@@ -1,0 +1,272 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\SenderController;
+use App\Http\Controllers\DomainController;
+use App\Http\Controllers\ContentController;
+use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\AdminController;
+// use App\Http\Controllers\TelegramController;
+use App\Http\Controllers\BackupController;
+use App\Http\Controllers\LogController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PowerMTAController;
+use App\Http\Controllers\BTCPayController;
+use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\SecurityController;
+use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\SuppressionListController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\MonitoringController;
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "api" middleware group. Make something great!
+|
+*/
+
+// Public routes - Webhooks are now processed via traits during operations
+// Route::post('/webhooks/telegram', [TelegramController::class, 'webhook']);
+
+// Auth routes (public)
+Route::prefix('auth')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/me', [AuthController::class, 'me'])->middleware('auth:web');
+    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:web');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
+    Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
+});
+
+// User profile routes (session authenticated)
+Route::prefix('user')->middleware('auth:web')->group(function () {
+    Route::get('/profile', [UserController::class, 'getProfile']);
+    Route::put('/profile', [UserController::class, 'updateProfile']);
+    Route::put('/password', [UserController::class, 'changePassword']);
+    Route::get('/devices', [UserController::class, 'getDevices']);
+    Route::get('/sessions', [UserController::class, 'getSessions']);
+});
+
+// Public tracking routes (no authentication required)
+Route::prefix('tracking')->group(function () {
+    Route::get('/open/{emailId}', [TrackingController::class, 'trackOpen']);
+    Route::get('/click/{emailId}/{linkId}', [TrackingController::class, 'trackClick']);
+    Route::get('/unsubscribe/{emailId}', [TrackingController::class, 'unsubscribe']);
+});
+
+// Protected routes
+Route::middleware(['auth:web'])->group(function () {
+    
+    // Campaign routes
+    Route::prefix('campaigns')->group(function () {
+        Route::get('/', [CampaignController::class, 'index']);
+        Route::post('/', [CampaignController::class, 'store']);
+        Route::get('/{campaign}', [CampaignController::class, 'show']);
+        Route::put('/{campaign}', [CampaignController::class, 'update']);
+        Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
+        Route::post('/{campaign}/start', [CampaignController::class, 'startCampaign']);
+        Route::post('/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
+        Route::post('/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
+        Route::post('/{campaign}/stop', [CampaignController::class, 'stopCampaign']);
+        Route::get('/{campaign}/stats', [CampaignController::class, 'statistics']);
+        Route::get('/{campaign}/tracking', [CampaignController::class, 'trackingStats']);
+        Route::get('/template-variables', [CampaignController::class, 'getTemplateVariables']);
+        Route::get('/{campaign}/template-variables', [CampaignController::class, 'getCampaignTemplateVariables']);
+        Route::get('/{campaign}/unsubscribe-list', [CampaignController::class, 'downloadUnsubscribeList']);
+        Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
+        Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
+    });
+
+    // User routes
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::post('/', [UserController::class, 'store']);
+        Route::get('/{user}', [UserController::class, 'show']);
+        Route::put('/{user}', [UserController::class, 'update']);
+        Route::delete('/{user}', [UserController::class, 'destroy']);
+        Route::post('/{user}/devices', [UserController::class, 'addDevice']);
+        Route::delete('/{user}/devices/{device}', [UserController::class, 'removeDevice']);
+        Route::get('/{user}/sessions', [UserController::class, 'sessions']);
+        Route::delete('/{user}/sessions/{session}', [UserController::class, 'terminateSession']);
+    });
+
+    // Sender routes
+    Route::prefix('senders')->group(function () {
+        Route::get('/', [SenderController::class, 'index']);
+        Route::post('/', [SenderController::class, 'store']);
+        Route::get('/{sender}', [SenderController::class, 'show']);
+        Route::put('/{sender}', [SenderController::class, 'update']);
+        Route::delete('/{sender}', [SenderController::class, 'destroy']);
+        Route::post('/{sender}/test', [SenderController::class, 'testConnection']);
+    });
+
+    // Domain routes
+    Route::prefix('domains')->group(function () {
+        Route::get('/', [DomainController::class, 'index']);
+        Route::post('/', [DomainController::class, 'store']);
+        Route::get('/{domain}', [DomainController::class, 'show']);
+        Route::put('/{domain}', [DomainController::class, 'update']);
+        Route::delete('/{domain}', [DomainController::class, 'destroy']);
+        Route::post('/{domain}/smtp', [DomainController::class, 'updateSmtpConfig']);
+        Route::get('/{domain}/smtp', [DomainController::class, 'getSmtpConfig']);
+        Route::delete('/{domain}/smtp', [DomainController::class, 'deleteSmtpConfig']);
+        Route::put('/{domain}/bounce-processing', [DomainController::class, 'updateBounceProcessing']);
+        Route::post('/{domain}/bounce-processing/test', [DomainController::class, 'testBounceConnection']);
+        Route::get('/{domain}/bounce-processing/stats', [DomainController::class, 'getBounceStatistics']);
+        Route::post('/{domain}/bounce-processing/process', [DomainController::class, 'processBounces']);
+    });
+
+    // Content routes
+    Route::prefix('contents')->group(function () {
+        Route::get('/', [ContentController::class, 'index']);
+        Route::post('/', [ContentController::class, 'store']);
+        Route::get('/{content}', [ContentController::class, 'show']);
+        Route::put('/{content}', [ContentController::class, 'update']);
+        Route::delete('/{content}', [ContentController::class, 'destroy']);
+        Route::post('/{content}/preview', [ContentController::class, 'preview']);
+    });
+
+    // Subscription routes
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/', [SubscriptionController::class, 'index']);
+        Route::post('/', [SubscriptionController::class, 'store']);
+        Route::get('/{subscription}', [SubscriptionController::class, 'show']);
+        Route::put('/{subscription}', [SubscriptionController::class, 'update']);
+        Route::delete('/{subscription}', [SubscriptionController::class, 'destroy']);
+        Route::post('/{subscription}/cancel', [SubscriptionController::class, 'cancel']);
+        Route::post('/{subscription}/reactivate', [SubscriptionController::class, 'reactivate']);
+    });
+
+    // Suppression List routes
+    Route::prefix('suppression-list')->group(function () {
+        Route::get('/statistics', [SuppressionListController::class, 'getStatistics']);
+        Route::post('/export', [SuppressionListController::class, 'export']);
+        Route::get('/download/{filename}', [SuppressionListController::class, 'download']);
+        Route::post('/import', [SuppressionListController::class, 'import']);
+        Route::post('/process-fbl', [SuppressionListController::class, 'processFBLFile']);
+        Route::delete('/remove-email', [SuppressionListController::class, 'removeEmail']);
+        Route::post('/cleanup', [SuppressionListController::class, 'cleanup']);
+    });
+
+    // Admin routes
+    Route::prefix('admin')->middleware(['role:admin'])->group(function () {
+        Route::get('/dashboard', [AdminController::class, 'dashboard']);
+        Route::get('/users', [AdminController::class, 'users']);
+        Route::get('/campaigns', [AdminController::class, 'campaigns']);
+        Route::get('/analytics', [AdminController::class, 'analytics']);
+        Route::get('/system-status', [AdminController::class, 'systemStatus']);
+        Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
+        Route::get('/system-config', [AdminController::class, 'getSystemConfig']);
+    });
+
+    // Backup routes
+    Route::prefix('backups')->group(function () {
+        Route::get('/', [BackupController::class, 'index']);
+        Route::post('/', [BackupController::class, 'create']);
+        Route::get('/{backup}', [BackupController::class, 'show']);
+        Route::delete('/{backup}', [BackupController::class, 'destroy']);
+        Route::post('/{backup}/download', [BackupController::class, 'download']);
+        Route::post('/{backup}/restore', [BackupController::class, 'restore']);
+    });
+
+    // Log routes
+    Route::prefix('logs')->group(function () {
+        Route::get('/', [LogController::class, 'index']);
+        Route::get('/{log}', [LogController::class, 'show']);
+        Route::delete('/{log}', [LogController::class, 'destroy']);
+        Route::post('/clear', [LogController::class, 'clear']);
+    });
+
+    // Notification routes
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/{notification}', [NotificationController::class, 'show']);
+        Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+        Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+        Route::put('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::delete('/', [NotificationController::class, 'deleteAll']);
+    });
+
+    // Telegram routes
+    // Route::prefix('telegram')->group(function () {
+    //     Route::post('/verify', [TelegramController::class, 'verifyCode']);
+    //     Route::get('/status', [TelegramController::class, 'getStatus']);
+    //     Route::post('/test', [TelegramController::class, 'sendTestMessage']);
+    // });
+
+    // PowerMTA routes
+    Route::prefix('powermta')->group(function () {
+        Route::get('/training/config', [PowerMTAController::class, 'getTrainingConfig']);
+        Route::get('/domains/analytics', [PowerMTAController::class, 'getAllDomainsAnalytics']);
+        Route::post('/domains/training/check', [PowerMTAController::class, 'manualTrainingCheck']);
+        
+        Route::prefix('domains/{domainId}')->group(function () {
+            Route::get('/analytics', [PowerMTAController::class, 'getDomainAnalytics']);
+            Route::get('/accounting', [PowerMTAController::class, 'getAccountingMetrics']);
+            Route::get('/fbl', [PowerMTAController::class, 'getFBLData']);
+            Route::get('/diagnostics', [PowerMTAController::class, 'getDiagnosticData']);
+            Route::get('/status', [PowerMTAController::class, 'getDomainStatus']);
+            Route::post('/training/apply', [PowerMTAController::class, 'applyTrainingConfig']);
+            Route::put('/config', [PowerMTAController::class, 'updateDomainConfig']);
+            Route::get('/analytics/export', [PowerMTAController::class, 'exportDomainAnalytics']);
+        });
+    });
+
+    // BTCPay routes
+    Route::prefix('btcpay')->group(function () {
+        Route::post('/invoice', [BTCPayController::class, 'createInvoice']);
+        Route::post('/manual/subscription', [BTCPayController::class, 'createManualSubscription']);
+        Route::post('/manual/payment', [BTCPayController::class, 'processManualPayment']);
+        Route::get('/manual/payment-methods', [BTCPayController::class, 'getManualPaymentMethods']);
+        Route::get('/invoice/{invoice_id}', [BTCPayController::class, 'getInvoiceStatus']);
+        Route::get('/rates', [BTCPayController::class, 'getPaymentRates']);
+        Route::get('/history', [BTCPayController::class, 'getPaymentHistory']);
+    });
+
+    // Analytics routes
+    Route::prefix('analytics')->group(function () {
+        Route::get('/', [AnalyticsController::class, 'index']);
+        Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']);
+        Route::get('/campaigns', [AnalyticsController::class, 'getCampaignAnalytics']);
+        Route::get('/users', [AnalyticsController::class, 'getUserAnalytics']);
+        Route::get('/revenue', [AnalyticsController::class, 'getRevenueAnalytics']);
+        Route::get('/deliverability', [AnalyticsController::class, 'getDeliverabilityAnalytics']);
+        Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']);
+        Route::get('/trending', [AnalyticsController::class, 'getTrendingMetrics']);
+        Route::get('/campaign/{campaign}/performance', [AnalyticsController::class, 'getCampaignPerformanceReport']);
+        Route::get('/export', [AnalyticsController::class, 'export']);
+    });
+
+    // Security routes
+    Route::prefix('security')->group(function () {
+        Route::get('/2fa/enable', [SecurityController::class, 'enable2FA']);
+        Route::post('/2fa/verify', [SecurityController::class, 'verify2FA']);
+        Route::delete('/2fa/disable', [SecurityController::class, 'disable2FA']);
+        Route::get('/api-keys', [SecurityController::class, 'getApiKeys']);
+        Route::post('/api-keys', [SecurityController::class, 'createApiKey']);
+        Route::delete('/api-keys/{key}', [SecurityController::class, 'revokeApiKey']);
+        Route::get('/activity', [SecurityController::class, 'getActivityLog']);
+        Route::post('/password/change', [SecurityController::class, 'changePassword']);
+    });
+
+    // Monitoring routes
+    Route::prefix('monitoring')->group(function () {
+        Route::get('/status', [MonitoringController::class, 'getMonitoringStatus']);
+        Route::get('/results', [MonitoringController::class, 'getAllMonitoringResults']);
+        Route::get('/domains/{domainId}/result', [MonitoringController::class, 'getDomainMonitoringResult']);
+        Route::post('/run', [MonitoringController::class, 'forceRunMonitoring']);
+        Route::post('/domains/{domainId}/schedule', [MonitoringController::class, 'scheduleDomainCheck']);
+        Route::post('/process', [MonitoringController::class, 'processScheduledChecks']);
+        Route::delete('/clear', [MonitoringController::class, 'clearMonitoringData']);
+    });
+}); 

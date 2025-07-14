@@ -1,0 +1,260 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+
+class SystemConfig extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'key',
+        'value',
+        'description',
+        'type',
+        'is_encrypted',
+        'is_public'
+    ];
+
+    protected $casts = [
+        'is_encrypted' => 'boolean',
+        'is_public' => 'boolean'
+    ];
+
+    /**
+     * Get config value with caching
+     */
+    public static function getValue(string $key, $default = null)
+    {
+        return Cache::remember("system_config:{$key}", 3600, function () use ($key, $default) {
+            $config = static::where('key', $key)->first();
+            return $config ? $config->value : $default;
+        });
+    }
+
+    /**
+     * Set config value with cache invalidation
+     */
+    public static function setValue(string $key, $value, string $description = null, string $type = 'string', bool $isEncrypted = false): void
+    {
+        $config = static::updateOrCreate(
+            ['key' => $key],
+            [
+                'value' => $value,
+                'description' => $description,
+                'type' => $type,
+                'is_encrypted' => $isEncrypted
+            ]
+        );
+
+        Cache::forget("system_config:{$key}");
+    }
+
+    /**
+     * Get all public configs
+     */
+    public static function getPublicConfigs(): array
+    {
+        return static::where('is_public', true)
+            ->get()
+            ->pluck('value', 'key')
+            ->toArray();
+    }
+
+    /**
+     * Get Redis configuration
+     */
+    public static function getRedisConfig(): array
+    {
+        return [
+            'host' => static::getValue('redis_host', '127.0.0.1'),
+            'port' => static::getValue('redis_port', 6379),
+            'password' => static::getValue('redis_password'),
+            'database' => static::getValue('redis_database', 0),
+            'prefix' => static::getValue('redis_prefix', 'campaign_manager:')
+        ];
+    }
+
+    /**
+     * Get PowerMTA configuration
+     */
+    public static function getPowerMTAConfig(): array
+    {
+        return [
+            'host' => static::getValue('powermta_host', 'localhost'),
+            'port' => static::getValue('powermta_port', 25),
+            'username' => static::getValue('powermta_username'),
+            'password' => static::getValue('powermta_password'),
+            'logs_path' => static::getValue('powermta_logs_path', '/var/log/powermta'),
+            'config_path' => static::getValue('powermta_config_path', '/etc/powermta'),
+            'acct_file' => static::getValue('powermta_acct_file', 'acct.csv'),
+            'fbl_file' => static::getValue('powermta_fbl_file', 'fbl.csv'),
+            'diag_file' => static::getValue('powermta_diag_file', 'diag.csv'),
+            'logs_file' => static::getValue('powermta_logs_file', 'logs.txt')
+        ];
+    }
+
+    /**
+     * Get SMTP configuration
+     */
+    public static function getDefaultSMTPConfig(): array
+    {
+        return [
+            'host' => static::getValue('default_smtp_host'),
+            'port' => static::getValue('default_smtp_port', 587),
+            'username' => static::getValue('default_smtp_username'),
+            'password' => static::getValue('default_smtp_password'),
+            'encryption' => static::getValue('default_smtp_encryption', 'tls'),
+            'from_address' => static::getValue('default_smtp_from_address'),
+            'from_name' => static::getValue('default_smtp_from_name')
+        ];
+    }
+
+    /**
+     * Get BTCPay configuration
+     */
+    public static function getBTCPayConfig(): array
+    {
+        return [
+            'url' => static::getValue('btcpay_url'),
+            'api_key' => static::getValue('btcpay_api_key'),
+            'store_id' => static::getValue('btcpay_store_id'),
+            'webhook_secret' => static::getValue('btcpay_webhook_secret'),
+            'currency' => static::getValue('btcpay_currency', 'USD')
+        ];
+    }
+
+    /**
+     * Get GeoIP configuration
+     */
+    public static function getGeoIPConfig(): array
+    {
+        return [
+            'database_path' => static::getValue('geoip_database_path'),
+            'api_key' => static::getValue('geoip_api_key'),
+            'service' => static::getValue('geoip_service', 'maxmind')
+        ];
+    }
+
+    /**
+     * Get file upload configuration
+     */
+    public static function getUploadConfig(): array
+    {
+        return [
+            'max_file_size' => static::getValue('upload_max_file_size', 10485760), // 10MB
+            'allowed_extensions' => static::getValue('upload_allowed_extensions', 'txt,csv'),
+            'upload_path' => static::getValue('upload_path', 'uploads'),
+            'backup_path' => static::getValue('backup_path', 'backups'),
+            'powermta_logs_path' => static::getValue('powermta_logs_path', 'powermta_logs')
+        ];
+    }
+
+    /**
+     * Get rate limiting configuration
+     */
+    public static function getRateLimitConfig(): array
+    {
+        return [
+            'default_emails_per_hour' => static::getValue('rate_limit_default_emails_per_hour', 100),
+            'max_emails_per_hour' => static::getValue('rate_limit_max_emails_per_hour', 1000),
+            'burst_limit' => static::getValue('rate_limit_burst_limit', 50),
+            'decay_minutes' => static::getValue('rate_limit_decay_minutes', 60)
+        ];
+    }
+
+    /**
+     * Get notification configuration
+     */
+    public static function getNotificationConfig(): array
+    {
+        return [
+            'email_enabled' => static::getValue('notification_email_enabled', true),
+            'telegram_enabled' => static::getValue('notification_telegram_enabled', false),
+            'telegram_bot_token' => static::getValue('notification_telegram_bot_token'),
+            'telegram_chat_id' => static::getValue('notification_telegram_chat_id'),
+            'websocket_enabled' => static::getValue('notification_websocket_enabled', true)
+        ];
+    }
+
+    /**
+     * Get security configuration
+     */
+    public static function getSecurityConfig(): array
+    {
+        return [
+            'max_login_attempts' => static::getValue('security_max_login_attempts', 5),
+            'lockout_duration' => static::getValue('security_lockout_duration', 15),
+            'password_min_length' => static::getValue('security_password_min_length', 8),
+            'require_2fa' => static::getValue('security_require_2fa', false),
+            'session_timeout' => static::getValue('security_session_timeout', 120)
+        ];
+    }
+
+    /**
+     * Initialize default system configurations
+     */
+    public static function initializeDefaults(): void
+    {
+        $defaults = [
+            // Redis Configuration
+            ['key' => 'redis_host', 'value' => '127.0.0.1', 'description' => 'Redis server host'],
+            ['key' => 'redis_port', 'value' => '6379', 'description' => 'Redis server port'],
+            ['key' => 'redis_database', 'value' => '0', 'description' => 'Redis database number'],
+            ['key' => 'redis_prefix', 'value' => 'campaign_manager:', 'description' => 'Redis key prefix'],
+
+            // PowerMTA Configuration
+            ['key' => 'powermta_host', 'value' => 'localhost', 'description' => 'PowerMTA server host'],
+            ['key' => 'powermta_port', 'value' => '25', 'description' => 'PowerMTA server port'],
+            ['key' => 'powermta_logs_path', 'value' => '/var/log/powermta', 'description' => 'PowerMTA logs directory'],
+            ['key' => 'powermta_config_path', 'value' => '/etc/powermta', 'description' => 'PowerMTA config directory'],
+
+            // Upload Configuration
+            ['key' => 'upload_max_file_size', 'value' => '10485760', 'description' => 'Maximum file upload size (10MB)'],
+            ['key' => 'upload_allowed_extensions', 'value' => 'txt,csv', 'description' => 'Allowed file extensions'],
+            ['key' => 'upload_path', 'value' => 'uploads', 'description' => 'File upload directory'],
+            ['key' => 'backup_path', 'value' => 'backups', 'description' => 'Backup directory'],
+
+            // Rate Limiting
+            ['key' => 'rate_limit_default_emails_per_hour', 'value' => '100', 'description' => 'Default emails per hour'],
+            ['key' => 'rate_limit_max_emails_per_hour', 'value' => '1000', 'description' => 'Maximum emails per hour'],
+            ['key' => 'rate_limit_burst_limit', 'value' => '50', 'description' => 'Burst limit for rate limiting'],
+
+            // Security
+            ['key' => 'security_max_login_attempts', 'value' => '5', 'description' => 'Maximum login attempts'],
+            ['key' => 'security_lockout_duration', 'value' => '15', 'description' => 'Lockout duration in minutes'],
+            ['key' => 'security_password_min_length', 'value' => '8', 'description' => 'Minimum password length'],
+
+            // Notifications
+            ['key' => 'notification_email_enabled', 'value' => 'true', 'description' => 'Enable email notifications'],
+            ['key' => 'notification_websocket_enabled', 'value' => 'true', 'description' => 'Enable WebSocket notifications']
+        ];
+
+        foreach ($defaults as $config) {
+            static::updateOrCreate(
+                ['key' => $config['key']],
+                [
+                    'value' => $config['value'],
+                    'description' => $config['description'],
+                    'type' => 'string',
+                    'is_encrypted' => false,
+                    'is_public' => false
+                ]
+            );
+        }
+    }
+
+    /**
+     * Clear all cached configurations
+     */
+    public static function clearCache(): void
+    {
+        $configs = static::all();
+        foreach ($configs as $config) {
+            Cache::forget("system_config:{$config->key}");
+        }
+    }
+}
