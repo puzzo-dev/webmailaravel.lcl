@@ -5,24 +5,14 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\EmailTracking;
 use App\Models\ClickTracking;
-use App\Services\GeoIPService;
-use App\Services\SuppressionListService;
+use App\Traits\GeoIPTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class TrackingController extends Controller
 {
-    protected $geoIPService;
-    protected $suppressionListService;
-
-    public function __construct(
-        GeoIPService $geoIPService,
-        SuppressionListService $suppressionListService
-    ) {
-        $this->geoIPService = $geoIPService;
-        $this->suppressionListService = $suppressionListService;
-    }
+    use GeoIPTrait;
 
     /**
      * Track email open
@@ -42,13 +32,13 @@ class TrackingController extends Controller
             $userAgent = $request->userAgent();
 
             // Get geo location
-            $geoData = $this->geoIPService->getLocation($ipAddress);
+            $geoData = $this->getLocation($ipAddress);
 
             // Mark as opened
             $emailTracking->markAsOpened($ipAddress, $userAgent);
 
             // Update geo data if available
-            if ($geoData) {
+            if ($geoData['success']) {
                 $emailTracking->update([
                     'country' => $geoData['country'] ?? null,
                     'city' => $geoData['city'] ?? null,
@@ -104,7 +94,7 @@ class TrackingController extends Controller
             $userAgent = $request->userAgent();
 
             // Get geo location
-            $geoData = $this->geoIPService->getLocation($ipAddress);
+            $geoData = $this->getLocation($ipAddress);
 
             // Mark email as clicked
             $emailTracking->markAsClicked($ipAddress, $userAgent);
@@ -116,8 +106,8 @@ class TrackingController extends Controller
                 'original_url' => $request->get('url', ''),
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
-                'country' => $geoData['country'] ?? null,
-                'city' => $geoData['city'] ?? null,
+                'country' => $geoData['success'] ? ($geoData['country'] ?? null) : null,
+                'city' => $geoData['success'] ? ($geoData['city'] ?? null) : null,
                 'device_type' => $this->getDeviceType($userAgent),
                 'browser' => $this->getBrowser($userAgent),
                 'os' => $this->getOS($userAgent),
@@ -171,7 +161,8 @@ class TrackingController extends Controller
             ];
 
             // Process unsubscribe through suppression list service
-            $result = $this->suppressionListService->handleUnsubscribe($emailId, $email, $metadata);
+            $suppressionService = app(\App\Services\SuppressionListService::class);
+            $result = $suppressionService->handleUnsubscribe($emailId, $email, $metadata);
 
             // Append to per-campaign unsubscribe file (for user info only)
             $unsubscribeService = app(\App\Services\UnsubscribeExportService::class);
@@ -209,13 +200,10 @@ class TrackingController extends Controller
                 </body>
                 </html>';
 
-                return response()->make($html, 200, ['Content-Type' => 'text/html']);
+                return response($html, 200, ['Content-Type' => 'text/html']);
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process unsubscribe'
-            ], 500);
+            return response()->json(['error' => 'Failed to unsubscribe'], 500);
 
         } catch (\Exception $e) {
             Log::error('Unsubscribe failed', [
@@ -223,7 +211,7 @@ class TrackingController extends Controller
                 'error' => $e->getMessage()
             ]);
 
-            return response()->json(['error' => 'Unsubscribe failed'], 500);
+            return response()->json(['error' => 'Failed to unsubscribe'], 500);
         }
     }
 
@@ -232,10 +220,15 @@ class TrackingController extends Controller
      */
     private function getDeviceType(string $userAgent): string
     {
-        if (preg_match('/(android|iphone|ipad|mobile)/i', $userAgent)) {
+        $userAgent = strtolower($userAgent);
+        
+        if (strpos($userAgent, 'mobile') !== false) {
             return 'mobile';
+        } elseif (strpos($userAgent, 'tablet') !== false) {
+            return 'tablet';
+        } else {
+            return 'desktop';
         }
-        return 'desktop';
     }
 
     /**
@@ -243,12 +236,21 @@ class TrackingController extends Controller
      */
     private function getBrowser(string $userAgent): string
     {
-        if (preg_match('/chrome/i', $userAgent)) return 'Chrome';
-        if (preg_match('/firefox/i', $userAgent)) return 'Firefox';
-        if (preg_match('/safari/i', $userAgent)) return 'Safari';
-        if (preg_match('/edge/i', $userAgent)) return 'Edge';
-        if (preg_match('/opera/i', $userAgent)) return 'Opera';
-        return 'Unknown';
+        $userAgent = strtolower($userAgent);
+        
+        if (strpos($userAgent, 'chrome') !== false) {
+            return 'Chrome';
+        } elseif (strpos($userAgent, 'firefox') !== false) {
+            return 'Firefox';
+        } elseif (strpos($userAgent, 'safari') !== false) {
+            return 'Safari';
+        } elseif (strpos($userAgent, 'edge') !== false) {
+            return 'Edge';
+        } elseif (strpos($userAgent, 'opera') !== false) {
+            return 'Opera';
+        } else {
+            return 'Other';
+        }
     }
 
     /**
@@ -256,11 +258,20 @@ class TrackingController extends Controller
      */
     private function getOS(string $userAgent): string
     {
-        if (preg_match('/windows/i', $userAgent)) return 'Windows';
-        if (preg_match('/macintosh|mac os/i', $userAgent)) return 'macOS';
-        if (preg_match('/linux/i', $userAgent)) return 'Linux';
-        if (preg_match('/android/i', $userAgent)) return 'Android';
-        if (preg_match('/iphone|ipad/i', $userAgent)) return 'iOS';
-        return 'Unknown';
+        $userAgent = strtolower($userAgent);
+        
+        if (strpos($userAgent, 'windows') !== false) {
+            return 'Windows';
+        } elseif (strpos($userAgent, 'mac') !== false) {
+            return 'macOS';
+        } elseif (strpos($userAgent, 'linux') !== false) {
+            return 'Linux';
+        } elseif (strpos($userAgent, 'android') !== false) {
+            return 'Android';
+        } elseif (strpos($userAgent, 'ios') !== false) {
+            return 'iOS';
+        } else {
+            return 'Other';
+        }
     }
 } 

@@ -1,15 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { billingService } from '../../services/api';
 
 // Async thunks
 export const fetchSubscriptions = createAsyncThunk(
   'billing/fetchSubscriptions',
   async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await api.get('/subscriptions', params);
+      const response = await billingService.getSubscriptions(params);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch subscriptions');
     }
   }
 );
@@ -18,10 +18,10 @@ export const createSubscription = createAsyncThunk(
   'billing/createSubscription',
   async (subscriptionData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/subscriptions', subscriptionData);
+      const response = await billingService.createSubscription(subscriptionData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create subscription');
     }
   }
 );
@@ -30,10 +30,10 @@ export const cancelSubscription = createAsyncThunk(
   'billing/cancelSubscription',
   async (id, { rejectWithValue }) => {
     try {
-      const response = await api.post(`/subscriptions/${id}/cancel`);
+      const response = await billingService.cancelSubscription(id);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to cancel subscription');
     }
   }
 );
@@ -42,10 +42,10 @@ export const createBTCPayInvoice = createAsyncThunk(
   'billing/createBTCPayInvoice',
   async (invoiceData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/btcpay/invoice', invoiceData);
+      const response = await billingService.createBTCPayInvoice(invoiceData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create BTCPay invoice');
     }
   }
 );
@@ -54,10 +54,10 @@ export const fetchPaymentHistory = createAsyncThunk(
   'billing/fetchPaymentHistory',
   async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await api.get('/btcpay/history', params);
+      const response = await billingService.getPaymentHistory(params);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch payment history');
     }
   }
 );
@@ -66,10 +66,10 @@ export const fetchPaymentRates = createAsyncThunk(
   'billing/fetchPaymentRates',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/btcpay/rates');
+      const response = await billingService.getPaymentRates();
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch payment rates');
     }
   }
 );
@@ -78,10 +78,10 @@ export const createManualPayment = createAsyncThunk(
   'billing/createManualPayment',
   async (paymentData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/btcpay/manual/payment', paymentData);
+      const response = await billingService.createManualPayment(paymentData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create manual payment');
     }
   }
 );

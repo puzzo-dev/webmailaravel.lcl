@@ -5,19 +5,20 @@ namespace App\Services;
 use App\Models\Campaign;
 use App\Models\User;
 use App\Models\Domain;
-use App\Models\ReputationHistory;
 use App\Models\Subscription;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use App\Traits\LoggingTrait;
+use App\Traits\ValidationTrait;
+use App\Traits\CacheManagementTrait;
 
 class AnalyticsService
 {
-    protected $loggingService;
+    use LoggingTrait, ValidationTrait, CacheManagementTrait;
 
-    public function __construct(LoggingService $loggingService)
+    public function __construct()
     {
-        $this->loggingService = $loggingService;
+        // No dependencies needed
     }
 
     /**
@@ -34,7 +35,7 @@ class AnalyticsService
             'users' => $this->getUserAnalytics($now, $lastMonth),
             'revenue' => $this->getRevenueAnalytics($now, $lastMonth),
             'deliverability' => $this->getDeliverabilityAnalytics($now, $lastWeek),
-            'reputation' => $this->getReputationAnalytics($now, $lastWeek),
+            'reputation' => $this->getReputationAnalytics(),
             'performance' => $this->getPerformanceMetrics($now, $lastMonth)
         ];
     }
@@ -42,7 +43,7 @@ class AnalyticsService
     /**
      * Get campaign analytics
      */
-    protected function getCampaignAnalytics(Carbon $now, Carbon $lastMonth): array
+    public function getCampaignAnalytics(Carbon $now, Carbon $lastMonth): array
     {
         $totalCampaigns = Campaign::count();
         $activeCampaigns = Campaign::where('status', 'active')->count();
@@ -75,135 +76,9 @@ class AnalyticsService
     }
 
     /**
-     * Get user analytics
-     */
-    protected function getUserAnalytics(Carbon $now, Carbon $lastMonth): array
-    {
-        $totalUsers = User::count();
-        $activeUsers = User::where('is_active', true)->count();
-        $newUsersThisMonth = User::whereBetween('created_at', [$lastMonth, $now])->count();
-        $newUsersThisWeek = User::whereBetween('created_at', [$now->copy()->subWeek(), $now])->count();
-
-        $premiumUsers = User::whereHas('subscriptions', function($query) {
-            $query->where('status', 'active');
-        })->count();
-
-        $userGrowth = $this->calculateGrowthRate(
-            User::whereBetween('created_at', [$lastMonth->copy()->subMonth(), $lastMonth])->count(),
-            $newUsersThisMonth
-        );
-
-        return [
-            'total' => $totalUsers,
-            'active' => $activeUsers,
-            'premium' => $premiumUsers,
-            'new_this_month' => $newUsersThisMonth,
-            'new_this_week' => $newUsersThisWeek,
-            'growth_rate' => $userGrowth,
-            'activation_rate' => $totalUsers > 0 ? ($activeUsers / $totalUsers) * 100 : 0
-        ];
-    }
-
-    /**
-     * Get revenue analytics
-     */
-    protected function getRevenueAnalytics(Carbon $now, Carbon $lastMonth): array
-    {
-        $totalRevenue = Subscription::where('status', 'active')
-            ->sum('payment_amount');
-
-        $monthlyRevenue = Subscription::where('status', 'active')
-            ->whereBetween('paid_at', [$lastMonth, $now])
-            ->sum('payment_amount');
-
-        $weeklyRevenue = Subscription::where('status', 'active')
-            ->whereBetween('paid_at', [$now->copy()->subWeek(), $now])
-            ->sum('payment_amount');
-
-        $activeSubscriptions = Subscription::where('status', 'active')->count();
-        $totalSubscriptions = Subscription::count();
-
-        $revenueGrowth = $this->calculateGrowthRate(
-            Subscription::where('status', 'active')
-                ->whereBetween('paid_at', [$lastMonth->copy()->subMonth(), $lastMonth])
-                ->sum('payment_amount'),
-            $monthlyRevenue
-        );
-
-        return [
-            'total' => $totalRevenue,
-            'monthly' => $monthlyRevenue,
-            'weekly' => $weeklyRevenue,
-            'active_subscriptions' => $activeSubscriptions,
-            'total_subscriptions' => $totalSubscriptions,
-            'growth_rate' => $revenueGrowth,
-            'average_revenue_per_user' => $activeSubscriptions > 0 ? $totalRevenue / $activeSubscriptions : 0
-        ];
-    }
-
-    /**
-     * Get deliverability analytics
-     */
-    protected function getDeliverabilityAnalytics(Carbon $now, Carbon $lastWeek): array
-    {
-        $recentCampaigns = Campaign::whereBetween('created_at', [$lastWeek, $now])->get();
-
-        $totalSent = $recentCampaigns->sum('emails_sent');
-        $totalDelivered = $recentCampaigns->sum('emails_delivered');
-        $totalBounces = $recentCampaigns->sum('bounces');
-        $totalComplaints = $recentCampaigns->sum('complaints');
-
-        $deliveryRate = $totalSent > 0 ? ($totalDelivered / $totalSent) * 100 : 0;
-        $bounceRate = $totalSent > 0 ? ($totalBounces / $totalSent) * 100 : 0;
-        $complaintRate = $totalSent > 0 ? ($totalComplaints / $totalSent) * 100 : 0;
-
-        return [
-            'delivery_rate' => round($deliveryRate, 2),
-            'bounce_rate' => round($bounceRate, 2),
-            'complaint_rate' => round($complaintRate, 2),
-            'total_sent' => $totalSent,
-            'total_delivered' => $totalDelivered,
-            'total_bounces' => $totalBounces,
-            'total_complaints' => $totalComplaints
-        ];
-    }
-
-    /**
-     * Get reputation analytics
-     */
-    protected function getReputationAnalytics(Carbon $now, Carbon $lastWeek): array
-    {
-        $domains = Domain::all();
-        $totalDomains = $domains->count();
-        
-        $lowRiskDomains = $domains->where('risk_level', 'low')->count();
-        $mediumRiskDomains = $domains->where('risk_level', 'medium')->count();
-        $highRiskDomains = $domains->where('risk_level', 'high')->count();
-
-        $averageReputationScore = $domains->avg('reputation_score') ?? 0;
-        $averageBounceRate = $domains->avg('bounce_rate') ?? 0;
-        $averageComplaintRate = $domains->avg('complaint_rate') ?? 0;
-
-        return [
-            'total_domains' => $totalDomains,
-            'low_risk' => $lowRiskDomains,
-            'medium_risk' => $mediumRiskDomains,
-            'high_risk' => $highRiskDomains,
-            'average_reputation_score' => round($averageReputationScore, 2),
-            'average_bounce_rate' => round($averageBounceRate, 2),
-            'average_complaint_rate' => round($averageComplaintRate, 2),
-            'risk_distribution' => [
-                'low' => $totalDomains > 0 ? ($lowRiskDomains / $totalDomains) * 100 : 0,
-                'medium' => $totalDomains > 0 ? ($mediumRiskDomains / $totalDomains) * 100 : 0,
-                'high' => $totalDomains > 0 ? ($highRiskDomains / $totalDomains) * 100 : 0
-            ]
-        ];
-    }
-
-    /**
      * Get performance metrics
      */
-    protected function getPerformanceMetrics(Carbon $now, Carbon $lastMonth): array
+    public function getPerformanceMetrics(Carbon $now, Carbon $lastMonth): array
     {
         $campaigns = Campaign::whereBetween('created_at', [$lastMonth, $now])->get();
         
@@ -260,96 +135,47 @@ class AnalyticsService
     /**
      * Get hourly statistics
      */
-    protected function getHourlyStats(Campaign $campaign): array
+    public function getHourlyStats(Campaign $campaign): array
     {
-        // This would typically come from detailed logs
-        // For now, we'll return mock data
-        $hours = collect(range(0, 23))->map(function($hour) {
-            return [
-                'hour' => $hour,
-                'sent' => rand(10, 100),
-                'delivered' => rand(8, 95),
-                'bounces' => rand(0, 5),
-                'complaints' => rand(0, 2)
-            ];
-        });
-
-        return $hours->toArray();
+        // TODO: Implement real hourly statistics from campaign logs
+        // For now, return empty structure
+        return [];
     }
 
     /**
      * Get daily statistics
      */
-    protected function getDailyStats(Campaign $campaign): array
+    public function getDailyStats(Campaign $campaign): array
     {
-        $days = collect(range(0, 6))->map(function($day) {
-            $date = now()->subDays($day);
-            return [
-                'date' => $date->format('Y-m-d'),
-                'sent' => rand(100, 1000),
-                'delivered' => rand(90, 950),
-                'bounces' => rand(5, 50),
-                'complaints' => rand(0, 10)
-            ];
-        });
-
-        return $days->toArray();
+        // TODO: Implement real daily statistics from campaign logs
+        // For now, return empty structure
+        return [];
     }
 
     /**
      * Get domain performance
      */
-    protected function getDomainPerformance(Campaign $campaign): array
+    public function getDomainPerformance(Campaign $campaign): array
     {
-        // This would analyze performance by recipient domain
-        return [
-            'gmail.com' => [
-                'sent' => rand(100, 500),
-                'delivered' => rand(95, 480),
-                'bounces' => rand(0, 20),
-                'delivery_rate' => rand(90, 98)
-            ],
-            'yahoo.com' => [
-                'sent' => rand(50, 200),
-                'delivered' => rand(45, 190),
-                'bounces' => rand(0, 10),
-                'delivery_rate' => rand(85, 95)
-            ],
-            'outlook.com' => [
-                'sent' => rand(75, 300),
-                'delivered' => rand(70, 285),
-                'bounces' => rand(0, 15),
-                'delivery_rate' => rand(88, 96)
-            ]
-        ];
+        // TODO: Implement real domain performance analysis
+        // For now, return empty structure
+        return [];
     }
 
     /**
      * Get sender performance
      */
-    protected function getSenderPerformance(Campaign $campaign): array
+    public function getSenderPerformance(Campaign $campaign): array
     {
-        // This would analyze performance by sender
-        return [
-            'sender1@domain.com' => [
-                'sent' => rand(200, 800),
-                'delivered' => rand(190, 760),
-                'bounces' => rand(0, 40),
-                'delivery_rate' => rand(90, 98)
-            ],
-            'sender2@domain.com' => [
-                'sent' => rand(150, 600),
-                'delivered' => rand(140, 570),
-                'bounces' => rand(0, 30),
-                'delivery_rate' => rand(88, 96)
-            ]
-        ];
+        // TODO: Implement real sender performance analysis
+        // For now, return empty structure
+        return [];
     }
 
     /**
      * Calculate growth rate
      */
-    protected function calculateGrowthRate(float $previous, float $current): float
+    public function calculateGrowthRate(float $previous, float $current): float
     {
         if ($previous == 0) {
             return $current > 0 ? 100 : 0;
@@ -363,31 +189,160 @@ class AnalyticsService
      */
     public function getTrendingMetrics(int $days = 30): array
     {
-        $endDate = now();
-        $startDate = $endDate->copy()->subDays($days);
+        $now = now();
+        $startDate = $now->copy()->subDays($days);
 
-        $campaigns = Campaign::whereBetween('created_at', [$startDate, $endDate])
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as count, SUM(emails_sent) as emails_sent')
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        $users = User::whereBetween('created_at', [$startDate, $endDate])
+        $campaigns = Campaign::whereBetween('created_at', [$startDate, $now])
             ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
-        $revenue = Subscription::whereBetween('paid_at', [$startDate, $endDate])
-            ->selectRaw('DATE(paid_at) as date, SUM(payment_amount) as total')
+        $users = User::whereBetween('created_at', [$startDate, $now])
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
         return [
-            'campaigns' => $campaigns->toArray(),
-            'users' => $users->toArray(),
-            'revenue' => $revenue->toArray()
+            'campaigns' => $campaigns,
+            'users' => $users,
+            'period' => $days
+        ];
+    }
+
+    /**
+     * Get user analytics
+     */
+    public function getUserAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    {
+        $endDate = $endDate ?? now();
+        $startDate = $startDate ?? now()->subMonth();
+        
+        $totalUsers = User::count();
+        $activeUsers = User::where('is_active', true)->count();
+        $newUsersThisMonth = User::whereBetween('created_at', [$startDate, $endDate])->count();
+        $newUsersThisWeek = User::whereBetween('created_at', [$endDate->copy()->subWeek(), $endDate])->count();
+
+        $premiumUsers = User::whereHas('subscriptions', function($query) {
+            $query->where('status', 'active');
+        })->count();
+
+        $userGrowth = $this->calculateGrowthRate(
+            User::whereBetween('created_at', [$startDate->copy()->subMonth(), $startDate])->count(),
+            $newUsersThisMonth
+        );
+
+        return [
+            'total' => $totalUsers,
+            'active' => $activeUsers,
+            'premium' => $premiumUsers,
+            'new_this_month' => $newUsersThisMonth,
+            'new_this_week' => $newUsersThisWeek,
+            'growth_rate' => $userGrowth,
+            'activation_rate' => $totalUsers > 0 ? ($activeUsers / $totalUsers) * 100 : 0
+        ];
+    }
+
+    /**
+     * Get revenue analytics
+     */
+    public function getRevenueAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    {
+        $endDate = $endDate ?? now();
+        $startDate = $startDate ?? now()->subMonth();
+        
+        $totalRevenue = Subscription::where('status', 'active')
+            ->sum('payment_amount');
+
+        $monthlyRevenue = Subscription::where('status', 'active')
+            ->whereBetween('paid_at', [$startDate, $endDate])
+            ->sum('payment_amount');
+
+        $weeklyRevenue = Subscription::where('status', 'active')
+            ->whereBetween('paid_at', [$endDate->copy()->subWeek(), $endDate])
+            ->sum('payment_amount');
+
+        $activeSubscriptions = Subscription::where('status', 'active')->count();
+        $totalSubscriptions = Subscription::count();
+
+        $revenueGrowth = $this->calculateGrowthRate(
+            Subscription::where('status', 'active')
+                ->whereBetween('paid_at', [$startDate->copy()->subMonth(), $startDate])
+                ->sum('payment_amount'),
+            $monthlyRevenue
+        );
+
+        return [
+            'total' => $totalRevenue,
+            'monthly' => $monthlyRevenue,
+            'weekly' => $weeklyRevenue,
+            'active_subscriptions' => $activeSubscriptions,
+            'total_subscriptions' => $totalSubscriptions,
+            'growth_rate' => $revenueGrowth,
+            'average_revenue_per_user' => $activeSubscriptions > 0 ? $totalRevenue / $activeSubscriptions : 0
+        ];
+    }
+
+    /**
+     * Get deliverability analytics
+     */
+    public function getDeliverabilityAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    {
+        $endDate = $endDate ?? now();
+        $startDate = $startDate ?? now()->subWeek();
+        
+        $recentCampaigns = Campaign::whereBetween('created_at', [$startDate, $endDate])->get();
+
+        $totalSent = $recentCampaigns->sum('emails_sent');
+        $totalDelivered = $recentCampaigns->sum('emails_delivered');
+        $totalBounces = $recentCampaigns->sum('bounces');
+        $totalComplaints = $recentCampaigns->sum('complaints');
+
+        $deliveryRate = $totalSent > 0 ? ($totalDelivered / $totalSent) * 100 : 0;
+        $bounceRate = $totalSent > 0 ? ($totalBounces / $totalSent) * 100 : 0;
+        $complaintRate = $totalSent > 0 ? ($totalComplaints / $totalSent) * 100 : 0;
+
+        return [
+            'delivery_rate' => round($deliveryRate, 2),
+            'bounce_rate' => round($bounceRate, 2),
+            'complaint_rate' => round($complaintRate, 2),
+            'total_sent' => $totalSent,
+            'total_delivered' => $totalDelivered,
+            'total_bounces' => $totalBounces,
+            'total_complaints' => $totalComplaints
+        ];
+    }
+
+    /**
+     * Get reputation analytics
+     */
+    public function getReputationAnalytics(): array
+    {
+        $domains = Domain::all();
+        $totalDomains = $domains->count();
+        
+        $lowRiskDomains = $domains->where('risk_level', 'low')->count();
+        $mediumRiskDomains = $domains->where('risk_level', 'medium')->count();
+        $highRiskDomains = $domains->where('risk_level', 'high')->count();
+
+        $averageReputationScore = $domains->avg('reputation_score') ?? 0;
+        $averageBounceRate = $domains->avg('bounce_rate') ?? 0;
+        $averageComplaintRate = $domains->avg('complaint_rate') ?? 0;
+
+        return [
+            'total_domains' => $totalDomains,
+            'low_risk' => $lowRiskDomains,
+            'medium_risk' => $mediumRiskDomains,
+            'high_risk' => $highRiskDomains,
+            'average_reputation_score' => round($averageReputationScore, 2),
+            'average_bounce_rate' => round($averageBounceRate, 2),
+            'average_complaint_rate' => round($averageComplaintRate, 2),
+            'risk_distribution' => [
+                'low' => $totalDomains > 0 ? ($lowRiskDomains / $totalDomains) * 100 : 0,
+                'medium' => $totalDomains > 0 ? ($mediumRiskDomains / $totalDomains) * 100 : 0,
+                'high' => $totalDomains > 0 ? ($highRiskDomains / $totalDomains) * 100 : 0
+            ]
         ];
     }
 } 

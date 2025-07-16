@@ -7,18 +7,17 @@ use App\Models\BounceProcessingLog;
 use App\Models\SuppressionList;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
+use App\Traits\SuppressionListTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Crypt;
 
 class BounceProcessingService
 {
-    use LoggingTrait, ValidationTrait;
+    use LoggingTrait, ValidationTrait, SuppressionListTrait, FileProcessingTrait;
 
-    private SuppressionListService $suppressionListService;
-
-    public function __construct(SuppressionListService $suppressionListService)
+    public function __construct()
     {
-        $this->suppressionListService = $suppressionListService;
     }
 
     /**
@@ -83,8 +82,9 @@ class BounceProcessingService
                     
                     // Add to suppression list if it's a hard bounce or spam
                     if (in_array($bounceData['bounce_type'], ['hard', 'spam'])) {
-                        $this->suppressionListService->addEmail(
+                        SuppressionList::addEmail(
                             $bounceData['to_email'],
+                            'bounce_processing',
                             'bounce_processing',
                             $bounceData['bounce_reason']
                         );
@@ -262,7 +262,7 @@ class BounceProcessingService
     private function extractRecipientEmail(array $message, string $body): ?string
     {
         // Try to extract from message headers first
-        if (isset($message['to']) && filter_var($message['to'], FILTER_VALIDATE_EMAIL)) {
+        if (isset($message['to']) && $this->validateEmail($message['to'])) {
             return $message['to'];
         }
 

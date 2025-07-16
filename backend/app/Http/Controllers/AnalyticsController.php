@@ -2,44 +2,88 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Services\AnalyticsService;
-use App\Services\LoggingService;
+use App\Traits\LoggingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class AnalyticsController extends Controller
 {
-    protected $analyticsService;
-    protected $loggingService;
+    use LoggingTrait;
 
-    public function __construct(AnalyticsService $analyticsService, LoggingService $loggingService)
+    protected $analyticsService;
+
+    public function __construct(AnalyticsService $analyticsService)
     {
         $this->analyticsService = $analyticsService;
-        $this->loggingService = $loggingService;
     }
 
     /**
-     * Get dashboard analytics
+     * Get analytics overview (user or admin based on role)
      */
-    public function getDashboard(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $analytics = $this->analyticsService->getDashboardAnalytics();
+            $user = auth()->user();
+            
+            // Check if user is admin for enhanced analytics
+            if ($user->hasRole('admin')) {
+                return $this->getAdminAnalytics($request);
+            }
+            
+            // Get basic user analytics data
+            $data = [
+                'dashboard' => $this->analyticsService->getDashboardAnalytics(),
+                'trending' => $this->analyticsService->getTrendingMetrics(7), // Last 7 days
+                'summary' => [
+                    'total_campaigns' => $user->campaigns()->count(),
+                    'active_campaigns' => $user->campaigns()->where('status', 'active')->count(),
+                    'total_emails_sent' => $user->campaigns()->sum('emails_sent'),
+                    'total_opens' => $user->campaigns()->sum('opens'),
+                    'total_clicks' => $user->campaigns()->sum('clicks'),
+                ]
+            ];
 
-            $this->loggingService->log('analytics.dashboard.accessed', [
-                'user_id' => auth()->id(),
-                'ip' => $request->ip()
+            $this->logInfo('analytics.index.accessed', [
+                'user_id' => $user->id,
+                'ip' => request()->ip()
             ]);
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics
+                'data' => $data
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get dashboard analytics',
+                'message' => 'Failed to get analytics overview',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get analytics dashboard data
+     */
+    public function getDashboard(Request $request): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            $data = $this->analyticsService->getDashboardAnalytics();
+
+            $this->logInfo('analytics.dashboard.accessed', [
+                'user_id' => $user->id,
+                'ip' => request()->ip()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get analytics data',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -218,6 +262,45 @@ class AnalyticsController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get campaign performance report',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get admin analytics (consolidated from AdminController)
+     */
+    public function getAdminAnalytics(Request $request): JsonResponse
+    {
+        try {
+            $timeRange = $request->get('timeRange', '30d');
+            
+            $analytics = [
+                'user_growth' => $this->analyticsService->getUserGrowth($timeRange),
+                'campaign_performance' => $this->analyticsService->getCampaignPerformance($timeRange),
+                'deliverability_stats' => $this->analyticsService->getDeliverabilityStats($timeRange),
+                'revenue_metrics' => $this->analyticsService->getRevenueMetrics($timeRange),
+            ];
+
+            $this->logInfo('admin_analytics.accessed', [
+                'user_id' => auth()->id(),
+                'time_range' => $timeRange
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Admin analytics data retrieved successfully',
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            $this->logError('admin_analytics.error', [
+                'error' => $e->getMessage(),
+                'user_id' => auth()->id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch admin analytics',
                 'error' => $e->getMessage()
             ], 500);
         }

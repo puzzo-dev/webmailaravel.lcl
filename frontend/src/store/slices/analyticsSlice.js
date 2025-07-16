@@ -1,70 +1,58 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { analyticsService } from '../../services/api';
 
+// Async thunks
 export const fetchAnalytics = createAsyncThunk(
   'analytics/fetchAnalytics',
-  async (params, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      return await api.get('/analytics', params);
+      const response = await analyticsService.getAnalytics();
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch analytics';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
-export const fetchDashboardStats = createAsyncThunk(
-  'analytics/fetchDashboardStats',
-  async (params, { rejectWithValue }) => {
+export const fetchDashboardData = createAsyncThunk(
+  'analytics/fetchDashboardData',
+  async (_, { rejectWithValue }) => {
     try {
-      return await api.get('/analytics/dashboard', params);
+      const response = await analyticsService.getDashboardData();
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch dashboard data';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const fetchCampaignAnalytics = createAsyncThunk(
   'analytics/fetchCampaignAnalytics',
-  async (campaignId, { rejectWithValue }) => {
-    try {
-      return await api.get(`/campaigns/${campaignId}/analytics`);
-    } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
-    }
-  }
-);
-
-export const fetchTrackingData = createAsyncThunk(
-  'analytics/fetchTrackingData',
-  async ({ campaignId, type }, { rejectWithValue }) => {
-    try {
-      return await api.get(`/campaigns/${campaignId}/tracking/${type}`);
-    } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
-    }
-  }
-);
-
-export const exportAnalytics = createAsyncThunk(
-  'analytics/exportAnalytics',
   async (params, { rejectWithValue }) => {
     try {
-      return await api.get('/analytics/export', params);
+      const response = await analyticsService.getCampaignAnalytics(params);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch campaign analytics';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 const initialState = {
-  analytics: null,
-  dashboardStats: null,
-  campaignAnalytics: null,
-  trackingData: null,
+  analytics: {
+    dashboard: null,
+    campaigns: null,
+    users: null,
+    revenue: null,
+    deliverability: null,
+    reputation: null,
+    trending: null,
+  },
   isLoading: false,
   error: null,
-  selectedPeriod: '7d',
-  selectedCampaign: null,
 };
 
 const analyticsSlice = createSlice({
@@ -74,97 +62,53 @@ const analyticsSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    setSelectedPeriod: (state, action) => {
-      state.selectedPeriod = action.payload;
-    },
-    setSelectedCampaign: (state, action) => {
-      state.selectedCampaign = action.payload;
-    },
-    clearAnalytics: (state) => {
-      state.analytics = null;
-      state.dashboardStats = null;
-      state.campaignAnalytics = null;
-      state.trackingData = null;
+    updateAnalytics: (state, action) => {
+      state.analytics = { ...state.analytics, ...action.payload };
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Analytics
+      // Fetch analytics
       .addCase(fetchAnalytics.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(fetchAnalytics.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.analytics = action.payload;
+        state.analytics = { ...state.analytics, ...action.payload };
       })
       .addCase(fetchAnalytics.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
-      // Fetch Dashboard Stats
-      .addCase(fetchDashboardStats.pending, (state) => {
+      // Fetch dashboard data
+      .addCase(fetchDashboardData.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(fetchDashboardStats.fulfilled, (state, action) => {
+      .addCase(fetchDashboardData.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.dashboardStats = action.payload;
+        state.analytics.dashboard = action.payload;
       })
-      .addCase(fetchDashboardStats.rejected, (state, action) => {
+      .addCase(fetchDashboardData.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
-      // Fetch Campaign Analytics
+      // Fetch campaign analytics
       .addCase(fetchCampaignAnalytics.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(fetchCampaignAnalytics.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.campaignAnalytics = action.payload;
+        state.analytics.campaigns = action.payload;
       })
       .addCase(fetchCampaignAnalytics.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload;
-      })
-      
-      // Fetch Tracking Data
-      .addCase(fetchTrackingData.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(fetchTrackingData.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.trackingData = action.payload;
-      })
-      .addCase(fetchTrackingData.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload;
-      })
-      
-      // Export Analytics
-      .addCase(exportAnalytics.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(exportAnalytics.fulfilled, (state) => {
-        state.isLoading = false;
-      })
-      .addCase(exportAnalytics.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });
   },
 });
 
-export const {
-  clearError,
-  setSelectedPeriod,
-  setSelectedCampaign,
-  clearAnalytics,
-} = analyticsSlice.actions;
-
+export const { clearError, updateAnalytics } = analyticsSlice.actions;
 export default analyticsSlice.reducer; 

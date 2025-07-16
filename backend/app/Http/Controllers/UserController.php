@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Device;
 use App\Services\GeoIPService;
+use App\Traits\LoggingTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -12,28 +14,42 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 
-class UserController extends BaseController
+class UserController extends Controller
 {
+    use LoggingTrait,
+        ValidationTrait;
+
     public function __construct(
         private GeoIPService $geoIPService
-    ) {
-        parent::__construct();
-    }
+    ) {}
 
     /**
      * Display a listing of the resource (admin only)
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            fn() => $this->getPaginatedResults(
-                User::with(['devices', 'campaigns']),
-                request(),
-                'users'
-            ),
-            'list_users'
-        );
+        $this->authorize('admin');
+        
+        $users = User::with(['devices', 'campaigns'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 20));
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Users retrieved successfully',
+            'data' => $users->items(),
+            'pagination' => [
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+                'has_more_pages' => $users->hasMorePages(),
+                'next_page_url' => $users->nextPageUrl(),
+                'previous_page_url' => $users->previousPageUrl()
+            ]
+        ]);
     }
 
     /**
@@ -41,103 +57,125 @@ class UserController extends BaseController
      */
     public function store(Request $request): JsonResponse
     {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'name' => 'required|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users',
-                'password' => 'required|string|min:8|confirmed',
-            ],
-            function () use ($request) {
-                $userData = $request->input('validated_data');
-                $userData['password'] = Hash::make($userData['password']);
-                
-                // Get location from IP
-                $location = $this->geoIPService->getLocation($request->ip());
-                $userData['country'] = $location['country'] ?? null;
-                $userData['city'] = $location['city'] ?? null;
-                
-                $user = User::create($userData);
-                
-                Log::info('User registered', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'ip' => $request->ip(),
-                    'country' => $user->country,
-                    'city' => $user->city
-                ]);
-                
-                return $this->createdResponse($user, 'User registered successfully');
-            },
-            'user_registration'
-        );
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $userData = $validator->validated();
+        $userData['password'] = Hash::make($userData['password']);
+        
+        // Get location from IP
+        $location = $this->geoIPService->getLocation($request->ip());
+        $userData['country'] = $location['country'] ?? null;
+        $userData['city'] = $location['city'] ?? null;
+        
+        $user = User::create($userData);
+        
+        Log::info('User registered', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'ip' => $request->ip(),
+            'country' => $user->country,
+            'city' => $user->city
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User registered successfully',
+            'data' => $user
+        ], 201);
     }
 
     /**
      * Display the specified resource
      */
-    public function show(User $user): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            fn() => $this->getResource($user, 'user', $user->id),
-            'view_user'
-        );
+        $user = User::with(['devices', 'campaigns'])->findOrFail($id);
+        
+        $this->authorize('view', $user);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User retrieved successfully',
+            'data' => $user
+        ]);
     }
 
     /**
      * Update the specified resource
      */
-    public function update(Request $request, User $user): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'name' => 'sometimes|string|max:255',
-                'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
-                'password' => 'sometimes|string|min:8|confirmed',
-            ],
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($request, $user) {
-                $userData = $request->input('validated_data');
-                
-                if (isset($userData['password'])) {
-                    $userData['password'] = Hash::make($userData['password']);
-                }
-                
-                $user->update($userData);
-                
-                Log::info('User updated', [
-                    'user_id' => $user->id,
-                    'updated_fields' => array_keys($request->input('validated_data')),
-                    'ip' => $request->ip()
-                ]);
-                
-                return $this->successResponse($user, 'User updated successfully');
-            },
-            'update_user'
-        );
+        $user = User::findOrFail($id);
+        
+        $this->authorize('update', $user);
+        
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
+            'password' => 'sometimes|string|min:8|confirmed',
+        ]);
+        
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        $userData = $validator->validated();
+        
+        if (isset($userData['password'])) {
+            $userData['password'] = Hash::make($userData['password']);
+        }
+        
+        $user->update($userData);
+        
+        Log::info('User updated', [
+            'user_id' => $user->id,
+            'updated_fields' => array_keys($userData),
+            'ip' => $request->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User updated successfully',
+            'data' => $user
+        ]);
     }
 
     /**
      * Remove the specified resource
      */
-    public function destroy(User $user): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($user) {
-                $user->delete();
-                
-                Log::info('User deleted', [
-                    'user_id' => $user->id,
-                    'ip' => request()->ip()
-                ]);
-                
-                return $this->successResponse(null, 'User deleted successfully');
-            },
-            'delete_user'
-        );
+        $user = User::findOrFail($id);
+        
+        $this->authorize('delete', $user);
+        
+        $user->delete();
+        
+        Log::info('User deleted', [
+            'user_id' => $user->id,
+            'ip' => request()->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User deleted successfully'
+        ]);
     }
 
     /**
@@ -145,33 +183,45 @@ class UserController extends BaseController
      */
     public function addDevice(Request $request, User $user): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'device_name' => 'required|string|max:255',
-                'device_type' => 'required|string|in:mobile,tablet,desktop',
-                'device_id' => 'required|string|max:255',
-            ],
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($request, $user) {
-                // Check device limit (max 2 devices)
-                if ($user->devices()->count() >= 2) {
-                    return $this->errorResponse('Maximum device limit reached (2 devices)', 'Device limit exceeded');
-                }
-                
-                $device = $user->devices()->create($request->input('validated_data'));
-                
-                Log::info('Device added', [
-                    'user_id' => $user->id,
-                    'device_id' => $device->id,
-                    'device_name' => $device->device_name,
-                    'ip' => $request->ip()
-                ]);
-                
-                return $this->createdResponse($device, 'Device added successfully');
-            },
-            'add_device'
-        );
+        $this->authorize('update', $user);
+        
+        $validator = Validator::make($request->all(), [
+            'device_name' => 'required|string|max:255',
+            'device_type' => 'required|string|in:mobile,tablet,desktop',
+            'device_id' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check device limit (max 2 devices)
+        if ($user->devices()->count() >= 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Maximum device limit reached (2 devices)',
+                'data' => 'Device limit exceeded'
+            ], 400);
+        }
+        
+        $device = $user->devices()->create($validator->validated());
+        
+        Log::info('Device added', [
+            'user_id' => $user->id,
+            'device_id' => $device->id,
+            'device_name' => $device->device_name,
+            'ip' => $request->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Device added successfully',
+            'data' => $device
+        ], 201);
     }
 
     /**
@@ -179,25 +229,27 @@ class UserController extends BaseController
      */
     public function removeDevice(User $user, Device $device): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($user, $device) {
-                if ($device->user_id !== $user->id) {
-                    return $this->forbiddenResponse('Access denied to device');
-                }
-                
-                $device->delete();
-                
-                Log::info('Device removed', [
-                    'user_id' => $user->id,
-                    'device_id' => $device->id,
-                    'ip' => request()->ip()
-                ]);
-                
-                return $this->successResponse(null, 'Device removed successfully');
-            },
-            'remove_device'
-        );
+        $this->authorize('update', $user);
+        
+        if ($device->user_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied to device'
+            ], 403);
+        }
+        
+        $device->delete();
+        
+        Log::info('Device removed', [
+            'user_id' => $user->id,
+            'device_id' => $device->id,
+            'ip' => request()->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Device removed successfully'
+        ]);
     }
 
     /**
@@ -205,18 +257,18 @@ class UserController extends BaseController
      */
     public function sessions(User $user): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($user) {
-                $sessions = $user->sessions()
-                    ->where('last_active', '>', now()->subMinutes(5))
-                    ->orderBy('last_active', 'desc')
-                    ->get();
-                
-                return $this->successResponse($sessions, 'User sessions retrieved successfully');
-            },
-            'view_sessions'
-        );
+        $this->authorize('view', $user);
+        
+        $sessions = $user->sessions()
+            ->where('last_active', '>', now()->subMinutes(5))
+            ->orderBy('last_active', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User sessions retrieved successfully',
+            'data' => $sessions
+        ]);
     }
 
     /**
@@ -224,27 +276,29 @@ class UserController extends BaseController
      */
     public function terminateSession(User $user, $sessionId): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($user, 'user'),
-            function () use ($user, $sessionId) {
-                $session = $user->sessions()->where('session_id', $sessionId)->first();
-                
-                if (!$session) {
-                    return $this->notFoundResponse('Session not found');
-                }
-                
-                $session->delete();
-                
-                Log::info('Session terminated', [
-                    'user_id' => $user->id,
-                    'session_id' => $sessionId,
-                    'ip' => request()->ip()
-                ]);
-                
-                return $this->successResponse(null, 'Session terminated successfully');
-            },
-            'terminate_session'
-        );
+        $this->authorize('update', $user);
+        
+        $session = $user->sessions()->where('session_id', $sessionId)->first();
+        
+        if (!$session) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Session not found'
+            ], 404);
+        }
+        
+        $session->delete();
+        
+        Log::info('Session terminated', [
+            'user_id' => $user->id,
+            'session_id' => $sessionId,
+            'ip' => request()->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Session terminated successfully'
+        ]);
     }
 
     /**
@@ -252,14 +306,13 @@ class UserController extends BaseController
      */
     public function getProfile(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess(Auth::user(), Auth::user()),
-            function () {
-                $user = Auth::user()->load(['devices', 'sessions']);
-                return $this->successResponse($user, 'Profile retrieved successfully');
-            },
-            'view_profile'
-        );
+        $user = Auth::user()->load(['devices', 'sessions']);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile retrieved successfully',
+            'data' => $user
+        ]);
     }
 
     /**
@@ -267,30 +320,37 @@ class UserController extends BaseController
      */
     public function updateProfile(Request $request): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'name' => 'sometimes|string|max:255',
-                'email' => 'sometimes|string|email|max:255|unique:users,email,' . Auth::id(),
-                'phone' => 'sometimes|string|max:20',
-                'timezone' => 'sometimes|string|max:50',
-                'language' => 'sometimes|string|max:10',
-            ],
-            fn() => $this->authorizeResourceAccess(Auth::user(), Auth::user()),
-            function () use ($request) {
-                $user = Auth::user();
-                $user->update($request->input('validated_data'));
-                
-                Log::info('Profile updated', [
-                    'user_id' => $user->id,
-                    'updated_fields' => array_keys($request->input('validated_data')),
-                    'ip' => $request->ip()
-                ]);
-                
-                return $this->successResponse($user, 'Profile updated successfully');
-            },
-            'update_profile'
-        );
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'sometimes|string|max:20',
+            'timezone' => 'sometimes|string|max:50',
+            'language' => 'sometimes|string|max:10',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user->update($validator->validated());
+        
+        Log::info('Profile updated', [
+            'user_id' => $user->id,
+            'updated_fields' => array_keys($validator->validated()),
+            'ip' => $request->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => $user
+        ]);
     }
 
     /**
@@ -298,33 +358,42 @@ class UserController extends BaseController
      */
     public function changePassword(Request $request): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'current_password' => 'required|string',
-                'new_password' => 'required|string|min:8|confirmed',
-            ],
-            fn() => $this->authorizeResourceAccess(Auth::user(), Auth::user()),
-            function () use ($request) {
-                $user = Auth::user();
-                
-                if (!Hash::check($request->current_password, $user->password)) {
-                    return $this->errorResponse('Current password is incorrect', 'Password change failed');
-                }
-                
-                $user->update([
-                    'password' => Hash::make($request->new_password)
-                ]);
-                
-                Log::info('Password changed', [
-                    'user_id' => $user->id,
-                    'ip' => $request->ip()
-                ]);
-                
-                return $this->successResponse(null, 'Password changed successfully');
-            },
-            'change_password'
-        );
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Current password is incorrect',
+                'data' => 'Password change failed'
+            ], 400);
+        }
+        
+        $user->update([
+            'password' => Hash::make($request->new_password)
+        ]);
+        
+        Log::info('Password changed', [
+            'user_id' => $user->id,
+            'ip' => $request->ip()
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully'
+        ]);
     }
 
     /**
@@ -332,14 +401,13 @@ class UserController extends BaseController
      */
     public function getDevices(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess(Auth::user(), Auth::user()),
-            function () {
-                $devices = Auth::user()->devices;
-                return $this->successResponse($devices, 'Devices retrieved successfully');
-            },
-            'view_devices'
-        );
+        $devices = Auth::user()->devices;
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Devices retrieved successfully',
+            'data' => $devices
+        ]);
     }
 
     /**
@@ -347,13 +415,12 @@ class UserController extends BaseController
      */
     public function getSessions(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess(Auth::user(), Auth::user()),
-            function () {
-                $sessions = Auth::user()->sessions;
-                return $this->successResponse($sessions, 'Sessions retrieved successfully');
-            },
-            'view_sessions'
-        );
+        $sessions = Auth::user()->sessions;
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Sessions retrieved successfully',
+            'data' => $sessions
+        ]);
     }
 }

@@ -15,19 +15,26 @@ import {
   HiMail,
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
+import {
+  fetchSuppressionStatistics,
+  importSuppressionList,
+  removeEmailFromSuppression,
+  exportSuppressionList,
+} from '../../store/slices/suppressionSlice';
 
 const SuppressionList = () => {
   const dispatch = useDispatch();
+  const { statistics, isLoading, isImporting, isExporting, error } = useSelector((state) => state.suppression);
   const [activeTab, setActiveTab] = useState('list');
-  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmails, setSelectedEmails] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
+  const [uploadReason, setUploadReason] = useState('bounce');
 
-  // Mock data - replace with actual API calls
+  // Mock suppression list data - replace with actual API call
   const suppressionList = [
     {
       id: 1,
@@ -55,67 +62,68 @@ const SuppressionList = () => {
     },
   ];
 
-  const statistics = {
-    total: 1250,
-    bounces: 450,
-    complaints: 150,
-    unsubscribes: 650,
-    lastUpdated: '2024-01-15',
-  };
+  useEffect(() => {
+    dispatch(fetchSuppressionStatistics());
+  }, [dispatch]);
 
   const handleUpload = async () => {
     if (!uploadFile) return;
     
-    setIsLoading(true);
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    formData.append('reason', uploadReason);
+    
     try {
-      // Implement file upload logic
-      console.log('Uploading file:', uploadFile);
+      await dispatch(importSuppressionList(formData)).unwrap();
       setShowUploadModal(false);
       setUploadFile(null);
+      setUploadReason('bounce');
+      // Refresh statistics
+      dispatch(fetchSuppressionStatistics());
     } catch (error) {
       console.error('Upload failed:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleAddEmail = async () => {
     if (!newEmail) return;
     
-    setIsLoading(true);
     try {
-      // Implement add email logic
-      console.log('Adding email:', newEmail);
+      const emailData = {
+        email: newEmail,
+        reason: 'manual',
+        source: 'manual',
+      };
+      
+      // Add email to suppression list
+      await dispatch(importSuppressionList({ emails: [emailData] })).unwrap();
       setShowAddModal(false);
       setNewEmail('');
+      // Refresh statistics
+      dispatch(fetchSuppressionStatistics());
     } catch (error) {
       console.error('Add email failed:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleRemoveEmail = async (emailId) => {
-    setIsLoading(true);
     try {
-      // Implement remove email logic
-      console.log('Removing email:', emailId);
+      const email = suppressionList.find(e => e.id === emailId);
+      if (email) {
+        await dispatch(removeEmailFromSuppression({ email: email.email })).unwrap();
+        // Refresh statistics
+        dispatch(fetchSuppressionStatistics());
+      }
     } catch (error) {
       console.error('Remove email failed:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleExport = async (format = 'csv') => {
-    setIsLoading(true);
     try {
-      // Implement export logic
-      console.log('Exporting in format:', format);
+      await dispatch(exportSuppressionList({ format })).unwrap();
     } catch (error) {
       console.error('Export failed:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -137,9 +145,10 @@ const SuppressionList = () => {
             <button
               onClick={() => setShowUploadModal(true)}
               className="btn btn-primary flex items-center"
+              disabled={isImporting}
             >
               <HiUpload className="h-5 w-5 mr-2" />
-              Upload List
+              {isImporting ? 'Uploading...' : 'Upload List'}
             </button>
             <button
               onClick={() => setShowAddModal(true)}
@@ -163,7 +172,9 @@ const SuppressionList = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Suppressed</p>
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(statistics.total)}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {isLoading ? '...' : formatNumber(statistics?.totalSuppressed || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -177,7 +188,9 @@ const SuppressionList = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Bounces</p>
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(statistics.bounces)}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {isLoading ? '...' : formatNumber(statistics?.totalBounces || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -191,7 +204,9 @@ const SuppressionList = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Complaints</p>
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(statistics.complaints)}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {isLoading ? '...' : formatNumber(statistics?.totalComplaints || 0)}
+              </p>
             </div>
           </div>
         </div>
@@ -205,11 +220,26 @@ const SuppressionList = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Unsubscribes</p>
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(statistics.unsubscribes)}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {isLoading ? '...' : formatNumber(statistics?.totalUnsubscribes || 0)}
+              </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamationCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="bg-white rounded-lg shadow-sm">
@@ -230,9 +260,10 @@ const SuppressionList = () => {
               <button
                 onClick={() => handleExport('csv')}
                 className="btn btn-secondary flex items-center"
+                disabled={isExporting}
               >
                 <HiDownload className="h-4 w-4 mr-2" />
-                Export
+                {isExporting ? 'Exporting...' : 'Export'}
               </button>
             </div>
           </div>
@@ -298,6 +329,7 @@ const SuppressionList = () => {
                     <button
                       onClick={() => handleRemoveEmail(email.id)}
                       className="text-danger-600 hover:text-danger-900"
+                      disabled={isLoading}
                     >
                       <HiTrash className="h-4 w-4" />
                     </button>
@@ -327,19 +359,35 @@ const SuppressionList = () => {
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason
+                  </label>
+                  <select
+                    value={uploadReason}
+                    onChange={(e) => setUploadReason(e.target.value)}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="bounce">Bounce</option>
+                    <option value="complaint">Complaint</option>
+                    <option value="unsubscribe">Unsubscribe</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
                 <div className="flex justify-end space-x-3">
                   <button
                     onClick={() => setShowUploadModal(false)}
                     className="btn btn-secondary"
+                    disabled={isImporting}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleUpload}
-                    disabled={!uploadFile || isLoading}
+                    disabled={!uploadFile || isImporting}
                     className="btn btn-primary"
                   >
-                    {isLoading ? 'Uploading...' : 'Upload'}
+                    {isImporting ? 'Uploading...' : 'Upload'}
                   </button>
                 </div>
               </div>
@@ -391,4 +439,4 @@ const SuppressionList = () => {
   );
 };
 
-export default SuppressionList; 
+export default SuppressionList;

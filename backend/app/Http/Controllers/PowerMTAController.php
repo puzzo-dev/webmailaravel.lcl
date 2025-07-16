@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Models\Domain;
 
-class PowerMTAController extends BaseController
+class PowerMTAController extends Controller
 {
     protected $powerMTAService;
 

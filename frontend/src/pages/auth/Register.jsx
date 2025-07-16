@@ -57,228 +57,208 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="flex justify-center">
-            <div className="h-12 w-12 bg-primary-600 rounded-lg flex items-center justify-center">
-              <HiInbox className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link
-              to="/login"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              sign in to your existing account
-            </Link>
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-center text-2xl font-bold text-gray-900">
+          Create your account
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Or{' '}
+          <Link
+            to="/login"
+            className="font-medium text-primary-600 hover:text-primary-500"
+          >
+            sign in to your existing account
+          </Link>
+        </p>
+      </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="form-label">
-                Full name
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="name"
-                  type="text"
-                  autoComplete="name"
-                  className={`input ${errors.name ? 'input-error' : ''}`}
-                  placeholder="Enter your full name"
-                  {...register('name', {
-                    required: 'Name is required',
-                    minLength: {
-                      value: 2,
-                      message: 'Name must be at least 2 characters',
-                    },
-                  })}
-                />
-                {errors.name && (
-                  <p className="form-error mt-1">{errors.name.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="username" className="form-label">
-                Username
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="username"
-                  type="text"
-                  autoComplete="username"
-                  className={`input ${errors.username ? 'input-error' : ''}`}
-                  placeholder="Choose a username"
-                  {...register('username', {
-                    required: 'Username is required',
-                    minLength: {
-                      value: 3,
-                      message: 'Username must be at least 3 characters',
-                    },
-                    pattern: {
-                      value: /^[a-zA-Z0-9_]+$/,
-                      message: 'Username can only contain letters, numbers, and underscores',
-                    },
-                  })}
-                />
-                {errors.username && (
-                  <p className="form-error mt-1">{errors.username.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="email" className="form-label">
-                Email address
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  className={`input ${errors.email ? 'input-error' : ''}`}
-                  placeholder="Enter your email"
-                  {...register('email', {
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Invalid email address',
-                    },
-                  })}
-                />
-                {errors.email && (
-                  <p className="form-error mt-1">{errors.email.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="form-label">
-                Password
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
-                  placeholder="Create a password"
-                  {...register('password', {
-                    required: 'Password is required',
-                    minLength: {
-                      value: 8,
-                      message: 'Password must be at least 8 characters',
-                    },
-                    pattern: {
-                      value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-                      message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
-                    },
-                  })}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <HiEyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <HiEye className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-                {errors.password && (
-                  <p className="form-error mt-1">{errors.password.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password_confirmation" className="form-label">
-                Confirm password
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="password_confirmation"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  className={`input pr-10 ${errors.password_confirmation ? 'input-error' : ''}`}
-                  placeholder="Confirm your password"
-                  {...register('password_confirmation', {
-                    required: 'Please confirm your password',
-                    validate: (value) => value === password || 'Passwords do not match',
-                  })}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
-                    <HiEyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <HiEye className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-                {errors.password_confirmation && (
-                  <p className="form-error mt-1">{errors.password_confirmation.message}</p>
-                )}
-              </div>
+      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="name" className="form-label">
+              Full name
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                className={`input ${errors.name ? 'input-error' : ''}`}
+                placeholder="Enter your full name"
+                {...register('name', {
+                  required: 'Name is required',
+                  minLength: {
+                    value: 2,
+                    message: 'Name must be at least 2 characters',
+                  },
+                })}
+              />
+              {errors.name && (
+                <p className="form-error mt-1">{errors.name.message}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn-primary w-full flex justify-center"
-            >
-              {isLoading ? (
-                <div className="loading-spinner"></div>
-              ) : (
-                <>
-                  <HiUser className="h-5 w-5 mr-2" />
-                  Create account
-                </>
+            <label htmlFor="username" className="form-label">
+              Username
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="username"
+                type="text"
+                autoComplete="username"
+                className={`input ${errors.username ? 'input-error' : ''}`}
+                placeholder="Choose a username"
+                {...register('username', {
+                  required: 'Username is required',
+                  minLength: {
+                    value: 3,
+                    message: 'Username must be at least 3 characters',
+                  },
+                  pattern: {
+                    value: /^[a-zA-Z0-9_]+$/,
+                    message: 'Username can only contain letters, numbers, and underscores',
+                  },
+                })}
+              />
+              {errors.username && (
+                <p className="form-error mt-1">{errors.username.message}</p>
               )}
-            </button>
+            </div>
           </div>
 
-          {/* Terms and conditions */}
-          <div className="text-center">
-            <p className="text-xs text-gray-600">
-              By creating an account, you agree to our{' '}
-              <a href="#" className="text-primary-600 hover:text-primary-500">
-                Terms of Service
-              </a>{' '}
-              and{' '}
-              <a href="#" className="text-primary-600 hover:text-primary-500">
-                Privacy Policy
-              </a>
-            </p>
+          <div>
+            <label htmlFor="email" className="form-label">
+              Email address
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                className={`input ${errors.email ? 'input-error' : ''}`}
+                placeholder="Enter your email"
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: 'Invalid email address',
+                  },
+                })}
+              />
+              {errors.email && (
+                <p className="form-error mt-1">{errors.email.message}</p>
+              )}
+            </div>
           </div>
-        </form>
 
-        {/* Additional links */}
+          <div>
+            <label htmlFor="password" className="form-label">
+              Password
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
+                placeholder="Create a password"
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: {
+                    value: 8,
+                    message: 'Password must be at least 8 characters',
+                  },
+                  pattern: {
+                    value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+                    message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+                  },
+                })}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <HiEyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <HiEye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+              {errors.password && (
+                <p className="form-error mt-1">{errors.password.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="password_confirmation" className="form-label">
+              Confirm password
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="password_confirmation"
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                className={`input pr-10 ${errors.password_confirmation ? 'input-error' : ''}`}
+                placeholder="Confirm your password"
+                {...register('password_confirmation', {
+                  required: 'Please confirm your password',
+                  validate: (value) => value === password || 'Passwords do not match',
+                })}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <HiEyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <HiEye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+              {errors.password_confirmation && (
+                <p className="form-error mt-1">{errors.password_confirmation.message}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn btn-primary w-full flex justify-center"
+          >
+            {isLoading ? (
+              <div className="loading-spinner"></div>
+            ) : (
+              <>
+                <HiUser className="h-5 w-5 mr-2" />
+                Create account
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Terms and conditions */}
         <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link
-              to="/login"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              Sign in
-            </Link>
+          <p className="text-xs text-gray-600">
+            By creating an account, you agree to our{' '}
+            <a href="#" className="text-primary-600 hover:text-primary-500">
+              Terms of Service
+            </a>{' '}
+            and{' '}
+            <a href="#" className="text-primary-600 hover:text-primary-500">
+              Privacy Policy
+            </a>
           </p>
         </div>
-      </div>
+      </form>
     </div>
   );
 };

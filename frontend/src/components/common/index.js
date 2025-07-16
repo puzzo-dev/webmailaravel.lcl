@@ -12,7 +12,4 @@ export { default as MobileMenu } from '../layout/MobileMenu';
 export { default as StatsCard } from '../dashboard/StatsCard';
 export { default as AnalyticsChart } from '../dashboard/AnalyticsChart';
 export { default as RecentCampaigns } from '../dashboard/RecentCampaigns';
-export { default as QuickActions } from '../dashboard/QuickActions';
-
-// Filter Components
-export { default as FilterBar } from './FilterBar'; 
+export { default as QuickActions } from '../dashboard/QuickActions'; 

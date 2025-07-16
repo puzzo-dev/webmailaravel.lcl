@@ -2,57 +2,34 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Sender;
 use App\Models\SmtpConfig;
 use App\Mail\TestEmail;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class SenderController extends Controller
 {
     public function __construct()
     {
-        // No dependencies needed - using Laravel's built-in features
+        // No parent constructor to call for base Controller
     }
 
     /**
      * Display a listing of the resource
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        try {
-            $senders = Sender::where('user_id', Auth::id())
+        return $this->executeControllerMethod(function () use ($request) {
+            $query = Sender::where('user_id', Auth::id())
                 ->with(['domain', 'domain.smtpConfig'])
-                ->orderBy('created_at', 'desc')
-                ->paginate(20);
+                ->orderBy('created_at', 'desc');
 
-            Log::info('Senders listed', [
-                'user_id' => Auth::id(),
-                'count' => $senders->count()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $senders,
-                'message' => 'Senders retrieved successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Senders list failed', [
-                'user_id' => Auth::id(),
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve senders'
-            ], 500);
-        }
+            return $this->getPaginatedResults($query, $request, 'senders', ['domain', 'domain.smtpConfig']);
+        }, 'list_senders');
     }
 
     /**
@@ -60,255 +37,137 @@ class SenderController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        try {
-            $validator = Validator::make($request->all(), [
+        return $this->validateAndExecute(
+            $request,
+            [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|max:255',
                 'domain_id' => 'required|exists:domains,id',
                 'is_active' => 'boolean'
-            ]);
+            ],
+            function () use ($request) {
+                $data = $request->input('validated_data');
+                $data['user_id'] = Auth::id();
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $data = $validator->validated();
-            $data['user_id'] = Auth::id();
-
-            $sender = Sender::create($data);
-
-            Log::info('Sender created', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'email' => $sender->email
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $sender->load(['domain', 'domain.smtpConfig']),
-                'message' => 'Sender created successfully'
-            ], 201);
-
-        } catch (\Exception $e) {
-            Log::error('Sender creation failed', [
-                'user_id' => Auth::id(),
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create sender'
-            ], 500);
-        }
+                $sender = Sender::create($data);
+                
+                return $this->createdResponse(
+                    $sender->load(['domain', 'domain.smtpConfig']), 
+                    'Sender created successfully'
+                );
+            },
+            'create_sender',
+            ['email' => $request->email]
+        );
     }
 
     /**
      * Display the specified resource
      */
-    public function show(Sender $sender): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        try {
-            if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
-            }
-
-            Log::info('Sender viewed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $sender->load(['domain', 'domain.smtpConfig']),
-                'message' => 'Sender retrieved successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Sender view failed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'error' => $e->getMessage()
-            ]);
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $sender = Sender::with(['domain', 'domain.smtpConfig'])->findOrFail($id);
             
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve sender'
-            ], 500);
-        }
+            if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            return $this->getResource($sender, 'sender', $id);
+        }, 'view_sender');
     }
 
     /**
      * Update the specified resource
      */
-    public function update(Request $request, Sender $sender): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $sender = Sender::findOrFail($id);
+            
             if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $validator = Validator::make($request->all(), [
                 'name' => 'sometimes|string|max:255',
                 'email' => 'sometimes|email|max:255',
                 'domain_id' => 'sometimes|exists:domains,id',
                 'is_active' => 'boolean'
             ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $sender->update($validator->validated());
-
-            Log::info('Sender updated', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'updated_fields' => array_keys($validator->validated())
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $sender->load(['domain', 'domain.smtpConfig']),
-                'message' => 'Sender updated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Sender update failed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'error' => $e->getMessage()
-            ]);
             
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update sender'
-            ], 500);
-        }
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $sender->update($validator->validated());
+            return $this->successResponse($sender->load(['domain', 'domain.smtpConfig']), 'Sender updated successfully');
+        }, 'update_sender');
     }
 
     /**
      * Remove the specified resource
      */
-    public function destroy(Sender $sender): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $sender = Sender::findOrFail($id);
+            
             if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $sender->delete();
-
-            Log::info('Sender deleted', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Sender deleted successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Sender deletion failed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete sender'
-            ], 500);
-        }
+            return $this->successResponse(null, 'Sender deleted successfully');
+        }, 'delete_sender');
     }
 
     /**
-     * Test sender configuration
+     * Test sender connection
      */
-    public function testSender(Request $request, Sender $sender): JsonResponse
+    public function testConnection(Request $request, Sender $sender): JsonResponse
     {
-        try {
-            if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
-            }
-
-            $validator = Validator::make($request->all(), [
+        return $this->validateAuthorizeAndExecute(
+            $request,
+            [
                 'test_email' => 'required|email'
-            ]);
+            ],
+            function () use ($sender) {
+                if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                    return $this->forbiddenResponse('Access denied');
+                }
+                return null;
+            },
+            function () use ($request, $sender) {
+                $testEmail = $request->input('validated_data')['test_email'];
+                
+                $result = $this->callExternalService(
+                    function () use ($sender, $testEmail) {
+                        return $this->testSmtpConfig($sender->domain->smtpConfig, $sender, $testEmail);
+                    },
+                    'SMTP',
+                    'test_connection',
+                    ['sender_id' => $sender->id, 'test_email' => $testEmail]
+                );
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $smtpConfig = $sender->domain->smtpConfig;
-            
-            if (!$smtpConfig) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No SMTP configuration found for sender domain'
-                ], 400);
-            }
-
-            $testResult = $this->testSmtpConfig($smtpConfig, $sender, $validator->validated()['test_email']);
-
-            Log::info('Sender test completed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'test_email' => $validator->validated()['test_email'],
-                'success' => $testResult['success']
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $testResult,
-                'message' => $testResult['success'] ? 'Test email sent successfully' : 'Test email failed'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Sender test failed', [
-                'user_id' => Auth::id(),
-                'sender_id' => $sender->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to test sender: ' . $e->getMessage()
-            ], 500);
-        }
+                if ($result['success']) {
+                    return $this->actionResponse($result, 'Sender test completed successfully');
+                } else {
+                    return $this->errorResponse('Sender test failed', $result['error']);
+                }
+            },
+            'test_sender',
+            ['sender_id' => $sender->id]
+        );
     }
 
     /**
-     * Test SMTP configuration using Laravel's Mail facade
+     * Test SMTP configuration
      */
     protected function testSmtpConfig(SmtpConfig $smtpConfig, Sender $sender, string $testEmail): array
     {
         try {
-            // Configure mail settings for this test
+            // Configure mail settings
             config([
                 'mail.mailers.smtp.host' => $smtpConfig->host,
                 'mail.mailers.smtp.port' => $smtpConfig->port,
@@ -316,40 +175,25 @@ class SenderController extends Controller
                 'mail.mailers.smtp.password' => $smtpConfig->password,
                 'mail.mailers.smtp.encryption' => $smtpConfig->encryption,
                 'mail.from.address' => $sender->email,
-                'mail.from.name' => $sender->name
+                'mail.from.name' => $sender->name,
             ]);
 
-            $testData = [
-                'to' => $testEmail,
-                'from' => $sender->email,
-                'subject' => 'Test Email from Campaign System',
-                'html_body' => '<h1>Test Email</h1><p>This is a test email from the campaign system.</p><p>Sender: ' . $sender->name . '</p><p>Domain: ' . $sender->domain->domain . '</p>',
-                'text_body' => "Test Email\n\nThis is a test email from the campaign system.\n\nSender: {$sender->name}\nDomain: {$sender->domain->domain}"
-            ];
-
-            // Send test email using Laravel's Mail facade
-            Mail::to($testData['to'])
-                ->send(new TestEmail($testData));
+            // Send test email
+            Mail::to($testEmail)->send(new TestEmail($sender));
 
             return [
                 'success' => true,
                 'message' => 'Test email sent successfully',
-                'smtp_config' => [
-                    'host' => $smtpConfig->host,
-                    'port' => $smtpConfig->port,
-                    'encryption' => $smtpConfig->encryption
-                ]
+                'sender' => $sender->email,
+                'test_email' => $testEmail
             ];
 
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'error' => 'SMTP test failed: ' . $e->getMessage(),
-                'smtp_config' => [
-                    'host' => $smtpConfig->host,
-                    'port' => $smtpConfig->port,
-                    'encryption' => $smtpConfig->encryption
-                ]
+                'error' => $e->getMessage(),
+                'sender' => $sender->email,
+                'test_email' => $testEmail
             ];
         }
     }

@@ -8,9 +8,14 @@ use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
+use App\Traits\LoggingTrait;
+use App\Traits\FileProcessingTrait;
+use App\Traits\ValidationTrait;
 
 class UnsubscribeExportService
 {
+    use LoggingTrait, FileProcessingTrait, ValidationTrait;
+
     /**
      * Append an unsubscribed email to the campaign's unsubscribe list file
      */
@@ -19,7 +24,7 @@ class UnsubscribeExportService
         try {
             $campaign = Campaign::find($campaignId);
             if (!$campaign) {
-                Log::error('Campaign not found for unsubscribe list', ['campaign_id' => $campaignId]);
+                $this->logError('Campaign not found for unsubscribe list', ['campaign_id' => $campaignId]);
                 return false;
             }
 
@@ -32,7 +37,7 @@ class UnsubscribeExportService
                 if (!empty($metadata)) {
                     $line .= ' | ' . json_encode($metadata);
                 }
-                Storage::disk('local')->append($path, $line);
+                $this->appendLineToFile($path, $line);
             } else {
                 // For other formats, we need to read existing data and rewrite
                 $this->updateFormattedUnsubscribeList($campaignId, $email, $metadata, $format);
@@ -46,7 +51,7 @@ class UnsubscribeExportService
                 ]);
             }
 
-            Log::info('Email added to unsubscribe list', [
+            $this->logInfo('Email added to unsubscribe list', [
                 'campaign_id' => $campaignId,
                 'email' => $email,
                 'format' => $format,
@@ -56,7 +61,7 @@ class UnsubscribeExportService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Failed to append to unsubscribe list', [
+            $this->logError('Failed to append to unsubscribe list', [
                 'campaign_id' => $campaignId,
                 'email' => $email,
                 'error' => $e->getMessage()
@@ -128,7 +133,7 @@ class UnsubscribeExportService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Failed to export unsubscribe list', [
+            $this->logError('Failed to export unsubscribe list', [
                 'campaign_id' => $campaignId,
                 'format' => $format,
                 'error' => $e->getMessage()
@@ -173,11 +178,11 @@ class UnsubscribeExportService
         $format = $campaign->unsubscribe_list_format ?? 'txt';
         $path = $this->getUnsubscribeFilePath($campaignId, $format);
         
-        if (!Storage::disk('local')->exists($path)) {
+        if (!$this->fileExists($path)) {
             return [];
         }
 
-        $content = Storage::disk('local')->get($path);
+        $content = $this->getFileContent($path);
         
         if ($format === 'txt') {
             $lines = array_filter(array_map('trim', explode("\n", $content)));
@@ -195,7 +200,7 @@ class UnsubscribeExportService
     {
         try {
             if ($format === 'csv') {
-                $content = Storage::disk('local')->get($path);
+                $content = $this->getFileContent($path);
                 $lines = array_filter(array_map('trim', explode("\n", $content)));
                 $emails = [];
                 foreach ($lines as $line) {
@@ -209,11 +214,11 @@ class UnsubscribeExportService
 
             // For Excel files, we need PhpSpreadsheet
             if (!class_exists('\PhpOffice\PhpSpreadsheet\IOFactory')) {
-                Log::error('PhpSpreadsheet not available for Excel parsing');
+                $this->logError('PhpSpreadsheet not available for Excel parsing');
                 return [];
             }
 
-            $fullPath = Storage::disk('local')->path($path);
+            $fullPath = $this->getFilePath($path);
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($fullPath);
             $worksheet = $spreadsheet->getActiveSheet();
             $emails = [];
@@ -228,7 +233,7 @@ class UnsubscribeExportService
             return array_unique($emails);
 
         } catch (\Exception $e) {
-            Log::error('Failed to parse formatted file', [
+            $this->logError('Failed to parse formatted file', [
                 'path' => $path,
                 'format' => $format,
                 'error' => $e->getMessage()
@@ -244,7 +249,7 @@ class UnsubscribeExportService
     {
         $path = $this->getUnsubscribeFilePath($campaignId, 'txt');
         $content = implode("\n", $emails);
-        Storage::disk('local')->put($path, $content);
+        $this->putFileContent($path, $content);
         return $path;
     }
 
@@ -258,7 +263,7 @@ class UnsubscribeExportService
         foreach ($emails as $email) {
             $csv .= '"' . addslashes($email) . '",' . now()->toISOString() . "\n";
         }
-        Storage::disk('local')->put($path, $csv);
+        $this->putFileContent($path, $csv);
         return $path;
     }
 
@@ -268,7 +273,7 @@ class UnsubscribeExportService
     private function exportExcel(int $campaignId, array $emails, string $type, array $metadata = []): string
     {
         if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
-            Log::error('PhpSpreadsheet not available for Excel export');
+            $this->logError('PhpSpreadsheet not available for Excel export');
             return $this->exportTxt($campaignId, $emails);
         }
 

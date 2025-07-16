@@ -1,196 +1,224 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { userService } from '../../services/api';
+
+// Async thunks
+export const fetchCurrentUser = createAsyncThunk(
+  'user/fetchCurrentUser',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await userService.getProfile();
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch user profile';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
 
 export const fetchUsers = createAsyncThunk(
-  'users/fetchUsers',
-  async (params, { rejectWithValue }) => {
+  'user/fetchUsers',
+  async (params = {}, { rejectWithValue }) => {
     try {
-      return await api.get('/admin/users', params);
+      const response = await userService.getUsers(params);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch users';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const fetchAdminUsers = createAsyncThunk(
-  'users/fetchAdminUsers',
-  async (params, { rejectWithValue }) => {
+  'user/fetchAdminUsers',
+  async (params = {}, { rejectWithValue }) => {
     try {
-      return await api.get('/admin/users', params);
+      const response = await userService.getAdminUsers(params);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch admin users';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const updateUserStatus = createAsyncThunk(
-  'users/updateUserStatus',
+  'user/updateUserStatus',
   async ({ userId, status }, { rejectWithValue }) => {
     try {
-      return await api.put(`/admin/users/${userId}`, { status });
+      const response = await userService.updateUserStatus(userId, status);
+      return { userId, status, ...response.data };
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
-    }
-  }
-);
-
-export const fetchUser = createAsyncThunk(
-  'users/fetchUser',
-  async (userId, { rejectWithValue }) => {
-    try {
-      return await api.get(`/admin/users/${userId}`);
-    } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
-    }
-  }
-);
-
-export const updateUser = createAsyncThunk(
-  'users/updateUser',
-  async ({ userId, userData }, { rejectWithValue }) => {
-    try {
-      return await api.put(`/admin/users/${userId}`, userData);
-    } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update user status';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const deleteUser = createAsyncThunk(
-  'users/deleteUser',
+  'user/deleteUser',
   async (userId, { rejectWithValue }) => {
     try {
-      return await api.delete(`/admin/users/${userId}`);
+      const response = await userService.deleteUser(userId);
+      return { userId, ...response.data };
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to delete user';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
-export const updateProfile = createAsyncThunk(
-  'users/updateProfile',
+export const updateUserProfile = createAsyncThunk(
+  'user/updateUserProfile',
   async (profileData, { rejectWithValue }) => {
     try {
-      return await api.put('/user/profile', profileData);
+      const response = await userService.updateProfile(profileData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update profile';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const changePassword = createAsyncThunk(
-  'users/changePassword',
+  'user/changePassword',
   async (passwordData, { rejectWithValue }) => {
     try {
-      return await api.put('/user/password', passwordData);
+      const response = await userService.changePassword(passwordData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to change password';
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
+// Initial state
 const initialState = {
-  users: [],
   currentUser: null,
-  isLoading: false,
+  users: [],
+  adminUsers: [],
+  loading: false,
   error: null,
-  pagination: {
-    current_page: 1,
-    last_page: 1,
-    per_page: 10,
-    total: 0,
-  },
+  profileLoading: false,
+  profileError: null
 };
 
+// Slice
 const userSlice = createSlice({
-  name: 'users',
+  name: 'user',
   initialState,
   reducers: {
-    clearError: (state) => {
+    clearUserError: (state) => {
       state.error = null;
-    },
-    setCurrentUser: (state, action) => {
-      state.currentUser = action.payload;
+      state.profileError = null;
     },
     clearCurrentUser: (state) => {
       state.currentUser = null;
-    },
+    }
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Users
+      // Fetch current user
+      .addCase(fetchCurrentUser.pending, (state) => {
+        state.profileLoading = true;
+        state.profileError = null;
+      })
+      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        state.profileLoading = false;
+        state.currentUser = action.payload;
+      })
+      .addCase(fetchCurrentUser.rejected, (state, action) => {
+        state.profileLoading = false;
+        state.profileError = action.payload;
+      })
+      // Fetch users
       .addCase(fetchUsers.pending, (state) => {
-        state.isLoading = true;
+        state.loading = true;
         state.error = null;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.users = action.payload.data;
-        state.pagination = action.payload.meta;
+        state.loading = false;
+        state.users = action.payload.data || action.payload;
       })
       .addCase(fetchUsers.rejected, (state, action) => {
-        state.isLoading = false;
+        state.loading = false;
         state.error = action.payload;
       })
-      
-      // Fetch Single User
-      .addCase(fetchUser.pending, (state) => {
-        state.isLoading = true;
+      // Fetch admin users
+      .addCase(fetchAdminUsers.pending, (state) => {
+        state.loading = true;
         state.error = null;
       })
-      .addCase(fetchUser.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.currentUser = action.payload;
+      .addCase(fetchAdminUsers.fulfilled, (state, action) => {
+        state.loading = false;
+        state.adminUsers = action.payload.data || action.payload;
       })
-      .addCase(fetchUser.rejected, (state, action) => {
-        state.isLoading = false;
+      .addCase(fetchAdminUsers.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
       })
-      
-      // Update User
-      .addCase(updateUser.pending, (state) => {
-        state.isLoading = true;
+      // Update user status
+      .addCase(updateUserStatus.pending, (state) => {
+        state.loading = true;
         state.error = null;
       })
-      .addCase(updateUser.fulfilled, (state, action) => {
-        state.isLoading = false;
-        const index = state.users.findIndex(u => u.id === action.payload.id);
-        if (index !== -1) {
-          state.users[index] = action.payload;
-        }
-        if (state.currentUser?.id === action.payload.id) {
-          state.currentUser = action.payload;
-        }
+      .addCase(updateUserStatus.fulfilled, (state, action) => {
+        state.loading = false;
+        // Update user in both arrays
+        const updateUser = (users) => users.map(user => 
+          user.id === action.payload.userId 
+            ? { ...user, status: action.payload.status }
+            : user
+        );
+        state.users = updateUser(state.users);
+        state.adminUsers = updateUser(state.adminUsers);
       })
-      .addCase(updateUser.rejected, (state, action) => {
-        state.isLoading = false;
+      .addCase(updateUserStatus.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
       })
-      
-      // Delete User
+      // Delete user
+      .addCase(deleteUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(deleteUser.fulfilled, (state, action) => {
-        state.users = state.users.filter(u => u.id !== action.payload);
-        if (state.currentUser?.id === action.payload) {
-          state.currentUser = null;
-        }
+        state.loading = false;
+        state.users = state.users.filter(user => user.id !== action.payload.userId);
+        state.adminUsers = state.adminUsers.filter(user => user.id !== action.payload.userId);
       })
-      
-      // Update Profile
-      .addCase(updateProfile.fulfilled, (state, action) => {
+      .addCase(deleteUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Update user profile
+      .addCase(updateUserProfile.pending, (state) => {
+        state.profileLoading = true;
+        state.profileError = null;
+      })
+      .addCase(updateUserProfile.fulfilled, (state, action) => {
+        state.profileLoading = false;
         state.currentUser = action.payload;
       })
-      
-      // Change Password
+      .addCase(updateUserProfile.rejected, (state, action) => {
+        state.profileLoading = false;
+        state.profileError = action.payload;
+      })
+      // Change password
+      .addCase(changePassword.pending, (state) => {
+        state.profileLoading = true;
+        state.profileError = null;
+      })
       .addCase(changePassword.fulfilled, (state) => {
-        // Password change successful, no state update needed
+        state.profileLoading = false;
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.profileLoading = false;
+        state.profileError = action.payload;
       });
-  },
+  }
 });
 
-export const {
-  clearError,
-  setCurrentUser,
-  clearCurrentUser,
-} = userSlice.actions;
-
+export const { clearUserError, clearCurrentUser } = userSlice.actions;
 export default userSlice.reducer; 

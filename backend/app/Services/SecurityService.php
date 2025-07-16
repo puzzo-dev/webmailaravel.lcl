@@ -5,6 +5,10 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\ApiKey;
 use App\Models\SecurityLog;
+use App\Traits\LoggingTrait;
+use App\Traits\CacheManagementTrait;
+use App\Traits\ValidationTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -13,13 +17,13 @@ use PragmaRX\Google2FA\Google2FA;
 
 class SecurityService
 {
-    protected $google2fa;
-    protected $loggingService;
+    use LoggingTrait, CacheManagementTrait, ValidationTrait, FileProcessingTrait;
 
-    public function __construct(LoggingService $loggingService)
+    protected $google2fa;
+
+    public function __construct()
     {
         $this->google2fa = new Google2FA();
-        $this->loggingService = $loggingService;
     }
 
     /**
@@ -35,11 +39,11 @@ class SecurityService
         );
 
         // Store secret temporarily (will be confirmed when user verifies)
-        Cache::put("2fa_secret_{$user->id}", $secret, 300); // 5 minutes
+        $this->putCache("2fa_secret_{$user->id}", $secret, 300); // 5 minutes
 
         return [
             'secret' => $secret,
-            'qr_code_url' => $qrCodeUrl,
+            'qr_code' => $qrCodeUrl,
             'backup_codes' => $this->generateBackupCodes($user)
         ];
     }
@@ -54,7 +58,7 @@ class SecurityService
         }
 
         // Check if it's initial setup
-        $tempSecret = Cache::get("2fa_secret_{$user->id}");
+        $tempSecret = $this->getCache("2fa_secret_{$user->id}");
         if ($tempSecret && $this->google2fa->verifyKey($tempSecret, $code)) {
             $this->enable2FA($user, $tempSecret);
             return true;
@@ -74,7 +78,7 @@ class SecurityService
             'two_factor_enabled_at' => now()
         ]);
 
-        Cache::forget("2fa_secret_{$user->id}");
+        $this->forgetCache("2fa_secret_{$user->id}");
 
         $this->logSecurityEvent($user, '2fa_enabled', [
             'ip' => request()->ip(),
@@ -305,7 +309,7 @@ class SecurityService
             ]))
         ]);
 
-        $this->loggingService->log("security.{$event}", [
+        $this->log("security.{$event}", [
             'user_id' => $user->id,
             'event' => $event,
             'metadata' => $metadata

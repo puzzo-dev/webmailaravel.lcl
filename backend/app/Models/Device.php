@@ -13,12 +13,17 @@ class Device extends Model
         'user_id',
         'device_id',
         'device_name',
+        'device_type',
         'ip_address',
         'last_seen',
+        'trusted',
+        'trusted_at',
     ];
 
     protected $casts = [
         'last_seen' => 'datetime',
+        'trusted' => 'boolean',
+        'trusted_at' => 'datetime',
     ];
 
     // Relationships

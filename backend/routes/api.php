@@ -7,20 +7,17 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\SenderController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\ContentController;
-use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\AdminController;
-// use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PowerMTAController;
-use App\Http\Controllers\BTCPayController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\SuppressionListController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\MonitoringController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,25 +33,23 @@ use App\Http\Controllers\MonitoringController;
 // Public routes - Webhooks are now processed via traits during operations
 // Route::post('/webhooks/telegram', [TelegramController::class, 'webhook']);
 
+// Test route for debugging
+Route::get('/security/test', function () {
+    return response()->json(['message' => 'Security routes working']);
+});
+
+// Security routes (temporarily outside auth middleware for testing)
+Route::prefix('security')->group(function () {
+    Route::get('/sessions', [SecurityController::class, 'getActiveSessions']);
+    Route::get('/devices', [SecurityController::class, 'getTrustedDevices']);
+});
+
 // Auth routes (public)
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
-    Route::get('/me', [AuthController::class, 'me'])->middleware('auth:web');
-    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:web');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-    Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
-    Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
-});
-
-// User profile routes (session authenticated)
-Route::prefix('user')->middleware('auth:web')->group(function () {
-    Route::get('/profile', [UserController::class, 'getProfile']);
-    Route::put('/profile', [UserController::class, 'updateProfile']);
-    Route::put('/password', [UserController::class, 'changePassword']);
-    Route::get('/devices', [UserController::class, 'getDevices']);
-    Route::get('/sessions', [UserController::class, 'getSessions']);
 });
 
 // Public tracking routes (no authentication required)
@@ -64,9 +59,33 @@ Route::prefix('tracking')->group(function () {
     Route::get('/unsubscribe/{emailId}', [TrackingController::class, 'unsubscribe']);
 });
 
-// Protected routes
-Route::middleware(['auth:web'])->group(function () {
-    
+// Protected routes (require JWT authentication)
+Route::middleware(['auth:api'])->group(function () {
+    // Test route to verify authentication
+    Route::get('/test-auth', function () {
+        return response()->json([
+            'success' => true,
+            'message' => 'Authentication working',
+            'user' => auth()->user()
+        ]);
+    });
+
+    // User profile routes
+    Route::prefix('user')->group(function () {
+        Route::get('/profile', [UserController::class, 'getProfile']);
+        Route::put('/profile', [UserController::class, 'updateProfile']);
+        Route::put('/password', [UserController::class, 'changePassword']);
+        Route::get('/devices', [UserController::class, 'getDevices']);
+        Route::get('/sessions', [UserController::class, 'getSessions']);
+        Route::get('/me', [AuthController::class, 'me']);
+    });
+
+    // Auth routes (require authentication)
+    Route::prefix('auth')->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/refresh', [AuthController::class, 'refresh']);
+    });
+
     // Campaign routes
     Route::prefix('campaigns')->group(function () {
         Route::get('/', [CampaignController::class, 'index']);
@@ -78,7 +97,7 @@ Route::middleware(['auth:web'])->group(function () {
         Route::post('/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
         Route::post('/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
         Route::post('/{campaign}/stop', [CampaignController::class, 'stopCampaign']);
-        Route::get('/{campaign}/stats', [CampaignController::class, 'statistics']);
+        Route::get('/{campaign}/stats', [CampaignController::class, 'getCampaignStatistics']);
         Route::get('/{campaign}/tracking', [CampaignController::class, 'trackingStats']);
         Route::get('/template-variables', [CampaignController::class, 'getTemplateVariables']);
         Route::get('/{campaign}/template-variables', [CampaignController::class, 'getCampaignTemplateVariables']);
@@ -87,8 +106,8 @@ Route::middleware(['auth:web'])->group(function () {
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
     });
 
-    // User routes
-    Route::prefix('users')->group(function () {
+    // User management routes (admin only)
+    Route::prefix('users')->middleware(['role:admin'])->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
         Route::get('/{user}', [UserController::class, 'show']);
@@ -136,15 +155,25 @@ Route::middleware(['auth:web'])->group(function () {
         Route::post('/{content}/preview', [ContentController::class, 'preview']);
     });
 
-    // Subscription routes
-    Route::prefix('subscriptions')->group(function () {
-        Route::get('/', [SubscriptionController::class, 'index']);
-        Route::post('/', [SubscriptionController::class, 'store']);
-        Route::get('/{subscription}', [SubscriptionController::class, 'show']);
-        Route::put('/{subscription}', [SubscriptionController::class, 'update']);
-        Route::delete('/{subscription}', [SubscriptionController::class, 'destroy']);
-        Route::post('/{subscription}/cancel', [SubscriptionController::class, 'cancel']);
-        Route::post('/{subscription}/reactivate', [SubscriptionController::class, 'reactivate']);
+    // Billing & Subscription routes (consolidated)
+    Route::prefix('billing')->group(function () {
+        // Subscription management
+        Route::get('/subscriptions', [BillingController::class, 'index']);
+        Route::post('/subscriptions', [BillingController::class, 'store']);
+        Route::get('/subscriptions/{subscription}', [BillingController::class, 'show']);
+        Route::put('/subscriptions/{subscription}', [BillingController::class, 'update']);
+        Route::delete('/subscriptions/{subscription}', [BillingController::class, 'destroy']);
+        Route::post('/subscriptions/{subscription}/renew', [BillingController::class, 'renew']);
+        
+        // Payment & Invoice management
+        Route::post('/invoice', [BillingController::class, 'createInvoice']);
+        Route::get('/invoice/{invoice_id}/status', [BillingController::class, 'invoiceStatus']);
+        Route::get('/payment-history', [BillingController::class, 'paymentHistory']);
+        Route::get('/rates', [BillingController::class, 'rates']);
+        Route::get('/plans', [BillingController::class, 'plans']);
+        
+        // Webhook for payment processing
+        Route::post('/webhook', [BillingController::class, 'webhook']);
     });
 
     // Suppression List routes
@@ -167,6 +196,14 @@ Route::middleware(['auth:web'])->group(function () {
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
         Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
         Route::get('/system-config', [AdminController::class, 'getSystemConfig']);
+
+        // Granular config endpoints for BTCPay, Telegram, PowerMTA
+        Route::get('/system-config/btcpay', [AdminController::class, 'getBTCPayConfig']);
+        Route::post('/system-config/btcpay', [AdminController::class, 'updateBTCPayConfig']);
+        Route::get('/system-config/telegram', [AdminController::class, 'getTelegramConfig']);
+        Route::post('/system-config/telegram', [AdminController::class, 'updateTelegramConfig']);
+        Route::get('/system-config/powermta', [AdminController::class, 'getPowerMTAConfig']);
+        Route::post('/system-config/powermta', [AdminController::class, 'updatePowerMTAConfig']);
     });
 
     // Backup routes
@@ -197,40 +234,34 @@ Route::middleware(['auth:web'])->group(function () {
         Route::delete('/', [NotificationController::class, 'deleteAll']);
     });
 
-    // Telegram routes
-    // Route::prefix('telegram')->group(function () {
-    //     Route::post('/verify', [TelegramController::class, 'verifyCode']);
-    //     Route::get('/status', [TelegramController::class, 'getStatus']);
-    //     Route::post('/test', [TelegramController::class, 'sendTestMessage']);
-    // });
-
     // PowerMTA routes
     Route::prefix('powermta')->group(function () {
-        Route::get('/training/config', [PowerMTAController::class, 'getTrainingConfig']);
-        Route::get('/domains/analytics', [PowerMTAController::class, 'getAllDomainsAnalytics']);
-        Route::post('/domains/training/check', [PowerMTAController::class, 'manualTrainingCheck']);
-        
-        Route::prefix('domains/{domainId}')->group(function () {
-            Route::get('/analytics', [PowerMTAController::class, 'getDomainAnalytics']);
-            Route::get('/accounting', [PowerMTAController::class, 'getAccountingMetrics']);
-            Route::get('/fbl', [PowerMTAController::class, 'getFBLData']);
-            Route::get('/diagnostics', [PowerMTAController::class, 'getDiagnosticData']);
-            Route::get('/status', [PowerMTAController::class, 'getDomainStatus']);
-            Route::post('/training/apply', [PowerMTAController::class, 'applyTrainingConfig']);
-            Route::put('/config', [PowerMTAController::class, 'updateDomainConfig']);
-            Route::get('/analytics/export', [PowerMTAController::class, 'exportDomainAnalytics']);
-        });
+        Route::get('/status', [PowerMTAController::class, 'getStatus']);
+        Route::get('/fbl/accounts', [PowerMTAController::class, 'getFBLAccounts']);
+        Route::get('/diagnostics/files', [PowerMTAController::class, 'getDiagnosticFiles']);
+        Route::post('/diagnostics/parse', [PowerMTAController::class, 'parseDiagnosticFile']);
+        Route::post('/reputation/analyze', [PowerMTAController::class, 'analyzeSenderReputation']);
+        Route::get('/reputation/summary', [PowerMTAController::class, 'getReputationSummary']);
+        Route::get('/config', [PowerMTAController::class, 'getConfiguration']);
+        Route::put('/config', [PowerMTAController::class, 'updateConfiguration']);
     });
 
-    // BTCPay routes
+    // Legacy routes for backward compatibility - redirect to new billing endpoints
     Route::prefix('btcpay')->group(function () {
-        Route::post('/invoice', [BTCPayController::class, 'createInvoice']);
-        Route::post('/manual/subscription', [BTCPayController::class, 'createManualSubscription']);
-        Route::post('/manual/payment', [BTCPayController::class, 'processManualPayment']);
-        Route::get('/manual/payment-methods', [BTCPayController::class, 'getManualPaymentMethods']);
-        Route::get('/invoice/{invoice_id}', [BTCPayController::class, 'getInvoiceStatus']);
-        Route::get('/rates', [BTCPayController::class, 'getPaymentRates']);
-        Route::get('/history', [BTCPayController::class, 'getPaymentHistory']);
+        Route::post('/invoice', [BillingController::class, 'createInvoice']);
+        Route::get('/invoice/{invoice_id}', [BillingController::class, 'invoiceStatus']);
+        Route::get('/rates', [BillingController::class, 'rates']);
+        Route::get('/history', [BillingController::class, 'paymentHistory']);
+    });
+    
+    // Legacy subscription routes for backward compatibility
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/', [BillingController::class, 'index']);
+        Route::post('/', [BillingController::class, 'store']);
+        Route::get('/{subscription}', [BillingController::class, 'show']);
+        Route::put('/{subscription}', [BillingController::class, 'update']);
+        Route::delete('/{subscription}', [BillingController::class, 'destroy']);
+        Route::post('/{subscription}/renew', [BillingController::class, 'renew']);
     });
 
     // Analytics routes
@@ -249,7 +280,8 @@ Route::middleware(['auth:web'])->group(function () {
 
     // Security routes
     Route::prefix('security')->group(function () {
-        Route::get('/2fa/enable', [SecurityController::class, 'enable2FA']);
+        Route::get('/settings', [SecurityController::class, 'getSecuritySettings']);
+        Route::post('/2fa/enable', [SecurityController::class, 'enable2FA']);
         Route::post('/2fa/verify', [SecurityController::class, 'verify2FA']);
         Route::delete('/2fa/disable', [SecurityController::class, 'disable2FA']);
         Route::get('/api-keys', [SecurityController::class, 'getApiKeys']);
@@ -257,16 +289,9 @@ Route::middleware(['auth:web'])->group(function () {
         Route::delete('/api-keys/{key}', [SecurityController::class, 'revokeApiKey']);
         Route::get('/activity', [SecurityController::class, 'getActivityLog']);
         Route::post('/password/change', [SecurityController::class, 'changePassword']);
-    });
-
-    // Monitoring routes
-    Route::prefix('monitoring')->group(function () {
-        Route::get('/status', [MonitoringController::class, 'getMonitoringStatus']);
-        Route::get('/results', [MonitoringController::class, 'getAllMonitoringResults']);
-        Route::get('/domains/{domainId}/result', [MonitoringController::class, 'getDomainMonitoringResult']);
-        Route::post('/run', [MonitoringController::class, 'forceRunMonitoring']);
-        Route::post('/domains/{domainId}/schedule', [MonitoringController::class, 'scheduleDomainCheck']);
-        Route::post('/process', [MonitoringController::class, 'processScheduledChecks']);
-        Route::delete('/clear', [MonitoringController::class, 'clearMonitoringData']);
+        Route::get('/devices', [SecurityController::class, 'getTrustedDevices']);
+        Route::post('/devices/{device}/trust', [SecurityController::class, 'trustDevice']);
+        Route::get('/sessions', [SecurityController::class, 'getActiveSessions']);
+        Route::delete('/sessions/{session}', [SecurityController::class, 'revokeSession']);
     });
 }); 

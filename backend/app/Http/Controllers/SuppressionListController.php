@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Services\SuppressionListService;
-use App\Services\FileUploadService;
+use App\Traits\SuppressionListTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -12,10 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class SuppressionListController extends Controller
 {
-    public function __construct(
-        private SuppressionListService $suppressionListService,
-        private FileUploadService $fileUploadService
-    ) {}
+    use SuppressionListTrait, FileProcessingTrait;
 
     /**
      * Handle unsubscribe request
@@ -25,7 +22,7 @@ class SuppressionListController extends Controller
         try {
             $email = $request->get('email');
             
-            if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (!$email || !$this->validateEmail($email)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid email address'
@@ -38,7 +35,7 @@ class SuppressionListController extends Controller
                 'unsubscribed_at' => now()->toISOString()
             ];
 
-            $result = $this->suppressionListService->handleUnsubscribe($emailId, $email, $metadata);
+            $result = $this->handleUnsubscribe($emailId, $email, $metadata);
 
             if ($result['success']) {
                 Log::info('Unsubscribe processed', [
@@ -91,10 +88,10 @@ class SuppressionListController extends Controller
             $source = $request->input('source', 'fbl_upload');
 
             // Upload file
-            $filepath = $this->fileUploadService->uploadFile($file, 'fbl_files');
+            $filepath = $this->uploadFile($file, 'fbl_files');
 
             // Process FBL file
-            $result = $this->suppressionListService->processFBLFile($filepath, $source);
+            $result = $this->processFBLFile($filepath, $source);
 
             if ($result['success']) {
                 Log::info('FBL file processed successfully', [
@@ -135,7 +132,7 @@ class SuppressionListController extends Controller
     public function getStatistics(): JsonResponse
     {
         try {
-            $stats = $this->suppressionListService->getStatistics();
+            $stats = $this->getSuppressionStatistics();
 
             return response()->json([
                 'success' => true,
@@ -161,7 +158,7 @@ class SuppressionListController extends Controller
     {
         try {
             $filename = $request->input('filename');
-            $filepath = $this->suppressionListService->exportSuppressionList($filename);
+            $filepath = $this->exportSuppressionList($filename);
 
             Log::info('Suppression list exported', [
                 'filepath' => $filepath
@@ -203,13 +200,11 @@ class SuppressionListController extends Controller
                 ], 404);
             }
 
-            $content = Storage::disk('local')->get($filepath);
-            $headers = [
-                'Content-Type' => 'text/plain',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"'
-            ];
-
-            return response($content, 200, $headers);
+            return response()->download(
+                Storage::disk('local')->path($filepath),
+                $filename,
+                ['Content-Type' => 'text/csv']
+            );
 
         } catch (\Exception $e) {
             Log::error('Failed to download suppression list', [
@@ -225,41 +220,49 @@ class SuppressionListController extends Controller
     }
 
     /**
-     * Import suppression list from file
+     * Import suppression list
      */
     public function import(Request $request): JsonResponse
     {
         try {
             $request->validate([
-                'suppression_file' => 'required|file|mimes:csv,txt|max:10240',
-                'type' => 'required|string|in:unsubscribe,fbl,bounce,complaint,manual',
+                'file' => 'required|file|mimes:csv,txt|max:10240',
+                'type' => 'nullable|string|max:50',
                 'source' => 'nullable|string|max:255'
             ]);
 
-            $file = $request->file('suppression_file');
-            $type = $request->input('type');
-            $source = $request->input('source', 'manual_import');
+            $file = $request->file('file');
+            $type = $request->input('type', 'manual');
+            $source = $request->input('source', 'import');
 
             // Upload file
-            $filepath = $this->fileUploadService->uploadFile($file, 'suppression_imports');
+            $filepath = $this->uploadFile($file, 'suppression_lists');
 
             // Import suppression list
-            $result = $this->suppressionListService->importSuppressionList($filepath, $type, $source);
+            $result = $this->importSuppressionList($filepath, $type, $source);
 
-            Log::info('Suppression list imported', [
-                'filepath' => $filepath,
-                'type' => $type,
-                'result' => $result
-            ]);
+            if ($result['success']) {
+                Log::info('Suppression list imported', [
+                    'filepath' => $filepath,
+                    'imported' => $result['imported'],
+                    'skipped' => $result['skipped']
+                ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Suppression list imported successfully',
-                'data' => $result
-            ]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Suppression list imported successfully',
+                    'data' => $result
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to import suppression list',
+                    'error' => $result['error']
+                ], 500);
+            }
 
         } catch (\Exception $e) {
-            Log::error('Failed to import suppression list', [
+            Log::error('Suppression list import failed', [
                 'error' => $e->getMessage()
             ]);
 
@@ -272,7 +275,7 @@ class SuppressionListController extends Controller
     }
 
     /**
-     * Remove email from suppression list (admin only)
+     * Remove email from suppression list
      */
     public function removeEmail(Request $request): JsonResponse
     {
@@ -282,12 +285,11 @@ class SuppressionListController extends Controller
             ]);
 
             $email = $request->input('email');
-            $result = $this->suppressionListService->removeFromSuppressionList($email);
+            $removed = $this->removeFromSuppressionList($email);
 
-            if ($result) {
+            if ($removed) {
                 Log::info('Email removed from suppression list', [
-                    'email' => $email,
-                    'user_id' => auth()->id()
+                    'email' => $email
                 ]);
 
                 return response()->json([
@@ -297,8 +299,8 @@ class SuppressionListController extends Controller
             } else {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Email not found in suppression list'
-                ], 404);
+                    'message' => 'Failed to remove email from suppression list'
+                ], 500);
             }
 
         } catch (\Exception $e) {
@@ -308,19 +310,19 @@ class SuppressionListController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to remove email from suppression list'
+                'message' => 'Failed to remove email'
             ], 500);
         }
     }
 
     /**
-     * Clean up old suppression entries
+     * Cleanup old suppression list entries
      */
     public function cleanup(Request $request): JsonResponse
     {
         try {
             $days = $request->input('days', 365);
-            $removed = $this->suppressionListService->cleanupOldEntries($days);
+            $removed = $this->cleanupOldEntries($days);
 
             Log::info('Suppression list cleanup completed', [
                 'days' => $days,
@@ -331,13 +333,12 @@ class SuppressionListController extends Controller
                 'success' => true,
                 'message' => 'Cleanup completed successfully',
                 'data' => [
-                    'removed_entries' => $removed,
-                    'days_old' => $days
+                    'removed_entries' => $removed
                 ]
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Failed to cleanup suppression list', [
+            Log::error('Suppression list cleanup failed', [
                 'error' => $e->getMessage()
             ]);
 

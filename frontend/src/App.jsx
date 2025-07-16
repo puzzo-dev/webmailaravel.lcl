@@ -24,77 +24,120 @@ import Campaigns from './pages/campaigns/Campaigns';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
 import Analytics from './pages/analytics/Analytics';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import Profile from './pages/Profile';
-import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
+import Account from './pages/Account';
 
-// New Feature Pages
+// Feature Pages
 import Billing from './pages/billing/Billing';
 import SuppressionList from './pages/suppression/SuppressionList';
 import Senders from './pages/senders/Senders';
 import Domains from './pages/domains/Domains';
-import Security from './pages/security/Security';
 
 // Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/AdminUsers';
 import AdminLogs from './pages/admin/AdminLogs';
 import AdminBackups from './pages/admin/AdminBackups';
 import AdminPowerMTA from './pages/admin/AdminPowerMTA';
 import AdminSystem from './pages/admin/AdminSystem';
 
-// Additional Features
-import Templates from './pages/templates/Templates';
-import ABTesting from './pages/campaigns/ABTesting';
-import Monitoring from './pages/monitoring/Monitoring';
-
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useSelector((state) => state.auth);
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return children;
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
-// Auth Route Component - redirect authenticated users to dashboard
+// Auth Route Component
 const AuthRoute = ({ children }) => {
   const { isAuthenticated } = useSelector((state) => state.auth);
-  
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  return children;
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
 };
 
 // Admin Route Component
 const AdminRoute = ({ children }) => {
   const { isAuthenticated, user } = useSelector((state) => state.auth);
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (!user?.role || user.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-  
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!user?.role || user.role !== 'admin') return <Navigate to="/" replace />;
   return children;
 };
 
+// Route Configurations
+const authRoutes = [
+  { path: '/login', component: Login },
+  { path: '/register', component: Register },
+  { path: '/forgot-password', component: ForgotPassword },
+  { path: '/reset-password', component: ResetPassword },
+  { path: '/verify-2fa', component: Verify2FA },
+];
+
+const mainRoutes = [
+  { path: '/dashboard', component: Dashboard },
+  { path: '/campaigns', component: Campaigns },
+  { path: '/campaigns/new', component: CampaignBuilder },
+  { path: '/campaigns/:id', component: CampaignDetail },
+  { path: '/campaigns/:id/edit', component: CampaignBuilder },
+  { path: '/analytics', component: Analytics },
+  { path: '/notifications', component: Notifications },
+  { path: '/account', component: Account },
+];
+
+const featureRoutes = [
+  { path: '/billing', component: Billing },
+  { path: '/suppression-list', component: SuppressionList },
+  { path: '/senders', component: Senders },
+  { path: '/domains', component: Domains },
+];
+
+const adminRoutes = [
+  { path: '/admin', component: AdminDashboard },
+  { path: '/admin/users', component: AdminUsers },
+  { path: '/admin/logs', component: AdminLogs },
+  { path: '/admin/backups', component: AdminBackups },
+  { path: '/admin/powermta', component: AdminPowerMTA },
+  { path: '/admin/system', component: AdminSystem },
+];
+
+const adminPlaceholderRoutes = [
+  {
+    path: '/admin/campaigns',
+    title: 'Admin Campaigns',
+    description: 'Admin campaign management coming soon...',
+  },
+  {
+    path: '/admin/domains',
+    title: 'Domain Management',
+    description: 'Domain management coming soon...',
+  },
+  {
+    path: '/admin/billing',
+    title: 'Billing Management',
+    description: 'Billing management coming soon...',
+  },
+  {
+    path: '/admin/settings',
+    title: 'System Settings',
+    description: 'System settings coming soon...',
+  },
+  {
+    path: '/admin/security',
+    title: 'Security Settings',
+    description: 'Security settings coming soon...',
+  },
+  {
+    path: '/admin/reports',
+    title: 'Reports',
+    description: 'Reporting features coming soon...',
+  },
+];
+
 function App() {
-  const { isAuthenticated, isLoading } = useSelector((state) => state.auth);
+  const { isAuthenticated, isLoading, user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
   useEffect(() => {
-    // Only initialize auth once on app load
     dispatch(initializeAuth());
-  }, []); // Remove dispatch from dependency array to prevent re-initialization
+  }, []);
 
-  // Show loading spinner while auth is being initialized
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -119,331 +162,112 @@ function App() {
             },
             success: {
               duration: 3000,
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
-              },
+              iconTheme: { primary: '#10b981', secondary: '#fff' },
             },
             error: {
               duration: 4000,
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
-              },
+              iconTheme: { primary: '#ef4444', secondary: '#fff' },
             },
           }}
         />
-        
         <Routes>
-          {/* Landing Page - Show for non-authenticated users */}
-          {!isAuthenticated && (
-            <Route path="/" element={<Landing />} />
-          )}
-
+          {/* Public Routes */}
+          {!isAuthenticated && <Route path="/" element={<Landing />} />}
+          
           {/* Auth Routes */}
-          <Route path="/login" element={
-            <AuthRoute>
-              <AuthLayout>
-                <Login />
-              </AuthLayout>
-            </AuthRoute>
-          } />
-          <Route path="/register" element={
-            <AuthRoute>
-              <AuthLayout>
-                <Register />
-              </AuthLayout>
-            </AuthRoute>
-          } />
-          <Route path="/forgot-password" element={
-            <AuthRoute>
-              <AuthLayout>
-                <ForgotPassword />
-              </AuthLayout>
-            </AuthRoute>
-          } />
-          <Route path="/reset-password" element={
-            <AuthRoute>
-              <AuthLayout>
-                <ResetPassword />
-              </AuthLayout>
-            </AuthRoute>
-          } />
-          <Route path="/verify-2fa" element={
-            <AuthRoute>
-              <AuthLayout>
-                <Verify2FA />
-              </AuthLayout>
-            </AuthRoute>
-          } />
+          {authRoutes.map(({ path, component: Component }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <AuthRoute>
+                  <AuthLayout>
+                    <Component />
+                  </AuthLayout>
+                </AuthRoute>
+              }
+            />
+          ))}
 
-          {/* Protected Routes */}
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/campaigns" element={
-            <ProtectedRoute>
-              <Layout>
-                <Campaigns />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/campaigns/new" element={
-            <ProtectedRoute>
-              <Layout>
-                <CampaignBuilder />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/campaigns/:id" element={
-            <ProtectedRoute>
-              <Layout>
-                <CampaignDetail />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/campaigns/:id/edit" element={
-            <ProtectedRoute>
-              <Layout>
-                <CampaignBuilder />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/analytics" element={
-            <ProtectedRoute>
-              <Layout>
-                <Analytics />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/templates" element={
-            <ProtectedRoute>
-              <Layout>
-                <Templates />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/ab-testing" element={
-            <ProtectedRoute>
-              <Layout>
-                <ABTesting />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/notifications" element={
-            <ProtectedRoute>
-              <Layout>
-                <Notifications />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <Layout>
-                <Profile />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Layout>
-                <Settings />
-              </Layout>
-            </ProtectedRoute>
-          } />
+          {/* Main Protected Routes */}
+          {mainRoutes.map(({ path, component: Component }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Component />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          ))}
 
-          {/* New Feature Routes */}
-          <Route path="/billing" element={
-            <ProtectedRoute>
-              <Layout>
-                <Billing />
-              </Layout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/suppression-list" element={
-            <ProtectedRoute>
-              <Layout>
-                <SuppressionList />
-              </Layout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/senders" element={
-            <ProtectedRoute>
-              <Layout>
-                <Senders />
-              </Layout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/domains" element={
-            <ProtectedRoute>
-              <Layout>
-                <Domains />
-              </Layout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/security" element={
-            <ProtectedRoute>
-              <Layout>
-                <Security />
-              </Layout>
-            </ProtectedRoute>
-          } />
-
-          <Route path="/monitoring" element={
-            <ProtectedRoute>
-              <Layout>
-                <Monitoring />
-              </Layout>
-            </ProtectedRoute>
-          } />
+          {/* Feature Routes */}
+          {featureRoutes.map(({ path, component: Component }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Component />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          ))}
 
           {/* Admin Routes */}
-          <Route path="/admin" element={
-            <AdminRoute>
-              <Layout>
-                <AdminDashboard />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/users" element={
-            <AdminRoute>
-              <Layout>
-                <AdminUsers />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/logs" element={
-            <AdminRoute>
-              <Layout>
-                <AdminLogs />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/backups" element={
-            <AdminRoute>
-              <Layout>
-                <AdminBackups />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/powermta" element={
-            <AdminRoute>
-              <Layout>
-                <AdminPowerMTA />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/system" element={
-            <AdminRoute>
-              <Layout>
-                <AdminSystem />
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/campaigns" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Admin Campaigns</h1>
-                  <p className="text-gray-600">Admin campaign management coming soon...</p>
-                </div>
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/domains" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Domain Management</h1>
-                  <p className="text-gray-600">Domain management coming soon...</p>
-                </div>
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/billing" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Billing Management</h1>
-                  <p className="text-gray-600">Billing management coming soon...</p>
-                </div>
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/settings" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">System Settings</h1>
-                  <p className="text-gray-600">System settings coming soon...</p>
-                </div>
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/security" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Security Settings</h1>
-                  <p className="text-gray-600">Security settings coming soon...</p>
-                </div>
-              </Layout>
-            </AdminRoute>
-          } />
-          
-          <Route path="/admin/reports" element={
-            <AdminRoute>
-              <Layout>
-                <div className="p-6">
-                  <h1 className="text-2xl font-bold text-gray-900 mb-4">Reports</h1>
-                  <p className="text-gray-600">Reporting features coming soon...</p>
-      </div>
-              </Layout>
-            </AdminRoute>
-          } />
+          {adminRoutes.map(({ path, component: Component }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <AdminRoute>
+                  <Layout>
+                    <Component />
+                  </Layout>
+                </AdminRoute>
+              }
+            />
+          ))}
 
-          {/* Redirect authenticated users to dashboard */}
-          {isAuthenticated && (
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          )}
+          {/* Admin Placeholder Routes */}
+          {adminPlaceholderRoutes.map(({ path, title, description }) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <AdminRoute>
+                  <Layout>
+                    <div className="p-6">
+                      <h1 className="text-2xl font-bold text-gray-900 mb-4">{title}</h1>
+                      <p className="text-gray-600">{description}</p>
+                    </div>
+                  </Layout>
+                </AdminRoute>
+              }
+            />
+          ))}
 
-          {/* Catch all route - only redirect to / for non-authenticated users */}
-          {!isAuthenticated && (
-            <Route path="*" element={<Navigate to="/" replace />} />
-          )}
-          
-          {/* For authenticated users, redirect unmatched routes to dashboard */}
-          {isAuthenticated && (
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          )}
+          {/* Test Route */}
+          <Route
+            path="/test"
+            element={
+              <Layout>
+                <div className="p-6">
+                  <h1 className="text-2xl font-bold">Test Page</h1>
+                  <p>This is a test page to verify routing works.</p>
+                </div>
+              </Layout>
+            }
+          />
+
+          {/* Redirects */}
+          {isAuthenticated && <Route path="/" element={<Navigate to="/dashboard" replace />} />}
+          <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
         </Routes>
       </div>
     </Router>

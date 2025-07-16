@@ -67,174 +67,136 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="flex justify-center">
-            <div className="h-12 w-12 bg-primary-600 rounded-lg flex items-center justify-center">
-              <HiInbox className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link
-              to="/register"
-              className="font-medium text-primary-600 hover:text-primary-500"
-            >
-              create a new account
-            </Link>
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-center text-2xl font-bold text-gray-900">
+          Sign in to your account
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Or{' '}
+          <Link
+            to="/register"
+            className="font-medium text-primary-600 hover:text-primary-500"
+          >
+            create a new account
+          </Link>
+        </p>
+      </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="identifier" className="form-label">
-                Username or Email
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="identifier"
-                  type="text"
-                  autoComplete="username"
-                  className={`input ${errors.identifier ? 'input-error' : ''}`}
-                  placeholder="Enter your username or email"
-                  {...register('identifier', {
-                    required: 'Username or email is required',
-                  })}
-                />
-                {errors.identifier && (
-                  <p className="form-error mt-1">{errors.identifier.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="form-label">
-                Password
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
-                  placeholder="Enter your password"
-                  {...register('password', {
-                    required: 'Password is required',
-                    minLength: {
-                      value: 8,
-                      message: 'Password must be at least 8 characters',
-                    },
-                  })}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <HiEyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <HiEye className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-                {errors.password && (
-                  <p className="form-error mt-1">{errors.password.message}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
+      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="identifier" className="form-label">
+              Username or Email
+            </label>
+            <div className="mt-1 relative">
               <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                id="identifier"
+                type="text"
+                autoComplete="username"
+                className={`input ${errors.identifier ? 'input-error' : ''}`}
+                placeholder="Enter your username or email"
+                {...register('identifier', {
+                  required: 'Username or email is required',
+                })}
               />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
-              </label>
-            </div>
-
-            <div className="text-sm">
-              <Link
-                to="/forgot-password"
-                className="font-medium text-primary-600 hover:text-primary-500"
-              >
-                Forgot your password?
-              </Link>
+              {errors.identifier && (
+                <p className="form-error mt-1">{errors.identifier.message}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={isLoading || loginAttempts >= 5}
-              className="btn btn-primary w-full flex justify-center"
-            >
-              {isLoading ? (
-                <div className="loading-spinner"></div>
-              ) : (
-                <>
-                  <HiLockClosed className="h-5 w-5 mr-2" />
-                  Sign in
-                </>
+            <label htmlFor="password" className="form-label">
+              Password
+            </label>
+            <div className="mt-1 relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
+                placeholder="Enter your password"
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: {
+                    value: 8,
+                    message: 'Password must be at least 8 characters',
+                  },
+                })}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <HiEyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <HiEye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+              {errors.password && (
+                <p className="form-error mt-1">{errors.password.message}</p>
               )}
-            </button>
-          </div>
-
-          {/* Demo login button */}
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={isLoading}
-              className="text-sm text-gray-600 hover:text-gray-500 underline"
-            >
-              Try demo account
-            </button>
-          </div>
-
-          {/* Rate limiting warning */}
-          {loginAttempts >= 3 && (
-            <div className="bg-warning-50 border border-warning-200 rounded-md p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <HiLockClosed className="h-5 w-5 text-warning-400" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-warning-800">
-                    Too many login attempts
-                  </h3>
-                  <div className="mt-2 text-sm text-warning-700">
-                    <p>
-                      Please wait a few minutes before trying again or reset your password.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
-        </form>
-
-        {/* Additional links */}
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Need help?{' '}
-            <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
-              Contact support
-            </a>
-          </p>
+          </div>
         </div>
-      </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+              Remember me
+            </label>
+          </div>
+
+          <div className="text-sm">
+            <Link
+              to="/forgot-password"
+              className="font-medium text-primary-600 hover:text-primary-500"
+            >
+              Forgot your password?
+            </Link>
+          </div>
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            disabled={isLoading || loginAttempts >= 5}
+            className="btn btn-primary w-full flex justify-center"
+          >
+            {isLoading ? (
+              <div className="loading-spinner"></div>
+            ) : (
+              <>
+                <HiLockClosed className="h-5 w-5 mr-2" />
+                Sign in
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Demo login button */}
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            disabled={isLoading}
+            className="text-sm text-gray-600 hover:text-gray-500 underline"
+          >
+            Try demo account
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

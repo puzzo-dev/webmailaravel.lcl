@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Services\CampaignService;
+use App\Traits\LoggingTrait;
+use App\Traits\ResponseTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
-class CampaignController extends BaseController
+class CampaignController extends Controller
 {
+    use ResponseTrait,
+        LoggingTrait,
+        ValidationTrait;
+
     public function __construct(
         private CampaignService $campaignService
     ) {}
@@ -19,14 +25,14 @@ class CampaignController extends BaseController
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return $this->executeControllerMethod(function () {
+        return $this->executeControllerMethod(function () use ($request) {
             $query = Campaign::where('user_id', Auth::id())
                 ->with(['contents', 'sender'])
                 ->orderBy('created_at', 'desc');
 
-            return $this->getPaginatedResults($query, request(), 'campaigns', ['contents', 'sender']);
+            return $this->getPaginatedResults($query, $request, 'campaigns', ['contents', 'sender']);
         }, 'list_campaigns');
     }
 
@@ -79,23 +85,32 @@ class CampaignController extends BaseController
     /**
      * Display the specified resource.
      */
-    public function show(Campaign $campaign): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            fn() => $this->getResource($campaign->load(['contents', 'sender', 'user']), 'campaign', $campaign->id),
-            'view_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $campaign = Campaign::with(['contents', 'sender', 'user'])->findOrFail($id);
+            
+            if (!$this->authorizeResourceAccess($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            return $this->getResource($campaign, 'campaign', $id);
+        }, 'view_campaign');
     }
 
     /**
      * Update the specified resource.
      */
-    public function update(Request $request, Campaign $campaign): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $campaign = Campaign::findOrFail($id);
+            
+            if (!$this->authorizeResourceAccess($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validator = Validator::make($request->all(), [
                 'name' => 'sometimes|string|max:255',
                 'subject' => 'sometimes|string|max:255',
                 'content' => 'sometimes|string',
@@ -104,35 +119,38 @@ class CampaignController extends BaseController
                 'content_variations' => 'nullable|array',
                 'content_variations.*.subject' => 'required_with:content_variations|string|max:255',
                 'content_variations.*.content' => 'required_with:content_variations|string',
-            ],
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($request, $campaign) {
-                $campaign->update($request->input('validated_data'));
-                return $this->updateResponse($campaign->load(['contents', 'sender']), 'Campaign updated successfully');
-            },
-            'update_campaign'
-        );
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $campaign->update($validator->validated());
+            return $this->successResponse($campaign->load(['contents', 'sender']), 'Campaign updated successfully');
+        }, 'update_campaign');
     }
 
     /**
      * Remove the specified resource.
      */
-    public function destroy(Campaign $campaign): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $campaign->delete();
-                return $this->deleteResponse('Campaign deleted successfully');
-            },
-            'delete_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $campaign = Campaign::findOrFail($id);
+            
+            if (!$this->authorizeResourceAccess($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $campaign->delete();
+            return $this->successResponse(null, 'Campaign deleted successfully');
+        }, 'delete_campaign');
     }
 
     /**
      * Get campaign statistics
      */
-    public function statistics(Campaign $campaign): JsonResponse
+    public function getCampaignStatistics(Campaign $campaign): JsonResponse
     {
         return $this->authorizeAndExecute(
             fn() => $this->authorizeResourceAccess($campaign),
@@ -346,9 +364,8 @@ class CampaignController extends BaseController
                 'campaign_name' => $campaign->name
             ];
 
-            // Send to Telegram if configured
-            $telegramService = app(\App\Services\TelegramService::class);
-            $telegramService->sendNotificationToAdmin("Campaign {$action}: {$campaign->name}");
+            // Send to Telegram if configured (using Http facade directly)
+            $this->sendTelegramNotification("Campaign {$action}: {$campaign->name}");
 
             return ['success' => true];
 
@@ -399,5 +416,30 @@ class CampaignController extends BaseController
     {
         // Implementation for hourly activity
         return [];
+    }
+
+    /**
+     * Send Telegram notification using Http facade directly
+     */
+    private function sendTelegramNotification(string $message): void
+    {
+        try {
+            $botToken = config('services.telegram.bot_token');
+            $chatId = config('services.telegram.admin_chat_id');
+            
+            if (!$botToken || !$chatId) {
+                return; // Skip if not configured
+            }
+
+            \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                'chat_id' => $chatId,
+                'text' => $message,
+                'parse_mode' => 'HTML'
+            ]);
+            
+        } catch (\Exception $e) {
+            // Log error but don't fail the main operation
+            $this->logError('Telegram notification failed', ['error' => $e->getMessage()]);
+        }
     }
 }

@@ -3,54 +3,74 @@ import axios from 'axios';
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 
-// Configure axios defaults for session-based authentication
+// Configure axios defaults for JWT authentication
 axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
-axios.defaults.withCredentials = true; // Enable cookies for session authentication
 
-// CSRF token management using Laravel Sanctum
-let csrfToken = null;
-
-// Function to fetch CSRF token using Laravel Sanctum's built-in route
-const fetchCsrfToken = async () => {
-  try {
-    // Use Laravel Sanctum's built-in CSRF route
-    const response = await axios.get('/sanctum/csrf-cookie', {
-      baseURL: API_BASE_URL.replace('/api', ''), // Remove /api for Sanctum route
-    });
-    
-    // The CSRF token is automatically set in the cookie by Sanctum
-    // We need to decode the token from the cookie
-    const cookies = document.cookie.split(';');
-    const xsrfCookie = cookies.find(cookie => cookie.trim().startsWith('XSRF-TOKEN='));
-    
-    if (xsrfCookie) {
-      csrfToken = decodeURIComponent(xsrfCookie.split('=')[1]);
+// Secure token storage using httpOnly cookies (if available) or sessionStorage
+const secureStorage = {
+  setToken: (token) => {
+    // Try to use httpOnly cookie first, fallback to sessionStorage
+    try {
+      // For JWT, we'll use sessionStorage (more secure than localStorage)
+      sessionStorage.setItem('jwt_token', token);
+    } catch (error) {
+      console.error('Failed to store token:', error);
     }
-    
-    return csrfToken;
-  } catch (error) {
-    console.error('Failed to fetch CSRF token:', error);
-    return null;
+  },
+
+  getToken: () => {
+    try {
+      return sessionStorage.getItem('jwt_token');
+    } catch (error) {
+      console.error('Failed to retrieve token:', error);
+      return null;
+    }
+  },
+
+  removeToken: () => {
+    try {
+      sessionStorage.removeItem('jwt_token');
+    } catch (error) {
+      console.error('Failed to remove token:', error);
+    }
+  },
+
+  setUser: (user) => {
+    try {
+      sessionStorage.setItem('user_data', JSON.stringify(user));
+    } catch (error) {
+      console.error('Failed to store user data:', error);
+    }
+  },
+
+  getUser: () => {
+    try {
+      const user = sessionStorage.getItem('user_data');
+      return user ? JSON.parse(user) : null;
+    } catch (error) {
+      console.error('Failed to retrieve user data:', error);
+      return null;
+    }
+  },
+
+  clearAuth: () => {
+    try {
+      sessionStorage.removeItem('jwt_token');
+      sessionStorage.removeItem('user_data');
+    } catch (error) {
+      console.error('Failed to clear auth data:', error);
+    }
   }
 };
 
-// Request interceptor - add CSRF token for non-GET requests
+// Request interceptor - add JWT token for authenticated requests
 axios.interceptors.request.use(
-  async (config) => {
-    // For session-based authentication, we need CSRF token for state-changing requests
-    if (config.method !== 'get' && config.method !== 'GET') {
-      // Fetch CSRF token if we don't have one
-      if (!csrfToken) {
-        await fetchCsrfToken();
-      }
-      
-      // Add CSRF token to headers
-      if (csrfToken) {
-        config.headers['X-CSRF-TOKEN'] = csrfToken;
-      }
+  (config) => {
+    const token = secureStorage.getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
   (error) => {
@@ -58,17 +78,83 @@ axios.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Flag to prevent multiple refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  
+  failedQueue = [];
+};
+
+// Response interceptor for error handling and token refresh
 axios.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // If we get a 419 (CSRF token mismatch), try to refresh the token
-    if (error.response?.status === 419) {
-      csrfToken = null; // Clear the token so it will be refreshed
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Skip refresh logic for the refresh endpoint itself
+    if (originalRequest.url?.includes('/auth/refresh')) {
+      secureStorage.clearAuth();
+      window.location.href = '/login';
+      return Promise.reject(error);
     }
-    
-    // Don't automatically redirect on 401 - let components handle it
-    // This prevents redirect loops during auth initialization
+
+    // If we get a 401 (Unauthorized) and haven't tried to refresh yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return axios(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Try to refresh the token
+        const response = await axios.post('/auth/refresh');
+        const newToken = response.data.data.token;
+        
+        // Store the new token
+        secureStorage.setToken(newToken);
+        
+        // Process queued requests
+        processQueue(null, newToken);
+        
+        // Retry the original request with the new token
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return axios(originalRequest);
+      } catch (refreshError) {
+        // If refresh fails, clear auth and redirect to login
+        processQueue(refreshError, null);
+        secureStorage.clearAuth();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // If we get a 403 (Forbidden), clear auth and redirect to login
+    if (error.response?.status === 403) {
+      secureStorage.clearAuth();
+      window.location.href = '/login';
+    }
+
     return Promise.reject(error);
   }
 );
@@ -84,8 +170,13 @@ export const api = {
   },
 
   // POST request
-  post: async (endpoint, data = {}) => {
-    const response = await axios.post(endpoint, data);
+  post: async (endpoint, data = {}, config = {}) => {
+    // Handle FormData - axios will set content-type automatically
+    if (data instanceof FormData) {
+      config.headers = { ...config.headers };
+      delete config.headers['Content-Type']; // Let axios set this
+    }
+    const response = await axios.post(endpoint, data, config);
     return response.data;
   },
 
@@ -131,23 +222,54 @@ export const handleApiSuccess = (response) => {
   };
 };
 
-// Auth utilities for session-based authentication
+// Auth utilities for JWT authentication
 export const auth = {
-  // For session auth, we don't need to manually manage tokens
+  // Set token in secure storage
   setToken: (token) => {
-    // No-op for session authentication
-    // The session cookie is automatically managed by the browser
+    secureStorage.setToken(token);
   },
 
+  // Remove token from secure storage
   removeToken: () => {
-    // For session auth, we need to call logout endpoint to clear session
-    // The session cookie will be cleared by the server
+    secureStorage.removeToken();
   },
 
+  // Get token from secure storage
   getToken: () => {
-    // For session auth, we don't need to check for tokens
-    // The session state is managed by the server
-    return null;
+    return secureStorage.getToken();
+  },
+
+  // Check if user is authenticated
+  isAuthenticated: () => {
+    return !!secureStorage.getToken();
+  },
+
+  // Set user data
+  setUser: (user) => {
+    secureStorage.setUser(user);
+  },
+
+  // Get user data
+  getUser: () => {
+    return secureStorage.getUser();
+  },
+
+  // Clear all auth data
+  clearAuth: () => {
+    secureStorage.clearAuth();
+  },
+
+  // Refresh token
+  refreshToken: async () => {
+    try {
+      const response = await axios.post('/auth/refresh');
+      const newToken = response.data.data.token;
+      secureStorage.setToken(newToken);
+      return newToken;
+    } catch (error) {
+      secureStorage.clearAuth();
+      throw error;
+    }
   },
 };
 

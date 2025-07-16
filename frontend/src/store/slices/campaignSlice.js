@@ -126,8 +126,10 @@ export const fetchSenders = createAsyncThunk(
   'campaigns/fetchSenders',
   async (_, { rejectWithValue }) => {
     try {
-      return await api.get('/senders');
+      const response = await api.get('/senders');
+      return response.data || [];
     } catch (error) {
+      console.error('Error fetching senders:', error);
       return rejectWithValue(handleApiError(error).message);
     }
   }
@@ -137,8 +139,10 @@ export const fetchDomains = createAsyncThunk(
   'campaigns/fetchDomains',
   async (_, { rejectWithValue }) => {
     try {
-      return await api.get('/domains');
+      const response = await api.get('/domains');
+      return response.data || [];
     } catch (error) {
+      console.error('Error fetching domains:', error);
       return rejectWithValue(handleApiError(error).message);
     }
   }
@@ -148,8 +152,10 @@ export const fetchContents = createAsyncThunk(
   'campaigns/fetchContents',
   async (_, { rejectWithValue }) => {
     try {
-      return await api.get('/contents');
+      const response = await api.get('/contents');
+      return response.data || [];
     } catch (error) {
+      console.error('Error fetching contents:', error);
       return rejectWithValue(handleApiError(error).message);
     }
   }
@@ -196,8 +202,13 @@ const campaignSlice = createSlice({
       })
       .addCase(fetchCampaigns.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.campaigns = action.payload.data;
-        state.pagination = action.payload.meta;
+        state.campaigns = action.payload.data || action.payload;
+        state.pagination = action.payload.meta || action.payload.pagination || {
+          current_page: 1,
+          last_page: 1,
+          per_page: 10,
+          total: (action.payload.data || action.payload)?.length || 0,
+        };
       })
       .addCase(fetchCampaigns.rejected, (state, action) => {
         state.isLoading = false;
@@ -240,7 +251,10 @@ const campaignSlice = createSlice({
       })
       .addCase(createCampaign.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.campaigns.unshift(action.payload);
+        const campaign = action.payload.data || action.payload;
+        if (campaign) {
+          state.campaigns.unshift(campaign);
+        }
       })
       .addCase(createCampaign.rejected, (state, action) => {
         state.isLoading = false;
@@ -311,17 +325,29 @@ const campaignSlice = createSlice({
       
       // Fetch Senders
       .addCase(fetchSenders.fulfilled, (state, action) => {
-        state.senders = action.payload;
+        state.senders = action.payload || [];
+      })
+      .addCase(fetchSenders.rejected, (state, action) => {
+        state.senders = [];
+        state.error = action.payload;
       })
       
       // Fetch Domains
       .addCase(fetchDomains.fulfilled, (state, action) => {
-        state.domains = action.payload;
+        state.domains = action.payload || [];
+      })
+      .addCase(fetchDomains.rejected, (state, action) => {
+        state.domains = [];
+        state.error = action.payload;
       })
       
       // Fetch Contents
       .addCase(fetchContents.fulfilled, (state, action) => {
-        state.contents = action.payload;
+        state.contents = action.payload || [];
+      })
+      .addCase(fetchContents.rejected, (state, action) => {
+        state.contents = [];
+        state.error = action.payload;
       });
   },
 });
@@ -332,4 +358,4 @@ export const {
   clearCurrentCampaign,
 } = campaignSlice.actions;
 
-export default campaignSlice.reducer; 
+export default campaignSlice.reducer;

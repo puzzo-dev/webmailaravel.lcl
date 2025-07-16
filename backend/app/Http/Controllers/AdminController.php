@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\AnalyticsController;
 use App\Models\User;
 use App\Models\Campaign;
 use App\Models\Analytics;
@@ -11,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
-class AdminController extends BaseController
+class AdminController extends Controller
 {
     /**
      * Get admin dashboard data
@@ -78,26 +79,13 @@ class AdminController extends BaseController
     }
 
     /**
-     * Get analytics data (admin only)
+     * Get analytics data (admin only) - redirects to AnalyticsController
      */
     public function analytics(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $timeRange = request('timeRange', '30d');
-                
-                $analytics = [
-                    'user_growth' => $this->getUserGrowth($timeRange),
-                    'campaign_performance' => $this->getCampaignPerformance($timeRange),
-                    'deliverability_stats' => $this->getDeliverabilityStats($timeRange),
-                    'revenue_metrics' => $this->getRevenueMetrics($timeRange),
-                ];
-
-                return $this->successResponse($analytics, 'Analytics data retrieved successfully');
-            },
-            'view_analytics'
-        );
+        // Redirect to consolidated analytics endpoint
+        $analyticsController = app(AnalyticsController::class);
+        return $analyticsController->getAdminAnalytics(request());
     }
 
     /**
@@ -163,6 +151,142 @@ class AdminController extends BaseController
                 // This would typically involve updating config files or database
 
                 return $this->successResponse(null, 'System configuration updated successfully');
+            },
+            'update_system_config'
+        );
+    }
+
+    /**
+     * Get BTCPay configuration
+     */
+    public function getBTCPayConfig(): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () {
+                $config = [
+                    'base_url' => \App\Models\SystemConfig::getValue('btcpay_url'),
+                    'api_key' => \App\Models\SystemConfig::getValue('btcpay_api_key'),
+                    'store_id' => \App\Models\SystemConfig::getValue('btcpay_store_id'),
+                    'webhook_secret' => \App\Models\SystemConfig::getValue('btcpay_webhook_secret'),
+                    'currency' => \App\Models\SystemConfig::getValue('btcpay_currency', 'USD'),
+                ];
+                return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
+            },
+            'view_system_config'
+        );
+    }
+
+    /**
+     * Update BTCPay configuration
+     */
+    public function updateBTCPayConfig(Request $request): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () use ($request) {
+                $validated = $request->validate([
+                    'base_url' => 'nullable|string',
+                    'api_key' => 'nullable|string',
+                    'store_id' => 'nullable|string',
+                    'webhook_secret' => 'nullable|string',
+                    'currency' => 'nullable|string',
+                ]);
+                foreach ($validated as $key => $value) {
+                    $configKey = 'btcpay_' . ($key === 'base_url' ? 'url' : $key);
+                    \App\Models\SystemConfig::setValue($configKey, $value);
+                }
+                return $this->successResponse(null, 'BTCPay configuration updated successfully');
+            },
+            'update_system_config'
+        );
+    }
+
+    /**
+     * Get Telegram configuration
+     */
+    public function getTelegramConfig(): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () {
+                $config = [
+                    'bot_token' => \App\Models\SystemConfig::getValue('notification_telegram_bot_token'),
+                    'chat_id' => \App\Models\SystemConfig::getValue('notification_telegram_chat_id'),
+                    'enabled' => \App\Models\SystemConfig::getValue('notification_telegram_enabled', false),
+                ];
+                return $this->successResponse($config, 'Telegram configuration retrieved successfully');
+            },
+            'view_system_config'
+        );
+    }
+
+    /**
+     * Update Telegram configuration
+     */
+    public function updateTelegramConfig(Request $request): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () use ($request) {
+                $validated = $request->validate([
+                    'bot_token' => 'nullable|string',
+                    'chat_id' => 'nullable|string',
+                    'enabled' => 'nullable|boolean',
+                ]);
+                foreach ($validated as $key => $value) {
+                    $configKey = 'notification_telegram_' . $key;
+                    \App\Models\SystemConfig::setValue($configKey, $value);
+                }
+                return $this->successResponse(null, 'Telegram configuration updated successfully');
+            },
+            'update_system_config'
+        );
+    }
+
+    /**
+     * Get PowerMTA configuration
+     */
+    public function getPowerMTAConfig(): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () {
+                $config = [
+                    'base_url' => \App\Models\SystemConfig::getValue('powermta_base_url'),
+                    'api_key' => \App\Models\SystemConfig::getValue('powermta_api_key'),
+                    'config_path' => \App\Models\SystemConfig::getValue('powermta_config_path'),
+                    'accounting_path' => \App\Models\SystemConfig::getValue('powermta_accounting_path'),
+                    'fbl_path' => \App\Models\SystemConfig::getValue('powermta_fbl_path'),
+                    'diag_path' => \App\Models\SystemConfig::getValue('powermta_diag_path'),
+                ];
+                return $this->successResponse($config, 'PowerMTA configuration retrieved successfully');
+            },
+            'view_system_config'
+        );
+    }
+
+    /**
+     * Update PowerMTA configuration
+     */
+    public function updatePowerMTAConfig(Request $request): JsonResponse
+    {
+        return $this->authorizeAndExecute(
+            fn() => $this->authorizeAdmin(),
+            function () use ($request) {
+                $validated = $request->validate([
+                    'base_url' => 'nullable|string',
+                    'api_key' => 'nullable|string',
+                    'config_path' => 'nullable|string',
+                    'accounting_path' => 'nullable|string',
+                    'fbl_path' => 'nullable|string',
+                    'diag_path' => 'nullable|string',
+                ]);
+                foreach ($validated as $key => $value) {
+                    $configKey = 'powermta_' . $key;
+                    \App\Models\SystemConfig::setValue($configKey, $value);
+                }
+                return $this->successResponse(null, 'PowerMTA configuration updated successfully');
             },
             'update_system_config'
         );

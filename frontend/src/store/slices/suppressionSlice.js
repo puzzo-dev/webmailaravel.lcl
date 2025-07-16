@@ -1,15 +1,15 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { suppressionService } from '../../services/api';
 
 // Async thunks
 export const fetchSuppressionStatistics = createAsyncThunk(
   'suppression/fetchSuppressionStatistics',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/suppression-list/statistics');
+      const response = await suppressionService.getStatistics();
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch suppression statistics');
     }
   }
 );
@@ -18,10 +18,10 @@ export const exportSuppressionList = createAsyncThunk(
   'suppression/exportSuppressionList',
   async (exportData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/suppression-list/export', exportData);
+      const response = await suppressionService.exportList(exportData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to export suppression list');
     }
   }
 );
@@ -30,10 +30,10 @@ export const importSuppressionList = createAsyncThunk(
   'suppression/importSuppressionList',
   async (importData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/suppression-list/import', importData);
+      const response = await suppressionService.importList(importData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to import suppression list');
     }
   }
 );
@@ -42,10 +42,10 @@ export const processFBLFile = createAsyncThunk(
   'suppression/processFBLFile',
   async (fileData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/suppression-list/process-fbl', fileData);
+      const response = await suppressionService.processFBLFile(fileData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to process FBL file');
     }
   }
 );
@@ -54,12 +54,10 @@ export const removeEmailFromSuppression = createAsyncThunk(
   'suppression/removeEmailFromSuppression',
   async (emailData, { rejectWithValue }) => {
     try {
-      const response = await api.delete('/suppression-list/remove-email', {
-        data: emailData,
-      });
+      const response = await suppressionService.removeEmail(emailData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to remove email from suppression');
     }
   }
 );
@@ -68,10 +66,10 @@ export const cleanupSuppressionList = createAsyncThunk(
   'suppression/cleanupSuppressionList',
   async (cleanupData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/suppression-list/cleanup', cleanupData);
+      const response = await suppressionService.cleanupList(cleanupData);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to cleanup suppression list');
     }
   }
 );
@@ -80,10 +78,10 @@ export const downloadSuppressionFile = createAsyncThunk(
   'suppression/downloadSuppressionFile',
   async (filename, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/suppression-list/download/${filename}`);
+      const response = await suppressionService.downloadFile(filename);
       return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to download suppression file');
     }
   }
 );

@@ -1,27 +1,23 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { logout } from '../../store/slices/authSlice';
+import { useSelector } from 'react-redux';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import MobileMenu from './MobileMenu';
 
-const Layout = () => {
+const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
 
   const handleLogout = () => {
-    dispatch(logout());
+    // Implement logout logic
+    console.log('Logout clicked');
   };
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
-      {/* Sidebar for desktop */}
+      {/* Sidebar */}
       <Sidebar 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)}
-        user={user}
+        user={user} 
         onLogout={handleLogout}
       />
 
@@ -35,15 +31,17 @@ const Layout = () => {
 
       {/* Main content */}
       <div className="flex-1 overflow-auto focus:outline-none">
+        {/* Header */}
         <Header 
-          onMenuClick={() => setSidebarOpen(true)}
+          onMenuToggle={() => setSidebarOpen(true)}
           user={user}
           onLogout={handleLogout}
         />
-        
+
+        {/* Page content */}
         <main className="flex-1 relative z-0 overflow-y-auto py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-            <Outlet />
+            {children}
           </div>
         </main>
       </div>

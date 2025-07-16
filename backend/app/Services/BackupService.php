@@ -7,29 +7,28 @@ use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LoggingTrait;
+use App\Traits\FileProcessingTrait;
+use App\Traits\ValidationTrait;
 
 class BackupService
 {
+    use LoggingTrait, FileProcessingTrait, ValidationTrait;
+
     /**
      * Create a new database backup
      */
     public function createBackup(User $user, string $description = null): ?Backup
     {
         try {
-            $filename = 'backup_' . date('Y-m-d_H-i-s') . '.sql';
+            $filename = 'backup_' . date('Y-m-d_H-i-s') . '.sqlite';
             $backupPath = 'backups/' . $filename;
-            $fullPath = storage_path('app/' . $backupPath);
 
-            // Ensure backup directory exists
-            if (!file_exists(dirname($fullPath))) {
-                mkdir(dirname($fullPath), 0755, true);
-            }
+            // Create SQLite backup by copying the database file
+            $this->createSQLiteBackup($backupPath);
 
-            // Create PostgreSQL backup
-            $this->createPostgreSQLBackup($fullPath);
-
-            // Get file size
-            $fileSize = file_exists($fullPath) ? filesize($fullPath) : 0;
+            // Get file size using Storage facade
+            $fileSize = Storage::disk('local')->size($backupPath);
 
             // Create backup record
             $backup = Backup::create([
@@ -40,7 +39,7 @@ class BackupService
                 'created_by' => $user->id,
             ]);
 
-            Log::info('Database backup created', [
+            $this->logInfo('Database backup created', [
                 'backup_id' => $backup->id,
                 'filename' => $filename,
                 'size' => $fileSize,
@@ -50,7 +49,7 @@ class BackupService
             return $backup;
 
         } catch (\Exception $e) {
-            Log::error('Backup creation failed', [
+            $this->logError('Backup creation failed', [
                 'error' => $e->getMessage(),
                 'created_by' => $user->id
             ]);
@@ -60,30 +59,25 @@ class BackupService
     }
 
     /**
-     * Create PostgreSQL backup using pg_dump
+     * Create SQLite backup by copying the database file
      */
-    private function createPostgreSQLBackup(string $filePath): void
+    private function createSQLiteBackup(string $backupPath): void
     {
-        $database = config('database.connections.pgsql.database');
-        $host = config('database.connections.pgsql.host');
-        $port = config('database.connections.pgsql.port');
-        $username = config('database.connections.pgsql.username');
-        $password = config('database.connections.pgsql.password');
-
-        // Set password environment variable
-        putenv("PGPASSWORD={$password}");
-
-        // Create pg_dump command
-        $command = "pg_dump -h {$host} -p {$port} -U {$username} -d {$database} -f {$filePath}";
-
-        // Execute backup command
-        $output = [];
-        $returnCode = 0;
-        exec($command, $output, $returnCode);
-
-        if ($returnCode !== 0) {
-            throw new \Exception('PostgreSQL backup failed: ' . implode("\n", $output));
+        $databasePath = config('database.connections.sqlite.database');
+        
+        if (!file_exists($databasePath)) {
+            throw new \Exception('SQLite database file not found: ' . $databasePath);
         }
+
+        // Copy SQLite database file to backup location
+        $backupContent = file_get_contents($databasePath);
+        
+        if ($backupContent === false) {
+            throw new \Exception('Failed to read SQLite database file');
+        }
+
+        // Store backup using Laravel Storage
+        Storage::disk('local')->put($backupPath, $backupContent);
     }
 
     /**
@@ -92,14 +86,13 @@ class BackupService
     public function restoreBackup(Backup $backup, User $user): bool
     {
         try {
-            $fullPath = storage_path('app/' . $backup->path);
-
-            if (!file_exists($fullPath)) {
+            if (!Storage::disk('local')->exists($backup->path)) {
                 throw new \Exception('Backup file not found');
             }
 
-            // Restore PostgreSQL backup
-            $this->restorePostgreSQLBackup($fullPath);
+            // Get backup content and restore SQLite database
+            $backupContent = Storage::disk('local')->get($backup->path);
+            $this->restoreSQLiteBackup($backupContent);
 
             // Update backup record
             $backup->update([
@@ -107,7 +100,7 @@ class BackupService
                 'restored_by' => $user->id,
             ]);
 
-            Log::info('Database backup restored', [
+            $this->logInfo('Database backup restored', [
                 'backup_id' => $backup->id,
                 'restored_by' => $user->id
             ]);
@@ -115,7 +108,7 @@ class BackupService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Backup restoration failed', [
+            $this->logError('Backup restoration failed', [
                 'backup_id' => $backup->id,
                 'error' => $e->getMessage(),
                 'restored_by' => $user->id
@@ -126,29 +119,67 @@ class BackupService
     }
 
     /**
-     * Restore PostgreSQL backup using psql
+     * Restore SQLite backup by replacing the database file
      */
-    private function restorePostgreSQLBackup(string $filePath): void
+    private function restoreSQLiteBackup(string $backupContent): void
     {
-        $database = config('database.connections.pgsql.database');
-        $host = config('database.connections.pgsql.host');
-        $port = config('database.connections.pgsql.port');
-        $username = config('database.connections.pgsql.username');
-        $password = config('database.connections.pgsql.password');
+        $databasePath = config('database.connections.sqlite.database');
+        
+        if (!$databasePath) {
+            throw new \Exception('SQLite database path not configured');
+        }
 
-        // Set password environment variable
-        putenv("PGPASSWORD={$password}");
+        // Create backup of current database before restoration
+        $currentBackupPath = $databasePath . '.restore_backup_' . time();
+        if (file_exists($databasePath)) {
+            copy($databasePath, $currentBackupPath);
+        }
 
-        // Create psql command
-        $command = "psql -h {$host} -p {$port} -U {$username} -d {$database} -f {$filePath}";
+        try {
+            // Write backup content to database file
+            $result = file_put_contents($databasePath, $backupContent);
+            
+            if ($result === false) {
+                throw new \Exception('Failed to write backup to database file');
+            }
 
-        // Execute restore command
-        $output = [];
-        $returnCode = 0;
-        exec($command, $output, $returnCode);
+            // Verify database integrity
+            if (!$this->verifySQLiteDatabase($databasePath)) {
+                throw new \Exception('Restored database failed integrity check');
+            }
 
-        if ($returnCode !== 0) {
-            throw new \Exception('PostgreSQL restore failed: ' . implode("\n", $output));
+            // Remove temporary backup on success
+            if (file_exists($currentBackupPath)) {
+                unlink($currentBackupPath);
+            }
+
+        } catch (\Exception $e) {
+            // Restore original database on failure
+            if (file_exists($currentBackupPath)) {
+                copy($currentBackupPath, $databasePath);
+                unlink($currentBackupPath);
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Verify SQLite database integrity
+     */
+    private function verifySQLiteDatabase(string $databasePath): bool
+    {
+        try {
+            $pdo = new \PDO("sqlite:{$databasePath}");
+            $result = $pdo->query("PRAGMA integrity_check");
+            
+            if ($result) {
+                $row = $result->fetch(\PDO::FETCH_ASSOC);
+                return isset($row['integrity_check']) && $row['integrity_check'] === 'ok';
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            return false;
         }
     }
 
@@ -158,16 +189,14 @@ class BackupService
     public function downloadBackup(Backup $backup): ?string
     {
         try {
-            $fullPath = storage_path('app/' . $backup->path);
-
-            if (!file_exists($fullPath)) {
+            if (!Storage::disk('local')->exists($backup->path)) {
                 return null;
             }
 
-            return $fullPath;
+            return Storage::disk('local')->path($backup->path);
 
         } catch (\Exception $e) {
-            Log::error('Backup download failed', [
+            $this->logError('Backup download failed', [
                 'backup_id' => $backup->id,
                 'error' => $e->getMessage()
             ]);
@@ -182,17 +211,15 @@ class BackupService
     public function deleteBackup(Backup $backup): bool
     {
         try {
-            $fullPath = storage_path('app/' . $backup->path);
-
-            // Delete file if exists
-            if (file_exists($fullPath)) {
-                unlink($fullPath);
+            // Delete file using Storage facade
+            if (Storage::disk('local')->exists($backup->path)) {
+                Storage::disk('local')->delete($backup->path);
             }
 
             // Delete backup record
             $backup->delete();
 
-            Log::info('Backup deleted', [
+            $this->logInfo('Backup deleted', [
                 'backup_id' => $backup->id,
                 'filename' => $backup->filename
             ]);
@@ -200,7 +227,7 @@ class BackupService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Backup deletion failed', [
+            $this->logError('Backup deletion failed', [
                 'backup_id' => $backup->id,
                 'error' => $e->getMessage()
             ]);
@@ -242,7 +269,7 @@ class BackupService
             }
         }
 
-        Log::info('Old backups cleaned up', ['count' => $deletedCount]);
+        $this->logInfo('Old backups cleaned up', ['count' => $deletedCount]);
         
         return $deletedCount;
     }

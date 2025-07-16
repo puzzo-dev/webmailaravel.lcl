@@ -7,19 +7,19 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
-class NotificationController extends BaseController
+class NotificationController extends Controller
 {
     /**
      * Display a listing of notifications
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         return $this->authorizeAndExecute(
             fn() => $this->authorizeResourceAccess(Auth::user(), 'user'),
-            function () {
+            function () use ($request) {
                 $notifications = Auth::user()->notifications()
                     ->orderBy('created_at', 'desc')
-                    ->paginate(request('limit', 20));
+                    ->paginate($request->get('limit', 20));
                 
                 return $this->successResponse($notifications, 'Notifications retrieved successfully');
             },
@@ -30,19 +30,17 @@ class NotificationController extends BaseController
     /**
      * Display the specified notification
      */
-    public function show(Notification $notification): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess(Auth::user(), 'user'),
-            function () use ($notification) {
-                if ($notification->user_id !== Auth::id()) {
-                    return $this->forbiddenResponse('Access denied to notification');
-                }
-                
-                return $this->successResponse($notification, 'Notification retrieved successfully');
-            },
-            'view_notification'
-        );
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $notification = Notification::findOrFail($id);
+            
+            if ($notification->user_id !== Auth::id()) {
+                return $this->forbiddenResponse('Access denied to notification');
+            }
+            
+            return $this->successResponse($notification, 'Notification retrieved successfully');
+        }, 'view_notification');
     }
 
     /**
@@ -86,21 +84,19 @@ class NotificationController extends BaseController
     /**
      * Remove the specified notification
      */
-    public function destroy(Notification $notification): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess(Auth::user(), 'user'),
-            function () use ($notification) {
-                if ($notification->user_id !== Auth::id()) {
-                    return $this->forbiddenResponse('Access denied to notification');
-                }
-                
-                $notification->delete();
-                
-                return $this->successResponse(null, 'Notification deleted successfully');
-            },
-            'delete_notification'
-        );
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $notification = Notification::findOrFail($id);
+            
+            if ($notification->user_id !== Auth::id()) {
+                return $this->forbiddenResponse('Access denied to notification');
+            }
+            
+            $notification->delete();
+            
+            return $this->successResponse(null, 'Notification deleted successfully');
+        }, 'delete_notification');
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Domain;
 use App\Models\SmtpConfig;
 use Illuminate\Http\Request;
@@ -15,42 +14,21 @@ class DomainController extends Controller
 {
     public function __construct()
     {
-        // No dependencies needed - using Laravel's built-in features
+        // No parent constructor to call for base Controller
     }
 
     /**
      * Display a listing of the resource
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        try {
-            $domains = Domain::where('user_id', Auth::id())
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $query = Domain::where('user_id', Auth::id())
                 ->with(['smtpConfig', 'senders'])
-                ->orderBy('created_at', 'desc')
-                ->paginate(20);
+                ->orderBy('created_at', 'desc');
 
-            Log::info('Domains listed', [
-                'user_id' => Auth::id(),
-                'count' => $domains->count()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $domains,
-                'message' => 'Domains retrieved successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Domains list failed', [
-                'user_id' => Auth::id(),
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve domains'
-            ], 500);
-        }
+            return $this->getPaginatedResults($query, $request, 'domains', ['smtpConfig', 'senders']);
+        }, 'list_domains');
     }
 
     /**
@@ -58,116 +36,69 @@ class DomainController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        try {
-            $validator = Validator::make($request->all(), [
+        return $this->validateAndExecute(
+            $request,
+            [
                 'domain' => 'required|string|max:255|unique:domains,domain',
                 'is_active' => 'boolean',
                 'verification_status' => 'string|in:pending,verified,failed'
-            ]);
+            ],
+            function () use ($request) {
+                $data = $request->input('validated_data');
+                $data['user_id'] = Auth::id();
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+                $domain = Domain::create($data);
 
-            $data = $validator->validated();
-            $data['user_id'] = Auth::id();
+                Log::info('Domain created', [
+                    'user_id' => Auth::id(),
+                    'domain_id' => $domain->id,
+                    'domain' => $domain->domain
+                ]);
 
-            $domain = Domain::create($data);
-
-            Log::info('Domain created', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'domain' => $domain->domain
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $domain,
-                'message' => 'Domain created successfully'
-            ], 201);
-
-        } catch (\Exception $e) {
-            Log::error('Domain creation failed', [
-                'user_id' => Auth::id(),
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create domain'
-            ], 500);
-        }
+                return $this->createdResponse($domain->load(['smtpConfig', 'senders']), 'Domain created successfully');
+            },
+            'create_domain'
+        );
     }
 
     /**
      * Display the specified resource
      */
-    public function show(Domain $domain): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        try {
-            if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
-            }
-
-            Log::info('Domain viewed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $domain->load(['smtpConfig', 'senders']),
-                'message' => 'Domain retrieved successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Domain view failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::with(['smtpConfig', 'senders'])->findOrFail($id);
             
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve domain'
-            ], 500);
-        }
+            if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            return $this->getResource($domain, 'domain', $id);
+        }, 'view_domain');
     }
 
     /**
      * Update the specified resource
      */
-    public function update(Request $request, Domain $domain): JsonResponse
+    public function update(Request $request, string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $validator = Validator::make($request->all(), [
                 'domain' => 'sometimes|string|max:255|unique:domains,domain,' . $domain->id,
                 'is_active' => 'boolean',
                 'verification_status' => 'string|in:pending,verified,failed'
             ]);
-
+            
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
-
+            
             $domain->update($validator->validated());
 
             Log::info('Domain updated', [
@@ -176,39 +107,22 @@ class DomainController extends Controller
                 'updated_fields' => array_keys($validator->validated())
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $domain->load(['smtpConfig', 'senders']),
-                'message' => 'Domain updated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Domain update failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update domain'
-            ], 500);
-        }
+            return $this->successResponse($domain->load(['smtpConfig', 'senders']), 'Domain updated successfully');
+        }, 'update_domain');
     }
 
     /**
      * Remove the specified resource
      */
-    public function destroy(Domain $domain): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $domain->delete();
 
             Log::info('Domain deleted', [
@@ -216,36 +130,20 @@ class DomainController extends Controller
                 'domain_id' => $domain->id
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Domain deleted successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Domain deletion failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete domain'
-            ], 500);
-        }
+            return $this->successResponse(null, 'Domain deleted successfully');
+        }, 'delete_domain');
     }
 
     /**
      * Verify domain
      */
-    public function verifyDomain(Domain $domain): JsonResponse
+    public function verifyDomain(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             // Domain verification logic would go here
@@ -261,11 +159,7 @@ class DomainController extends Controller
                     'domain' => $domain->domain
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Domain verified successfully',
-                    'data' => $verificationResult
-                ]);
+                return $this->successResponse($verificationResult, 'Domain verified successfully');
             } else {
                 $domain->update(['verification_status' => 'failed']);
                 
@@ -276,39 +170,23 @@ class DomainController extends Controller
                     'error' => $verificationResult['error']
                 ]);
 
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Domain verification failed: ' . $verificationResult['error']
-                ], 400);
+                return $this->errorResponse('Domain verification failed: ' . $verificationResult['error']);
             }
-
-        } catch (\Exception $e) {
-            Log::error('Domain verification failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to verify domain: ' . $e->getMessage()
-            ], 500);
-        }
+        }, 'verify_domain');
     }
 
     /**
      * Add SMTP configuration to domain
      */
-    public function addSmtpConfig(Request $request, Domain $domain): JsonResponse
+    public function addSmtpConfig(Request $request, string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $validator = Validator::make($request->all(), [
                 'host' => 'required|string|max:255',
                 'port' => 'required|integer|min:1|max:65535',
@@ -317,15 +195,11 @@ class DomainController extends Controller
                 'encryption' => 'required|string|in:tls,ssl,none',
                 'is_active' => 'boolean'
             ]);
-
+            
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
-
+            
             $smtpConfig = $domain->smtpConfig()->create($validator->validated());
 
             Log::info('SMTP config added', [
@@ -334,46 +208,27 @@ class DomainController extends Controller
                 'smtp_config_id' => $smtpConfig->id
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $smtpConfig,
-                'message' => 'SMTP configuration added successfully'
-            ], 201);
-
-        } catch (\Exception $e) {
-            Log::error('SMTP config add failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to add SMTP configuration'
-            ], 500);
-        }
+            return $this->createdResponse($smtpConfig, 'SMTP configuration added successfully');
+        }, 'add_smtp_config');
     }
 
     /**
      * Update SMTP configuration
      */
-    public function updateSmtpConfig(Request $request, Domain $domain, SmtpConfig $smtpConfig): JsonResponse
+    public function updateSmtpConfig(Request $request, string $domainId, string $smtpConfigId): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request, $domainId, $smtpConfigId) {
+            $domain = Domain::findOrFail($domainId);
+            $smtpConfig = SmtpConfig::findOrFail($smtpConfigId);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             if ($smtpConfig->domain_id !== $domain->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'SMTP configuration does not belong to this domain'
-                ], 400);
+                return $this->errorResponse('SMTP configuration does not belong to this domain');
             }
-
+            
             $validator = Validator::make($request->all(), [
                 'host' => 'sometimes|string|max:255',
                 'port' => 'sometimes|integer|min:1|max:65535',
@@ -382,15 +237,11 @@ class DomainController extends Controller
                 'encryption' => 'sometimes|string|in:tls,ssl,none',
                 'is_active' => 'boolean'
             ]);
-
+            
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
-
+            
             $smtpConfig->update($validator->validated());
 
             Log::info('SMTP config updated', [
@@ -400,47 +251,27 @@ class DomainController extends Controller
                 'updated_fields' => array_keys($validator->validated())
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $smtpConfig,
-                'message' => 'SMTP configuration updated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('SMTP config update failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'smtp_config_id' => $smtpConfig->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update SMTP configuration'
-            ], 500);
-        }
+            return $this->successResponse($smtpConfig, 'SMTP configuration updated successfully');
+        }, 'update_smtp_config');
     }
 
     /**
      * Remove SMTP configuration
      */
-    public function destroySmtpConfig(Domain $domain, SmtpConfig $smtpConfig): JsonResponse
+    public function destroySmtpConfig(string $domainId, string $smtpConfigId): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($domainId, $smtpConfigId) {
+            $domain = Domain::findOrFail($domainId);
+            $smtpConfig = SmtpConfig::findOrFail($smtpConfigId);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             if ($smtpConfig->domain_id !== $domain->id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'SMTP configuration does not belong to this domain'
-                ], 400);
+                return $this->errorResponse('SMTP configuration does not belong to this domain');
             }
-
+            
             $smtpConfig->delete();
 
             Log::info('SMTP config deleted', [
@@ -449,39 +280,22 @@ class DomainController extends Controller
                 'smtp_config_id' => $smtpConfig->id
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'SMTP configuration deleted successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('SMTP config deletion failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'smtp_config_id' => $smtpConfig->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete SMTP configuration'
-            ], 500);
-        }
+            return $this->successResponse(null, 'SMTP configuration deleted successfully');
+        }, 'delete_smtp_config');
     }
 
     /**
      * Update bounce processing settings
      */
-    public function updateBounceProcessing(Request $request, Domain $domain): JsonResponse
+    public function updateBounceProcessing(Request $request, string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
-
+            
             $validator = Validator::make($request->all(), [
                 'enable_bounce_processing' => 'boolean',
                 'bounce_protocol' => 'required_if:enable_bounce_processing,true|in:imap,pop3',
@@ -494,15 +308,11 @@ class DomainController extends Controller
                 'bounce_check_interval' => 'nullable|integer|min:60|max:3600',
                 'bounce_processing_rules' => 'nullable|array'
             ]);
-
+            
             if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return $this->validationErrorResponse($validator->errors());
             }
-
+            
             $data = $validator->validated();
             
             // Encrypt password if provided
@@ -518,44 +328,24 @@ class DomainController extends Controller
                 'enable_bounce_processing' => $data['enable_bounce_processing'] ?? false
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $domain->fresh(),
-                'message' => 'Bounce processing settings updated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Domain bounce processing update failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update bounce processing settings'
-            ], 500);
-        }
+            return $this->successResponse($domain->fresh(), 'Bounce processing settings updated successfully');
+        }, 'update_bounce_processing');
     }
 
     /**
      * Test bounce processing connection
      */
-    public function testBounceConnection(Domain $domain): JsonResponse
+    public function testBounceConnection(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             if (!$domain->isBounceProcessingConfigured()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bounce processing not configured for this domain'
-                ], 400);
+                return $this->errorResponse('Bounce processing not configured for this domain');
             }
 
             $bounceService = app(\App\Services\BounceProcessingService::class);
@@ -567,37 +357,20 @@ class DomainController extends Controller
                 'success' => $result['success']
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $result,
-                'message' => $result['success'] ? 'Connection test successful' : 'Connection test failed'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Bounce connection test failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Connection test failed: ' . $e->getMessage()
-            ], 500);
-        }
+            return $this->successResponse($result, $result['success'] ? 'Connection test successful' : 'Connection test failed');
+        }, 'test_bounce_connection');
     }
 
     /**
      * Get bounce processing statistics
      */
-    public function getBounceStatistics(Domain $domain): JsonResponse
+    public function getBounceStatistics(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             $bounceService = app(\App\Services\BounceProcessingService::class);
@@ -608,44 +381,24 @@ class DomainController extends Controller
                 'domain_id' => $domain->id
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $stats,
-                'message' => 'Bounce statistics retrieved successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Bounce statistics retrieval failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve bounce statistics'
-            ], 500);
-        }
+            return $this->successResponse($stats, 'Bounce statistics retrieved successfully');
+        }, 'get_bounce_statistics');
     }
 
     /**
      * Process bounces for domain
      */
-    public function processBounces(Domain $domain): JsonResponse
+    public function processBounces(string $id): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $domain = Domain::findOrFail($id);
+            
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Access denied'
-                ], 403);
+                return $this->forbiddenResponse('Access denied');
             }
 
             if (!$domain->isBounceProcessingConfigured()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bounce processing not configured for this domain'
-                ], 400);
+                return $this->errorResponse('Bounce processing not configured for this domain');
             }
 
             // Dispatch job to process bounces
@@ -656,23 +409,8 @@ class DomainController extends Controller
                 'domain_id' => $domain->id
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Bounce processing job has been queued'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Bounce processing job dispatch failed', [
-                'user_id' => Auth::id(),
-                'domain_id' => $domain->id,
-                'error' => $e->getMessage()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to queue bounce processing job'
-            ], 500);
-        }
+            return $this->successResponse(null, 'Bounce processing job has been queued');
+        }, 'process_bounces');
     }
 
     /**

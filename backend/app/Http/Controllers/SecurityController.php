@@ -2,22 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Services\SecurityService;
-use App\Services\LoggingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Hash;
 
 class SecurityController extends Controller
 {
     protected $securityService;
-    protected $loggingService;
 
-    public function __construct(SecurityService $securityService, LoggingService $loggingService)
+    public function __construct(SecurityService $securityService)
     {
         $this->securityService = $securityService;
-        $this->loggingService = $loggingService;
     }
 
     /**
@@ -25,21 +22,33 @@ class SecurityController extends Controller
      */
     public function getSecuritySummary(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $user = auth()->user();
             $summary = $this->securityService->getUserSecuritySummary($user);
+            return $summary;
+        }, 'get_security_summary');
+    }
 
-            return response()->json([
-                'success' => true,
-                'data' => $summary
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get security summary',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    /**
+     * Get security settings
+     */
+    public function getSecuritySettings(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = auth()->user();
+            
+            $settings = [
+                'two_factor_enabled' => $user->two_factor_enabled,
+                'two_factor_enabled_at' => $user->two_factor_enabled_at,
+                'last_password_change' => $user->last_password_change,
+                'security_score' => $user->getSecurityScore(),
+                'active_sessions_count' => $user->sessions()->where('last_activity', '>', time() - (24 * 60 * 60))->count(),
+                'trusted_devices_count' => $user->trustedDevices()->count(),
+                'api_keys_count' => $user->apiKeys()->where('expires_at', '>', now())->count(),
+            ];
+
+            return $settings;
+        }, 'get_security_settings');
     }
 
     /**
@@ -73,44 +82,42 @@ class SecurityController extends Controller
     }
 
     /**
+     * Enable 2FA
+     */
+    public function enable2FA(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = auth()->user();
+
+            if ($user->two_factor_enabled) {
+                throw new \Exception('2FA is already enabled');
+            }
+
+            $setup = $this->securityService->generate2FASecret($user);
+            return $setup;
+        }, 'enable_2fa');
+    }
+
+    /**
      * Verify 2FA code
      */
     public function verify2FA(Request $request): JsonResponse
     {
-        try {
-            $validator = Validator::make($request->all(), [
-                'code' => 'required|string|size:6'
-            ]);
+        return $this->validateAndExecuteWithErrorHandling(
+            $request->all(),
+            ['code' => 'required|string|size:6'],
+            function ($validatedData) {
+                $user = auth()->user();
+                $code = $validatedData['code'];
 
-            if ($validator->fails()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
+                if ($this->securityService->verify2FACode($user, $code)) {
+                    return ['message' => '2FA code verified successfully'];
+                }
 
-            $user = auth()->user();
-            $code = $request->input('code');
-
-            if ($this->securityService->verify2FACode($user, $code)) {
-                return response()->json([
-                    'success' => true,
-                    'message' => '2FA code verified successfully'
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid 2FA code'
-            ], 400);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to verify 2FA code',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+                throw new \Exception('Invalid 2FA code');
+            },
+            'verify_2fa'
+        );
     }
 
     /**
@@ -118,29 +125,16 @@ class SecurityController extends Controller
      */
     public function disable2FA(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $user = auth()->user();
 
             if (!$user->two_factor_enabled) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '2FA is not enabled'
-                ], 400);
+                throw new \Exception('2FA is not enabled');
             }
 
             $this->securityService->disable2FA($user);
-
-            return response()->json([
-                'success' => true,
-                'message' => '2FA disabled successfully'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to disable 2FA',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return ['message' => '2FA disabled successfully'];
+        }, 'disable_2fa');
     }
 
     /**
@@ -180,29 +174,28 @@ class SecurityController extends Controller
     }
 
     /**
-     * Get user's API keys
+     * Create API key (alias for generateApiKey for backward compatibility)
+     */
+    public function createApiKey(Request $request): JsonResponse
+    {
+        return $this->generateApiKey($request);
+    }
+
+    /**
+     * Get API keys
      */
     public function getApiKeys(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $user = auth()->user();
             
             $apiKeys = $user->apiKeys()
-                ->select(['id', 'name', 'key', 'permissions', 'last_used_at', 'expires_at', 'created_at'])
+                ->where('expires_at', '>', now())
                 ->orderBy('created_at', 'desc')
                 ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $apiKeys
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get API keys',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $apiKeys;
+        }, 'get_api_keys');
     }
 
     /**
@@ -268,6 +261,14 @@ class SecurityController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Get activity log (alias for getSecurityLogs for backward compatibility)
+     */
+    public function getActivityLog(Request $request): JsonResponse
+    {
+        return $this->getSecurityLogs($request);
     }
 
     /**
@@ -340,6 +341,117 @@ class SecurityController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to change password',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get trusted devices
+     */
+    public function getTrustedDevices(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = auth()->user();
+            
+            $devices = $user->trustedDevices()
+                ->select(['id', 'device_name', 'device_type', 'ip_address', 'last_used_at', 'created_at'])
+                ->orderBy('last_used_at', 'desc')
+                ->get();
+
+            return $devices;
+        }, 'get_trusted_devices');
+    }
+
+    /**
+     * Trust a device
+     */
+    public function trustDevice(Request $request, $deviceId): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            
+            $device = $user->trustedDevices()->find($deviceId);
+            
+            if (!$device) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Device not found'
+                ], 404);
+            }
+
+            $device->update([
+                'trusted' => true,
+                'trusted_at' => now()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Device trusted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to trust device',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get active sessions
+     */
+    public function getActiveSessions(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = auth()->user();
+            
+            $sessions = $user->sessions()
+                ->select(['id', 'ip_address', 'user_agent', 'last_activity'])
+                ->where('last_activity', '>', time() - (24 * 60 * 60)) // Last 24 hours
+                ->orderBy('last_activity', 'desc')
+                ->get()
+                ->map(function ($session) {
+                    return [
+                        'id' => $session->id,
+                        'ip_address' => $session->ip_address,
+                        'user_agent' => $session->user_agent,
+                        'last_activity' => date('Y-m-d H:i:s', $session->last_activity),
+                        'created_at' => date('Y-m-d H:i:s', $session->last_activity),
+                    ];
+                });
+
+            return $sessions;
+        }, 'get_active_sessions');
+    }
+
+    /**
+     * Revoke session
+     */
+    public function revokeSession(Request $request, $sessionId): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            
+            $session = $user->sessions()->find($sessionId);
+            
+            if (!$session) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Session not found'
+                ], 404);
+            }
+
+            $session->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Session revoked successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to revoke session',
                 'error' => $e->getMessage()
             ], 500);
         }

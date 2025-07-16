@@ -8,8 +8,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable
+class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens, HasRoles;
@@ -45,14 +46,77 @@ class User extends Authenticatable
     public function domains() { return $this->hasMany(Domain::class); }
     public function contents() { return $this->hasMany(Content::class); }
     public function devices() { return $this->hasMany(Device::class); }
+    public function trustedDevices() { return $this->hasMany(Device::class)->where('trusted', true); }
     public function sessions() { return $this->hasMany(Session::class); }
     public function logs() { return $this->hasMany(Log::class); }
     public function subscriptions() { return $this->hasMany(Subscription::class); }
+    public function activeSubscription() { return $this->hasOne(Subscription::class)->where('status', 'active'); }
     public function trainingConfigs() { return $this->hasMany(TrainingConfig::class); }
     public function createdBackups() { return $this->hasMany(Backup::class, 'created_by'); }
     public function restoredBackups() { return $this->hasMany(Backup::class, 'restored_by'); }
     public function apiKeys() { return $this->hasMany(ApiKey::class); }
     public function securityLogs() { return $this->hasMany(SecurityLog::class); }
+
+    /**
+     * Get current plan limits
+     */
+    public function getPlanLimits(): array
+    {
+        $subscription = $this->activeSubscription;
+        if (!$subscription || !$subscription->plan) {
+            return [
+                'max_domains' => 1,
+                'max_senders_per_domain' => 2,
+                'max_total_campaigns' => 10,
+                'max_live_campaigns' => 1,
+                'daily_sending_limit' => 1000,
+            ];
+        }
+
+        return [
+            'max_domains' => $subscription->plan->max_domains ?? 20,
+            'max_senders_per_domain' => $subscription->plan->max_senders_per_domain ?? 5,
+            'max_total_campaigns' => $subscription->plan->max_total_campaigns ?? 100,
+            'max_live_campaigns' => $subscription->plan->max_live_campaigns ?? 10,
+            'daily_sending_limit' => $subscription->plan->daily_sending_limit ?? 10000,
+        ];
+    }
+
+    /**
+     * Check if user can create more domains
+     */
+    public function canCreateDomain(): bool
+    {
+        $limits = $this->getPlanLimits();
+        return $this->domains()->count() < $limits['max_domains'];
+    }
+
+    /**
+     * Check if user can create more campaigns
+     */
+    public function canCreateCampaign(): bool
+    {
+        $limits = $this->getPlanLimits();
+        return $this->campaigns()->count() < $limits['max_total_campaigns'];
+    }
+
+    /**
+     * Check if user can create more live campaigns
+     */
+    public function canCreateLiveCampaign(): bool
+    {
+        $limits = $this->getPlanLimits();
+        return $this->campaigns()->where('status', 'active')->count() < $limits['max_live_campaigns'];
+    }
+
+    /**
+     * Check if domain can have more senders
+     */
+    public function canAddSenderToDomain(Domain $domain): bool
+    {
+        $limits = $this->getPlanLimits();
+        return $domain->senders()->count() < $limits['max_senders_per_domain'];
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -83,6 +147,30 @@ class User extends Authenticatable
             'last_password_change' => 'datetime',
             'last_payment_at' => 'datetime',
             'password' => 'hashed',
+        ];
+    }
+
+    /**
+     * Get the identifier that will be stored in the subject claim of the JWT.
+     *
+     * @return mixed
+     */
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    /**
+     * Return a key value array, containing any custom claims to be added to the JWT.
+     *
+     * @return array
+     */
+    public function getJWTCustomClaims()
+    {
+        return [
+            'email' => $this->email,
+            'username' => $this->username,
+            'role' => $this->role,
         ];
     }
 

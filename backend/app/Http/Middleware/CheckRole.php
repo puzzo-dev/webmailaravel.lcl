@@ -14,13 +14,19 @@ class CheckRole
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string $role): Response
+    public function handle(Request $request, Closure $next, string $role = null): Response
     {
-        if (!Auth::check()) {
+        // If no role is specified, just pass through (for public routes)
+        if ($role === null) {
+            return $next($request);
+        }
+
+        // Only check authentication when a role is specified
+        if (!Auth::guard('api')->check()) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $user = Auth::user();
+        $user = Auth::guard('api')->user();
         
         // Check if user has the required role
         if ($user->role !== $role) {

@@ -12,20 +12,40 @@ class Plan extends Model
     protected $fillable = [
         'name',
         'description',
-        'max_campaigns',
-        'max_emails_per_day',
         'price',
+        'currency',
+        'duration_days',
+        'max_domains',
+        'max_senders_per_domain',
+        'max_total_campaigns',
+        'max_live_campaigns',
+        'daily_sending_limit',
+        'features',
         'is_active',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'features' => 'array',
         'is_active' => 'boolean',
+        'price' => 'decimal:2',
     ];
 
     // Relationships
-    public function subscriptions()
+    public function subscriptions() { return $this->hasMany(Subscription::class); }
+
+    /**
+     * Get active plans
+     */
+    public static function getActivePlans()
     {
-        return $this->hasMany(Subscription::class);
+        return static::where('is_active', true)->orderBy('price')->get();
+    }
+
+    /**
+     * Check if plan is available for subscription
+     */
+    public function isAvailable(): bool
+    {
+        return $this->is_active;
     }
 }

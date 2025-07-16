@@ -18,7 +18,33 @@ const QuillEditor = ({
 
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
-      // Default modules configuration
+      // Suppress deprecated DOM mutation event warnings more effectively
+      const originalWarn = console.warn;
+      const originalError = console.error;
+      
+      console.warn = (...args) => {
+        const message = args[0];
+        if (typeof message === 'string' && 
+            (message.includes('DOMNodeInserted') || 
+             message.includes('mutation event') ||
+             message.includes('DOMNodeRemoved'))) {
+          return; // Suppress Quill's deprecated mutation event warnings
+        }
+        originalWarn.apply(console, args);
+      };
+
+      console.error = (...args) => {
+        const message = args[0];
+        if (typeof message === 'string' && 
+            (message.includes('DOMNodeInserted') || 
+             message.includes('mutation event') ||
+             message.includes('DOMNodeRemoved'))) {
+          return; // Suppress Quill's deprecated mutation event warnings
+        }
+        originalError.apply(console, args);
+      };
+
+      // Default modules configuration with modern settings
       const defaultModules = {
         toolbar: [
           [{ 'header': [1, 2, 3, false] }],
@@ -31,52 +57,77 @@ const QuillEditor = ({
         ],
         clipboard: {
           matchVisual: false
+        },
+        history: {
+          delay: 2000,
+          maxStack: 500,
+          userOnly: true
         }
       };
 
       // Merge with custom modules
       const finalModules = { ...defaultModules, ...modules };
 
-      // Initialize Quill
-      quillRef.current = new Quill(editorRef.current, {
-        theme,
-        modules: finalModules,
-        formats: formats.length > 0 ? formats : [
-          'header', 'bold', 'italic', 'underline', 'strike',
-          'color', 'background', 'list', 'bullet', 'align',
-          'link', 'image', 'clean'
-        ],
-        placeholder
-      });
+      try {
+        // Initialize Quill with error handling
+        quillRef.current = new Quill(editorRef.current, {
+          theme,
+          modules: finalModules,
+          formats: formats.length > 0 ? formats : [
+            'header', 'bold', 'italic', 'underline', 'strike',
+            'color', 'background', 'list', 'bullet', 'align',
+            'link', 'image', 'clean'
+          ],
+          placeholder
+        });
 
-      // Set initial value
-      if (value) {
-        quillRef.current.root.innerHTML = value;
-      }
-
-      // Set read-only mode
-      if (readOnly) {
-        quillRef.current.enable(false);
-      }
-
-      // Handle text change
-      quillRef.current.on('text-change', () => {
-        const html = quillRef.current.root.innerHTML;
-        const text = quillRef.current.getText();
-        
-        if (onChange) {
-          onChange({
-            html: html === '<p><br></p>' ? '' : html,
-            text: text.trim(),
-            quill: quillRef.current
-          });
+        // Set initial value
+        if (value) {
+          quillRef.current.root.innerHTML = value;
         }
-      });
+
+        // Set read-only mode
+        if (readOnly) {
+          quillRef.current.enable(false);
+        }
+
+        // Handle text change with debouncing
+        let changeTimeout;
+        quillRef.current.on('text-change', () => {
+          clearTimeout(changeTimeout);
+          changeTimeout = setTimeout(() => {
+            const html = quillRef.current.root.innerHTML;
+            const text = quillRef.current.getText();
+            
+            if (onChange) {
+              onChange({
+                html: html === '<p><br></p>' ? '' : html,
+                text: text.trim(),
+                quill: quillRef.current
+              });
+            }
+          }, 100);
+        });
+
+      } catch (error) {
+        console.error('Failed to initialize Quill editor:', error);
+      }
+
+      // Restore console methods after initialization
+      setTimeout(() => {
+        console.warn = originalWarn;
+        console.error = originalError;
+      }, 1000);
     }
 
     return () => {
       if (quillRef.current) {
-        quillRef.current = null;
+        try {
+          quillRef.current.off('text-change');
+          quillRef.current = null;
+        } catch (error) {
+          console.error('Error cleaning up Quill editor:', error);
+        }
       }
     };
   }, []);
@@ -84,21 +135,29 @@ const QuillEditor = ({
   // Update value when prop changes
   useEffect(() => {
     if (quillRef.current && value !== quillRef.current.root.innerHTML) {
-      quillRef.current.root.innerHTML = value;
+      try {
+        quillRef.current.root.innerHTML = value;
+      } catch (error) {
+        console.error('Error updating Quill editor value:', error);
+      }
     }
   }, [value]);
 
   // Update read-only mode
   useEffect(() => {
     if (quillRef.current) {
-      quillRef.current.enable(!readOnly);
+      try {
+        quillRef.current.enable(!readOnly);
+      } catch (error) {
+        console.error('Error updating Quill editor read-only mode:', error);
+      }
     }
   }, [readOnly]);
 
   return (
     <div className={`quill-editor ${className}`} style={style}>
       <div ref={editorRef} />
-      <style jsx>{`
+      <style>{`
         .quill-editor .ql-editor {
           min-height: 200px;
           font-family: inherit;

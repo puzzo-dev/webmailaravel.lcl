@@ -15,65 +15,77 @@ import {
   HiShieldCheck,
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
+import {
+  fetchSubscriptions,
+  fetchPaymentHistory,
+  fetchPaymentRates,
+  createSubscription,
+  cancelSubscription,
+  clearError,
+} from '../../store/slices/billingSlice';
 
 const Billing = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const {
+    subscriptions,
+    currentSubscription,
+    paymentHistory,
+    paymentRates,
+    invoices,
+    isLoading,
+    error,
+  } = useSelector((state) => state.billing);
+  
   const [activeTab, setActiveTab] = useState('subscription');
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Mock data - replace with actual API calls
-  const subscription = {
-    plan: 'Professional',
-    status: 'active',
-    nextBilling: '2024-02-15',
-    amount: 49.99,
-    currency: 'USD',
-    features: [
-      'Unlimited Campaigns',
-      'Advanced Analytics',
-      'Priority Support',
-      'Custom Domains',
-      'API Access',
-    ],
+  useEffect(() => {
+    dispatch(fetchSubscriptions());
+    dispatch(fetchPaymentHistory());
+    dispatch(fetchPaymentRates());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (error) {
+      // Auto-clear error after 5 seconds
+      const timer = setTimeout(() => {
+        dispatch(clearError());
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, dispatch]);
+
+  const handleUpgrade = async (planName) => {
+    try {
+      await dispatch(createSubscription({ plan: planName })).unwrap();
+    } catch (error) {
+      console.error('Plan upgrade failed:', error);
+    }
   };
 
-  const paymentHistory = [
-    {
-      id: 1,
-      date: '2024-01-15',
-      amount: 49.99,
-      status: 'completed',
-      method: 'Credit Card',
-      invoice: 'INV-2024-001',
-    },
-    {
-      id: 2,
-      date: '2023-12-15',
-      amount: 49.99,
-      status: 'completed',
-      method: 'Credit Card',
-      invoice: 'INV-2023-012',
-    },
-  ];
+  const handleCancelSubscription = async () => {
+    if (!confirm('Are you sure you want to cancel your subscription?')) return;
+    
+    try {
+      if (currentSubscription) {
+        await dispatch(cancelSubscription(currentSubscription.id)).unwrap();
+      }
+    } catch (error) {
+      console.error('Subscription cancellation failed:', error);
+    }
+  };
 
-  const invoices = [
-    {
-      id: 'INV-2024-001',
-      date: '2024-01-15',
-      amount: 49.99,
-      status: 'paid',
-      dueDate: '2024-01-15',
-    },
-    {
-      id: 'INV-2023-012',
-      date: '2023-12-15',
-      amount: 49.99,
-      status: 'paid',
-      dueDate: '2023-12-15',
-    },
-  ];
+  const handleDownloadInvoice = (invoiceId) => {
+    // Implement invoice download
+    console.log('Downloading invoice:', invoiceId);
+  };
 
+  const handleViewInvoice = (invoiceId) => {
+    // Implement invoice view
+    console.log('Viewing invoice:', invoiceId);
+  };
+
+  // Mock plans data - replace with actual API call
   const plans = [
     {
       name: 'Starter',
@@ -84,7 +96,7 @@ const Billing = () => {
         'Email Support',
         'Standard Templates',
       ],
-      current: false,
+      current: currentSubscription?.plan === 'Starter',
     },
     {
       name: 'Professional',
@@ -96,7 +108,7 @@ const Billing = () => {
         'Custom Domains',
         'API Access',
       ],
-      current: true,
+      current: currentSubscription?.plan === 'Professional',
     },
     {
       name: 'Enterprise',
@@ -109,24 +121,9 @@ const Billing = () => {
         'API Access',
         'White-label Options',
       ],
-      current: false,
+      current: currentSubscription?.plan === 'Enterprise',
     },
   ];
-
-  const handleUpgrade = (planName) => {
-    // Implement plan upgrade logic
-    console.log('Upgrading to:', planName);
-  };
-
-  const handleDownloadInvoice = (invoiceId) => {
-    // Implement invoice download
-    console.log('Downloading invoice:', invoiceId);
-  };
-
-  const handleViewInvoice = (invoiceId) => {
-    // Implement invoice view
-    console.log('Viewing invoice:', invoiceId);
-  };
 
   return (
     <div className="space-y-6">
@@ -145,6 +142,19 @@ const Billing = () => {
           </div>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiXCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm">
@@ -179,47 +189,53 @@ const Billing = () => {
           {activeTab === 'subscription' && (
             <div className="space-y-6">
               {/* Current Subscription */}
-              <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">Current Plan</h3>
-                    <p className="text-2xl font-bold text-primary-600">{subscription.plan}</p>
-                    <p className="text-gray-600 mt-1">
-                      ${subscription.amount}/{subscription.currency} per month
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                      subscription.status === 'active' 
-                        ? 'bg-success-100 text-success-800' 
-                        : 'bg-warning-100 text-warning-800'
-                    }`}>
-                      {subscription.status === 'active' ? (
-                        <HiCheckCircle className="h-4 w-4 mr-1" />
-                      ) : (
-                        <HiClock className="h-4 w-4 mr-1" />
-                      )}
-                      {subscription.status}
-                    </span>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Next billing: {formatDate(subscription.nextBilling)}
-                    </p>
+              {currentSubscription && (
+                <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">Current Plan</h3>
+                      <p className="text-2xl font-bold text-primary-600">{currentSubscription.plan}</p>
+                      <p className="text-gray-600 mt-1">
+                        ${currentSubscription.amount}/{currentSubscription.currency} per month
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        currentSubscription.status === 'active' 
+                          ? 'bg-success-100 text-success-800' 
+                          : 'bg-warning-100 text-warning-800'
+                      }`}>
+                        {currentSubscription.status === 'active' ? (
+                          <HiCheckCircle className="h-4 w-4 mr-1" />
+                        ) : (
+                          <HiClock className="h-4 w-4 mr-1" />
+                        )}
+                        {currentSubscription.status}
+                      </span>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Next billing: {formatDate(currentSubscription.next_billing_date)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Plan Features */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Features</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {subscription.features.map((feature, index) => (
-                    <div key={index} className="flex items-center">
-                      <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
-                      <span className="text-gray-700">{feature}</span>
-                    </div>
-                  ))}
+              {currentSubscription && (
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Features</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentSubscription.features?.map((feature, index) => (
+                      <div key={index} className="flex items-center">
+                        <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
+                        <span className="text-gray-700">{feature}</span>
+                      </div>
+                    )) || (
+                      <div className="text-gray-500">No features listed</div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Available Plans */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -260,14 +276,32 @@ const Billing = () => {
                         <button
                           onClick={() => handleUpgrade(plan.name)}
                           className="w-full mt-6 btn btn-primary"
+                          disabled={isLoading}
                         >
-                          Upgrade to {plan.name}
+                          {isLoading ? 'Processing...' : `Upgrade to ${plan.name}`}
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Cancel Subscription */}
+              {currentSubscription && currentSubscription.status === 'active' && (
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cancel Subscription</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Cancel your subscription to stop future billing. You'll continue to have access until the end of your current billing period.
+                  </p>
+                  <button
+                    onClick={handleCancelSubscription}
+                    className="btn btn-danger"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -412,7 +446,7 @@ const Billing = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(invoice.dueDate)}
+                            {formatDate(invoice.due_date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <button

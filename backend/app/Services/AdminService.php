@@ -10,10 +10,11 @@ use App\Models\TrainingConfig;
 use App\Models\Campaign;
 use App\Models\Domain;
 use App\Models\Sender;
-use App\Traits\HttpClientTrait;
 use App\Traits\LoggingTrait;
-use App\Traits\CacheServiceTrait;
 use App\Traits\ValidationTrait;
+use App\Traits\CacheManagementTrait;
+use Illuminate\Support\Facades\Http;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -21,7 +22,7 @@ use Spatie\Permission\Models\Permission;
 
 class AdminService
 {
-    use HttpClientTrait, LoggingTrait, CacheServiceTrait, ValidationTrait;
+    use LoggingTrait, ValidationTrait, CacheManagementTrait, FileProcessingTrait;
 
     /**
      * Get system statistics

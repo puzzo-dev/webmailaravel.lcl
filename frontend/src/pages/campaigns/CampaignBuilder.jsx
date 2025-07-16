@@ -17,35 +17,51 @@ import {
   HiCursorClick,
   HiEyeOff,
   HiX,
+  HiShieldCheck,
 } from 'react-icons/hi';
 import QuillEditor from '../../components/QuillEditor';
+
+// Safe array mapping component
+const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
+  const safeItems = Array.isArray(items) ? items : [];
+  
+  return (
+    <>
+      <option value="">{placeholder}</option>
+      {safeItems.map(renderItem)}
+    </>
+  );
+};
 
 const CampaignBuilder = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { isLoading, senders, domains, contents } = useSelector((state) => state.campaigns);
 
+  // Ensure arrays are always defined and are arrays
+  const safeSenders = Array.isArray(senders) ? senders : [];
+  const safeDomains = Array.isArray(domains) ? domains : [];
+  const safeContents = Array.isArray(contents) ? contents : [];
+
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
-    from_name: '',
-    from_email: '',
-    reply_to: '',
     email_content: '',
-    scheduled_at: '',
-    enable_tracking: true,
     enable_open_tracking: true,
     enable_click_tracking: true,
-    enable_unsubscribe: true,
+    enable_unsubscribe_link: true,
+    enable_template_variables: false,
+    template_variables: '',
     recipient_file: null,
-    sender_id: '',
-    domain_id: '',
-    content_id: '',
   });
 
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [enableContentSwitching, setEnableContentSwitching] = useState(false);
+  const [contentVariations, setContentVariations] = useState([
+    { subject: '', content: '' }
+  ]);
 
   useEffect(() => {
     dispatch(fetchSenders());
@@ -72,10 +88,26 @@ const CampaignBuilder = () => {
     }
   };
 
+  const handleContentVariationChange = (idx, field, value) => {
+    setContentVariations((prev) => {
+      const updated = [...prev];
+      updated[idx][field] = value;
+      return updated;
+    });
+  };
+
+  const addContentVariation = () => {
+    setContentVariations((prev) => [...prev, { subject: '', content: '' }]);
+  };
+
+  const removeContentVariation = (idx) => {
+    setContentVariations((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.subject || !formData.email_content) {
+    if (!formData.name || (!enableContentSwitching && !formData.email_content)) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -88,23 +120,38 @@ const CampaignBuilder = () => {
     try {
       const campaignData = new FormData();
       
-      // Add form fields
-      Object.keys(formData).forEach(key => {
-        if (key !== 'recipient_file') {
-          campaignData.append(key, formData[key]);
-        }
-      });
+      // Add basic form fields
+      campaignData.append('name', formData.name);
+      campaignData.append('subject', formData.subject);
+      campaignData.append('enable_open_tracking', formData.enable_open_tracking);
+      campaignData.append('enable_click_tracking', formData.enable_click_tracking);
+      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link);
+      campaignData.append('enable_template_variables', formData.enable_template_variables);
+      
+      if (formData.template_variables) {
+        campaignData.append('template_variables', formData.template_variables);
+      }
 
       // Add file
       if (selectedFile) {
         campaignData.append('recipient_file', selectedFile);
       }
 
+      // Add content switching data
+      campaignData.append('enable_content_switching', enableContentSwitching);
+      if (enableContentSwitching) {
+        campaignData.append('content_variations', JSON.stringify(contentVariations));
+      } else {
+        // Single content mode
+        campaignData.append('content', formData.email_content);
+      }
+
       const result = await dispatch(createCampaign(campaignData)).unwrap();
       toast.success('Campaign created successfully');
-      navigate(`/campaigns/${result.id}`);
+      navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
-      toast.error('Failed to create campaign');
+      console.error('Campaign creation error:', error);
+      toast.error(error || 'Failed to create campaign');
     }
   };
 
@@ -162,13 +209,25 @@ const CampaignBuilder = () => {
         </div>
       </div>
 
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={enableContentSwitching}
+            onChange={e => setEnableContentSwitching(e.target.checked)}
+            className="form-checkbox"
+          />
+          <span>Enable Content Switching (A/B test multiple email contents)</span>
+        </label>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="form-label">Campaign Name *</label>
                 <input
@@ -193,126 +252,121 @@ const CampaignBuilder = () => {
                   required
                 />
               </div>
-              <div>
-                <label className="form-label">From Name</label>
-                <input
-                  type="text"
-                  name="from_name"
-                  value={formData.from_name}
-                  onChange={handleInputChange}
-                  className="input"
-                  placeholder="Enter sender name"
-                />
-              </div>
-              <div>
-                <label className="form-label">From Email</label>
-                <input
-                  type="email"
-                  name="from_email"
-                  value={formData.from_email}
-                  onChange={handleInputChange}
-                  className="input"
-                  placeholder="Enter sender email"
-                />
-              </div>
-              <div>
-                <label className="form-label">Reply To</label>
-                <input
-                  type="email"
-                  name="reply_to"
-                  value={formData.reply_to}
-                  onChange={handleInputChange}
-                  className="input"
-                  placeholder="Enter reply-to email"
-                />
-              </div>
-              <div>
-                <label className="form-label">Scheduled Date</label>
-                <input
-                  type="datetime-local"
-                  name="scheduled_at"
-                  value={formData.scheduled_at}
-                  onChange={handleInputChange}
-                  className="input"
-                />
+            </div>
+          </div>
+
+          {/* Sender Configuration Info */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Sender Configuration</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <HiShieldCheck className="h-5 w-5 text-blue-600 mt-0.5 mr-2" />
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900">Automatic Sender Management</h4>
+                  <p className="text-sm text-blue-700 mt-1">
+                    All your active senders will be automatically used for this campaign. 
+                    The system will rotate between them to optimize delivery, maintain reputation, and avoid rate limits.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Sender Configuration */}
+          {/* Template Variables */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Sender Configuration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">Sender</label>
-                <select
-                  name="sender_id"
-                  value={formData.sender_id}
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Template Variables</h3>
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="enable_template_variables"
+                  checked={formData.enable_template_variables}
                   onChange={handleInputChange}
-                  className="input"
-                >
-                  <option value="">Select a sender</option>
-                  {senders.map(sender => (
-                    <option key={sender.id} value={sender.id}>
-                      {sender.name} ({sender.email})
-                    </option>
-                  ))}
-                </select>
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-900">Enable template variables</label>
               </div>
-              <div>
-                <label className="form-label">Domain</label>
-                <select
-                  name="domain_id"
-                  value={formData.domain_id}
-                  onChange={handleInputChange}
-                  className="input"
-                >
-                  <option value="">Select a domain</option>
-                  {domains.map(domain => (
-                    <option key={domain.id} value={domain.id}>
-                      {domain.domain}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {formData.enable_template_variables && (
+                <div>
+                  <label className="form-label">Template Variables (JSON format)</label>
+                  <textarea
+                    name="template_variables"
+                    value={formData.template_variables}
+                    onChange={handleInputChange}
+                    className="input"
+                    rows="4"
+                    placeholder='{"firstname": "John", "lastname": "Doe", "custom_field": "value"}'
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Use JSON format to define template variables. These will be replaced in your email content.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Content Selection */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Content</h3>
-            <div>
-              <label className="form-label">Select Content</label>
-              <select
-                name="content_id"
-                value={formData.content_id}
-                onChange={handleInputChange}
-                className="input"
-              >
-                <option value="">Select content</option>
-                {contents.map(content => (
-                  <option key={content.id} value={content.id}>
-                    {content.name}
-                  </option>
+            {enableContentSwitching ? (
+              <div className="space-y-6">
+                {contentVariations.map((variation, idx) => (
+                  <div key={idx} className="border rounded p-4 mb-2 relative">
+                    <button
+                      type="button"
+                      className="absolute top-2 right-2 text-red-500"
+                      onClick={() => removeContentVariation(idx)}
+                      disabled={contentVariations.length === 1}
+                    >
+                      <HiTrash className="h-4 w-4" />
+                    </button>
+                    <label className="form-label">Subject *</label>
+                    <input
+                      type="text"
+                      className="input mb-2"
+                      value={variation.subject}
+                      onChange={e => handleContentVariationChange(idx, 'subject', e.target.value)}
+                      placeholder="Enter subject"
+                      required
+                    />
+                    <label className="form-label">Email Content *</label>
+                    <QuillEditor
+                      value={variation.content}
+                      onChange={data => handleContentVariationChange(idx, 'content', data.html)}
+                      placeholder="Enter your email content here. You can use HTML tags for formatting."
+                      className="block w-full"
+                    />
+                  </div>
                 ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Email Content */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Email Content *</h3>
-            <div>
-              <QuillEditor
-                value={formData.email_content}
-                onChange={(data) => handleInputChange({ target: { name: 'email_content', value: data.html } })}
-                placeholder="Enter your email content here. You can use HTML tags for formatting."
-                className="block w-full"
-              />
-            </div>
-            <div className="mt-2 text-sm text-gray-500">
-              Available template variables: {'{username}', '{email}', '{firstname}', '{lastname}', '{unsubscribelink}'}
-            </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary mt-2"
+                  onClick={addContentVariation}
+                >
+                  <HiPlus className="h-4 w-4 mr-1" /> Add Variation
+                </button>
+              </div>
+            ) : (
+              <div>
+                <label className="form-label">Subject *</label>
+                <input
+                  type="text"
+                  name="subject"
+                  value={formData.subject}
+                  onChange={handleInputChange}
+                  className="input mb-2"
+                  placeholder="Enter subject"
+                  required
+                />
+                <label className="form-label">Email Content *</label>
+                <QuillEditor
+                  value={formData.email_content}
+                  onChange={data => handleInputChange({ target: { name: 'email_content', value: data.html } })}
+                  placeholder="Enter your email content here. You can use HTML tags for formatting."
+                  className="block w-full"
+                />
+              </div>
+            )}
           </div>
 
           {/* Recipient Upload */}
@@ -371,16 +425,6 @@ const CampaignBuilder = () => {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  name="enable_tracking"
-                  checked={formData.enable_tracking}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-900">Enable tracking</label>
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
                   name="enable_open_tracking"
                   checked={formData.enable_open_tracking}
                   onChange={handleInputChange}
@@ -401,8 +445,8 @@ const CampaignBuilder = () => {
               <div className="flex items-center">
                 <input
                   type="checkbox"
-                  name="enable_unsubscribe"
-                  checked={formData.enable_unsubscribe}
+                  name="enable_unsubscribe_link"
+                  checked={formData.enable_unsubscribe_link}
                   onChange={handleInputChange}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                 />
@@ -433,9 +477,9 @@ const CampaignBuilder = () => {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Scheduled</span>
+                <span className="text-sm text-gray-500">Content Switching</span>
                 <span className="text-sm font-medium text-gray-900">
-                  {formData.scheduled_at ? formatDate(formData.scheduled_at) : 'Not scheduled'}
+                  {enableContentSwitching ? 'Enabled' : 'Disabled'}
                 </span>
               </div>
             </div>
@@ -477,6 +521,7 @@ const CampaignBuilder = () => {
               <li>• Template variables are automatically replaced</li>
               <li>• Supported file formats: TXT, CSV, XLS, XLSX</li>
               <li>• Tracking helps measure campaign performance</li>
+              <li>• All active senders will be used for sender switching.</li>
             </ul>
           </div>
         </div>
@@ -502,7 +547,7 @@ const CampaignBuilder = () => {
                 <div>
                   <span className="text-sm font-medium text-gray-500">From:</span>
                   <div className="text-sm text-gray-900">
-                    {formData.from_name || 'Not set'} &lt;{formData.from_email || 'Not set'}&gt;
+                    Will use active senders automatically
                   </div>
                 </div>
                 <div>

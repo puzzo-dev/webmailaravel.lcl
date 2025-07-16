@@ -18,20 +18,17 @@ import {
   HiCog as HiSettings,
   HiTemplate,
   HiLogout,
+  HiBan,
 } from 'react-icons/hi';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HiHome },
   { name: 'Campaigns', href: '/campaigns', icon: HiInbox },
-  { name: 'Templates', href: '/templates', icon: HiDocumentText },
   { name: 'Analytics', href: '/analytics', icon: HiChartBar },
-  { name: 'Senders', href: '/senders', icon: HiUser },
   { name: 'Domains', href: '/domains', icon: HiGlobe },
-  { name: 'Suppression List', href: '/suppression-list', icon: HiDocumentText },
+  { name: 'Suppression List', href: '/suppression-list', icon: HiBan },
   { name: 'Billing', href: '/billing', icon: HiCreditCard },
-  { name: 'Security', href: '/security', icon: HiShieldCheck },
-  { name: 'Profile', href: '/profile', icon: HiUser },
-  { name: 'Settings', href: '/settings', icon: HiCog },
+  { name: 'Account', href: '/account', icon: HiUser },
 ];
 
 const adminNavigation = [
@@ -40,9 +37,7 @@ const adminNavigation = [
 
 const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
   const location = useLocation();
-  const { role } = useSelector((state) => state.auth.user || {});
-
-  const isAdmin = role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className={`hidden md:flex md:flex-shrink-0`}>
@@ -86,35 +81,7 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
                   </NavLink>
                 );
               })}
-
-              <NavLink
-                to="/templates"
-                className={({ isActive }) =>
-                  `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`
-                }
-              >
-                <HiTemplate className="h-5 w-5 mr-3" />
-                Templates
-              </NavLink>
               
-              <NavLink
-                to="/ab-testing"
-                className={({ isActive }) =>
-                  `flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`
-                }
-              >
-                <HiChartBar className="h-5 w-5 mr-3" />
-                A/B Testing
-              </NavLink>
-
               {/* Admin Navigation */}
               {isAdmin && (
                 <>

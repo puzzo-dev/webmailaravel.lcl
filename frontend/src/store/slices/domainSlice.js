@@ -120,7 +120,9 @@ const domainSlice = createSlice({
       })
       .addCase(fetchDomains.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.domains = action.payload.data || action.payload;
+        // Ensure domains is always an array
+        const domainsData = action.payload.data || action.payload;
+        state.domains = Array.isArray(domainsData) ? domainsData : [];
         state.pagination = action.payload.pagination || state.pagination;
       })
       .addCase(fetchDomains.rejected, (state, action) => {

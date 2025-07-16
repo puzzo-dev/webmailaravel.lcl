@@ -101,11 +101,6 @@ body {
     @apply block text-sm font-medium text-gray-700 mb-1;
   }
 
-  /* Form Error */
-  .form-error {
-    @apply text-red-600 text-sm;
-  }
-
   /* Table Styles */
   .table {
     @apply min-w-full divide-y divide-gray-200;

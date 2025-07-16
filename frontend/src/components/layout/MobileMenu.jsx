@@ -6,10 +6,10 @@ const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Campaigns', href: '/campaigns' },
-    { name: 'Templates', href: '/templates' },
+    { name: 'Domains', href: '/domains' },
+    { name: 'Suppression List', href: '/suppression-list' },
     { name: 'Analytics', href: '/analytics' },
-    { name: 'Profile', href: '/profile' },
-    { name: 'Settings', href: '/settings' },
+    { name: 'Account', href: '/account' },
   ];
 
   const adminNavigation = [

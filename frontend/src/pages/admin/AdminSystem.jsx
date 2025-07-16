@@ -123,6 +123,26 @@ const AdminSystem = () => {
         },
       },
     },
+    btcpay: {
+      base_url: 'https://btcpay.example.com',
+      api_key: 'your-btcpay-api-key',
+      store_id: 'your-store-id',
+      webhook_secret: 'your-webhook-secret',
+      currency: 'USD',
+    },
+    telegram: {
+      bot_token: 'your-telegram-bot-token',
+      chat_id: 'your-chat-id',
+      enabled: true,
+    },
+    powermta: {
+      base_url: 'http://localhost:8080',
+      api_key: 'your-powermta-api-key',
+      config_path: '/etc/pmta/config',
+      accounting_path: '/var/log/pmta/acct-*.csv',
+      fbl_path: '/var/log/pmta/fbl-*.csv',
+      diag_path: '/var/log/pmta/diag-*.csv',
+    },
   };
 
   const securitySettings = {
@@ -320,6 +340,9 @@ const AdminSystem = () => {
               { id: 'session', name: 'Session', icon: HiUser },
               { id: 'logging', name: 'Logging', icon: HiChartBar },
               { id: 'security', name: 'Security', icon: HiShieldCheck },
+              { id: 'btcpay', name: 'BTCPay', icon: HiKey },
+              { id: 'telegram', name: 'Telegram', icon: HiMail },
+              { id: 'powermta', name: 'PowerMTA', icon: HiServer },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -397,7 +420,7 @@ const AdminSystem = () => {
           )}
 
           {/* Configuration Tabs */}
-          {activeTab !== 'overview' && (
+          {activeTab !== 'overview' && activeTab !== 'security' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h4 className="text-lg font-medium text-gray-900 capitalize">

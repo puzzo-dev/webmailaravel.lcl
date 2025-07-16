@@ -10,14 +10,16 @@ class Session extends Model
     use HasFactory;
 
     protected $fillable = [
+        'id',
         'user_id',
-        'session_id',
-        'last_active',
         'ip_address',
+        'user_agent',
+        'payload',
+        'last_activity',
     ];
 
     protected $casts = [
-        'last_active' => 'datetime',
+        'last_activity' => 'integer',
     ];
 
     // Relationships

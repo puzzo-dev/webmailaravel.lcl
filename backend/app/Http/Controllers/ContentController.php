@@ -2,145 +2,141 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\BaseController;
 use App\Models\Content;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
 
-class ContentController extends BaseController
+class ContentController extends Controller
 {
     /**
-     * Display a listing of the resource
+     * Get the model class for this controller
      */
-    public function index(): JsonResponse
+    protected function getModelClass(): string
     {
-        return $this->executeControllerMethod(function () {
-            $query = Content::where('user_id', Auth::id())
-                ->with(['campaign'])
-                ->orderBy('created_at', 'desc');
-
-            return $this->getPaginatedResults($query, request(), 'contents', ['campaign']);
-        }, 'list_contents');
+        return Content::class;
     }
 
     /**
-     * Store a newly created resource
+     * Get the resource name for messages
      */
-    public function store(Request $request): JsonResponse
+    protected function getResourceName(): string
     {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'name' => 'required|string|max:255',
-                'subject' => 'required|string|max:255',
-                'body' => 'required|string',
-                'html_body' => 'nullable|string',
-                'text_body' => 'nullable|string',
-                'campaign_id' => 'required|exists:campaigns,id'
-            ],
-            function () use ($request) {
-                $data = $request->validated();
-                $data['user_id'] = Auth::id();
-
-                $content = Content::create($data);
-                return $this->createdResponse($content, 'Content created successfully');
-            },
-            'create_content'
-        );
+        return 'content';
     }
 
     /**
-     * Display the specified resource
+     * Get validation rules for store operation
      */
-    public function show(Content $content): JsonResponse
+    protected function getStoreRules(): array
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($content),
-            fn() => $this->getResource($content, 'content', $content->id),
-            'view_content'
-        );
+        return [
+            'title' => 'required|string|max:255',
+            'body' => 'required|string',
+            'type' => 'required|string|in:email,template,page',
+            'status' => 'nullable|string|in:draft,published,archived'
+        ];
     }
 
     /**
-     * Update the specified resource
+     * Get validation rules for update operation
      */
-    public function update(Request $request, Content $content): JsonResponse
+    protected function getUpdateRules(): array
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'name' => 'sometimes|string|max:255',
-                'subject' => 'sometimes|string|max:255',
-                'body' => 'sometimes|string',
-                'html_body' => 'nullable|string',
-                'text_body' => 'nullable|string',
-            ],
-            fn() => $this->authorizeResourceAccess($content),
-            function () use ($request, $content) {
-                $content->update($request->validated());
-                return $this->updateResponse($content, 'Content updated successfully');
-            },
-            'update_content'
-        );
+        return [
+            'title' => 'sometimes|string|max:255',
+            'body' => 'sometimes|string',
+            'type' => 'sometimes|string|in:email,template,page',
+            'status' => 'sometimes|string|in:draft,published,archived'
+        ];
     }
 
     /**
-     * Remove the specified resource
+     * Get relationships to load with the resource
      */
-    public function destroy(Content $content): JsonResponse
+    protected function getRelationships(): array
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($content),
-            function () use ($content) {
-                $content->delete();
-                return $this->deleteResponse('Content deleted successfully');
-            },
-            'delete_content'
-        );
+        return ['user'];
     }
 
     /**
-     * Send test email
+     * Get additional context for logging
      */
-    public function sendTestEmail(Request $request, Content $content): JsonResponse
+    protected function getLogContext(): array
     {
-        return $this->validateAuthorizeAndExecute(
-            $request,
-            [
-                'test_email' => 'required|email',
-                'sender_id' => 'required|exists:senders,id'
-            ],
-            fn() => $this->authorizeResourceAccess($content),
-            function () use ($request, $content) {
-                $testEmail = $request->input('test_email');
-                $senderId = $request->input('sender_id');
-
-                // Send test email logic here
-                $result = $this->sendTestEmailLogic($content, $testEmail, $senderId);
-
-                if ($result['success']) {
-                    return $this->actionResponse(null, 'Test email sent successfully');
-                }
-
-                return $this->errorResponse('Failed to send test email', $result['error']);
-            },
-            'send_test_email'
-        );
+        return ['content_type' => 'email'];
     }
 
     /**
-     * Send test email logic
+     * Custom method for content preview
      */
-    private function sendTestEmailLogic(Content $content, string $testEmail, int $senderId): array
+    public function preview(string $id): JsonResponse
     {
-        try {
-            // Implementation for sending test email
-            return ['success' => true];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $content = Content::with($this->getRelationships())->findOrFail($id);
+
+            if (!$this->canAccessResource($content)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            // Generate preview data
+            $previewData = [
+                'id' => $content->id,
+                'title' => $content->title,
+                'body' => $content->body,
+                'type' => $content->type,
+                'preview_html' => $this->generatePreviewHtml($content->body),
+                'preview_text' => $this->generatePreviewText($content->body)
             ];
-        }
+
+            return $this->successResponse($previewData, 'Content preview generated successfully');
+        }, 'preview_content');
+    }
+
+    /**
+     * Custom method for content duplication
+     */
+    public function duplicate(string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $originalContent = Content::findOrFail($id);
+
+            if (!$this->canAccessResource($originalContent)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $duplicatedContent = Content::create([
+                'title' => $originalContent->title . ' (Copy)',
+                'body' => $originalContent->body,
+                'type' => $originalContent->type,
+                'status' => 'draft',
+                'user_id' => auth()->id()
+            ]);
+
+            $this->logResourceCreated('content', $duplicatedContent->id, ['duplicated_from' => $id]);
+
+            return $this->createdResponse(
+                $duplicatedContent->load($this->getRelationships()),
+                'Content duplicated successfully'
+            );
+        }, 'duplicate_content');
+    }
+
+    /**
+     * Generate preview HTML
+     */
+    private function generatePreviewHtml(string $body): string
+    {
+        // Simple HTML generation for preview
+        return '<div class="preview-content">' . htmlspecialchars($body) . '</div>';
+    }
+
+    /**
+     * Generate preview text
+     */
+    private function generatePreviewText(string $body): string
+    {
+        // Strip HTML tags for text preview
+        return strip_tags($body);
     }
 }

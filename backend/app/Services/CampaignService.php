@@ -11,24 +11,21 @@ use App\Notifications\CampaignStatusChanged as CampaignStatusNotification;
 use App\Jobs\ProcessCampaignJob;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
-use App\Traits\CacheServiceTrait;
+use App\Traits\CacheManagementTrait;
+use App\Traits\SuppressionListTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Redis;
+
 use Illuminate\Support\Facades\DB;
 
 class CampaignService
 {
-    use LoggingTrait, ValidationTrait, CacheServiceTrait;
-
-    private FileUploadService $fileUploadService;
-    private SuppressionListService $suppressionListService;
+    use LoggingTrait, ValidationTrait, CacheManagementTrait, SuppressionListTrait, FileProcessingTrait;
 
     public function __construct(
-        FileUploadService $fileUploadService,
-        SuppressionListService $suppressionListService
+        // FileUploadService $fileUploadService // This dependency is now handled by FileProcessingTrait
     ) {
-        $this->fileUploadService = $fileUploadService;
-        $this->suppressionListService = $suppressionListService;
+        // $this->fileUploadService = $fileUploadService; // This dependency is now handled by FileProcessingTrait
     }
 
     /**
@@ -62,11 +59,11 @@ class CampaignService
             // Process content variations if content switching is enabled
             $processedData = $this->processContentVariations($data, $userContents);
 
-            // Upload recipient list if provided using FileUploadService
+            // Upload recipient list if provided using FileProcessingTrait
             $recipientPath = null;
             $recipientData = [];
             if ($recipientFile) {
-                $uploadResult = $this->fileUploadService->uploadRecipientList($recipientFile, $data['name']);
+                $uploadResult = $this->uploadRecipientList($recipientFile, $data['name']);
                 
                 if (!$uploadResult['success']) {
                     throw new \Exception($uploadResult['error']);
@@ -75,7 +72,7 @@ class CampaignService
                 $recipientPath = $uploadResult['path'];
                 $recipientData = $uploadResult['recipient_data'] ?? [];
                 
-                // Filter out suppressed emails from recipient list
+                // Filter out suppressed emails from recipient list using trait
                 $recipientPath = $this->filterSuppressedEmails($recipientPath, $data['name']);
             }
 
@@ -87,7 +84,7 @@ class CampaignService
                 'sender_ids' => $userSenders->pluck('id')->toArray(), // All user's senders
                 'content_ids' => $processedData['content_ids'],
                 'recipient_list_path' => $recipientPath,
-                'recipient_count' => $recipientPath ? $this->fileUploadService->countRecipients($recipientPath) : 0,
+                'recipient_count' => $recipientPath ? $this->countRecipients($recipientPath) : 0,
                 'enable_content_switching' => $processedData['enable_content_switching'],
                 'template_variables' => $data['template_variables'] ?? null,
                 'enable_template_variables' => $data['enable_template_variables'] ?? false,
@@ -98,17 +95,17 @@ class CampaignService
                 'status' => 'DRAFT',
             ]);
 
-            // Store recipient data in Redis for template variable processing
+            // Store recipient data in cache for template variable processing
             if (!empty($recipientData)) {
                 $this->storeRecipientData($campaign, $recipientData);
             }
 
-            // Store content variations in Redis for content switching
+            // Store content variations in cache for content switching
             if ($campaign->enable_content_switching && !empty($processedData['content_ids'])) {
                 $this->storeContentVariations($campaign, $processedData['content_variations']);
             }
 
-            // Store sender list in Redis for sender shuffling
+            // Store sender list in cache for sender shuffling
             $this->storeSenderList($campaign, $userSenders);
 
             DB::commit();
@@ -140,15 +137,15 @@ class CampaignService
     private function filterSuppressedEmails(string $originalPath, string $campaignName): string
     {
         try {
-            $originalContent = Storage::disk('local')->get($originalPath);
+            $originalContent = $this->readFile($originalPath, ['disk' => 'local']);
             $emails = array_filter(array_map('trim', explode("\n", $originalContent)));
             
             $filteredEmails = [];
             $suppressedCount = 0;
             
             foreach ($emails as $email) {
-                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    if ($this->suppressionListService->shouldSuppressEmail($email)) {
+                if ($this->validateEmail($email)) {
+                    if ($this->shouldSuppressEmail($email)) {
                         $suppressedCount++;
                         continue;
                     }
@@ -160,7 +157,7 @@ class CampaignService
             $filteredContent = implode("\n", $filteredEmails);
             $filteredPath = 'recipient_lists/filtered_' . $campaignName . '_' . time() . '.txt';
             
-            Storage::disk('local')->put($filteredPath, $filteredContent);
+            $this->writeFile($filteredPath, $filteredContent, ['disk' => 'local']);
             
             $this->logInfo('Recipient list filtered', [
                 'original_count' => count($emails),
@@ -259,7 +256,7 @@ class CampaignService
     }
 
     /**
-     * Store content variations in Redis for content switching
+     * Store content variations in cache for content switching
      */
     private function storeContentVariations(Campaign $campaign, array $contentVariations): void
     {
@@ -278,7 +275,7 @@ class CampaignService
     }
 
     /**
-     * Store recipient data in Redis for template variable processing
+     * Store recipient data in cache for template variable processing
      */
     private function storeRecipientData(Campaign $campaign, array $recipientData): void
     {
@@ -292,7 +289,7 @@ class CampaignService
     }
 
     /**
-     * Store sender list in Redis for sender shuffling
+     * Store sender list in cache for sender shuffling
      */
     private function storeSenderList(Campaign $campaign, $senders): void
     {
@@ -339,7 +336,7 @@ class CampaignService
             }
 
             // Check if recipient list exists
-            if (!$campaign->recipient_list_path || !Storage::disk('local')->exists($campaign->recipient_list_path)) {
+            if (!$campaign->recipient_list_path || !$this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
                 throw new \Exception('Recipient list not found');
             }
 
@@ -440,7 +437,7 @@ class CampaignService
      */
     public function updateSentList(Campaign $campaign, string $recipient): void
     {
-        $sentListPath = $this->fileUploadService->createSentList($campaign->name, [$recipient]);
+        $sentListPath = $this->createSentList($campaign->name, [$recipient]);
         
         // Update campaign with sent list path if not already set
         if (!$campaign->sent_list_path) {

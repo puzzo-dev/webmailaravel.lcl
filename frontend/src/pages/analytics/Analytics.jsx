@@ -1,95 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAnalytics } from '../../store/slices/analyticsSlice';
 import {
   HiChartBar,
-  HiEye,
-  HiCursorClick,
   HiMail,
-  HiUsers,
-  HiTrendingUp,
-  HiTrendingDown,
-  HiCalendar,
-  HiFilter,
-  HiDownload,
+  HiCursorClick,
+  HiEye,
+  HiExclamation,
 } from 'react-icons/hi';
-import { formatDate, formatNumber, formatPercent } from '../../utils/helpers';
+import { formatDate, formatNumber } from '../../utils/helpers';
+import toast from 'react-hot-toast';
+import { fetchAnalytics } from '../../store/slices/analyticsSlice';
+import MetricCard from '../../components/shared/MetricCard';
 
 const Analytics = () => {
   const dispatch = useDispatch();
   const { analytics, isLoading } = useSelector((state) => state.analytics);
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
-  const [selectedMetric, setSelectedMetric] = useState('overview');
+  const [timeRange, setTimeRange] = useState('30d');
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchAnalytics({ period: selectedPeriod, type: selectedMetric }));
-  }, [dispatch, selectedPeriod, selectedMetric]);
+    // Fetch analytics data from backend
+    fetchAnalyticsData();
+  }, [timeRange]);
 
-  const periods = [
-    { value: '24h', label: 'Last 24 Hours' },
-    { value: '7d', label: 'Last 7 Days' },
-    { value: '30d', label: 'Last 30 Days' },
-    { value: '90d', label: 'Last 90 Days' },
-  ];
-
-  const metrics = [
-    { value: 'overview', label: 'Overview' },
-    { value: 'campaigns', label: 'Campaigns' },
-    { value: 'deliverability', label: 'Deliverability' },
-    { value: 'reputation', label: 'Reputation' },
-  ];
-
-  const statCards = [
-    {
-      name: 'Total Sent',
-      value: analytics?.total_sent || 0,
-      change: analytics?.sent_change || 0,
-      changeType: analytics?.sent_change >= 0 ? 'increase' : 'decrease',
-      icon: HiMail,
-      color: 'blue',
-    },
-    {
-      name: 'Open Rate',
-      value: analytics?.open_rate || 0,
-      change: analytics?.open_rate_change || 0,
-      changeType: analytics?.open_rate_change >= 0 ? 'increase' : 'decrease',
-      icon: HiEye,
-      color: 'green',
-      format: 'percent',
-    },
-    {
-      name: 'Click Rate',
-      value: analytics?.click_rate || 0,
-      change: analytics?.click_rate_change || 0,
-      changeType: analytics?.click_rate_change >= 0 ? 'increase' : 'decrease',
-      icon: HiCursorClick,
-      color: 'purple',
-      format: 'percent',
-    },
-    {
-      name: 'Unique Recipients',
-      value: analytics?.unique_recipients || 0,
-      change: analytics?.recipients_change || 0,
-      changeType: analytics?.recipients_change >= 0 ? 'increase' : 'decrease',
-      icon: HiUsers,
-      color: 'orange',
-    },
-  ];
-
-  const formatValue = (value, format) => {
-    if (format === 'percent') {
-      return formatPercent(value);
+  const fetchAnalyticsData = async () => {
+    setIsLoadingData(true);
+    try {
+      await dispatch(fetchAnalytics({ timeRange })).unwrap();
+    } catch (error) {
+      toast.error('Failed to load analytics data');
+    } finally {
+      setIsLoadingData(false);
     }
-    return formatNumber(value);
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/4 mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="flex items-center justify-center py-8">
+            <div className="loading-spinner h-8 w-8"></div>
+            <span className="ml-2 text-gray-600">Loading analytics...</span>
           </div>
         </div>
       </div>
@@ -107,117 +58,146 @@ const Analytics = () => {
           </div>
           <div className="flex items-center space-x-4">
             <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
               className="input"
             >
-              {periods.map((period) => (
-                <option key={period.value} value={period.value}>
-                  {period.label}
-                </option>
-              ))}
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="1y">Last year</option>
             </select>
-            <select
-              value={selectedMetric}
-              onChange={(e) => setSelectedMetric(e.target.value)}
-              className="input"
+            <button
+              onClick={fetchAnalyticsData}
+              disabled={isLoadingData}
+              className="btn btn-secondary flex items-center"
             >
-              {metrics.map((metric) => (
-                <option key={metric.value} value={metric.value}>
-                  {metric.label}
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-secondary">
-              <HiDownload className="h-4 w-4 mr-2" />
-              Export
+              <HiChartBar className="h-5 w-5 mr-2" />
+              {isLoadingData ? 'Loading...' : 'Refresh'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => (
-          <div key={stat.name} className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatValue(stat.value, stat.format)}
-                </p>
-              </div>
-              <div className={`p-3 rounded-full bg-${stat.color}-100`}>
-                <stat.icon className={`h-6 w-6 text-${stat.color}-600`} />
-              </div>
-            </div>
-            <div className="mt-2 flex items-center">
-              {stat.changeType === 'increase' ? (
-                <HiTrendingUp className="h-4 w-4 text-green-500 mr-1" />
-              ) : (
-                <HiTrendingDown className="h-4 w-4 text-red-500 mr-1" />
-              )}
-              <span
-                className={`text-sm ${
-                  stat.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                {Math.abs(stat.change)}% from last period
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Key Metrics */}
+      {analytics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard
+            title="Total Emails Sent"
+            value={analytics.total_sent || 0}
+            previous={analytics.previous_total_sent}
+            icon={<HiMail className="h-6 w-6 text-blue-600" />}
+            color="blue"
+          />
+          <MetricCard
+            title="Open Rate"
+            value={analytics.open_rate || 0}
+            previous={analytics.previous_open_rate}
+            icon={<HiEye className="h-6 w-6 text-green-600" />}
+            color="green"
+            formatValue={(val) => `${val.toFixed(1)}%`}
+          />
+          <MetricCard
+            title="Click Rate"
+            value={analytics.click_rate || 0}
+            previous={analytics.previous_click_rate}
+            icon={<HiCursorClick className="h-6 w-6 text-purple-600" />}
+            color="purple"
+            formatValue={(val) => `${val.toFixed(1)}%`}
+          />
+          <MetricCard
+            title="Bounce Rate"
+            value={analytics.bounce_rate || 0}
+            previous={analytics.previous_bounce_rate}
+            icon={<HiExclamation className="h-6 w-6 text-red-600" />}
+            color="red"
+            formatValue={(val) => `${val.toFixed(1)}%`}
+          />
+        </div>
+      )}
 
-      {/* Charts placeholder */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Campaign Performance */}
+      {analytics?.campaigns && analytics.campaigns.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            <HiChartBar className="h-5 w-5 inline mr-2" />
-            Email Performance Over Time
-          </h3>
-          <div className="h-64 flex items-center justify-center text-gray-500">
-            Chart visualization will be implemented here
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Top Performing Campaigns</h2>
+          <div className="space-y-4">
+            {analytics.campaigns.slice(0, 5).map((campaign, index) => (
+              <div key={campaign.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                <div className="flex items-center">
+                  <div className="h-10 w-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <span className="text-primary-600 font-medium">{index + 1}</span>
+                  </div>
+                  <div className="ml-4">
+                    <h3 className="font-medium text-gray-900">{campaign.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      Sent: {formatDate(campaign.sent_at)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-6">
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">Sent</div>
+                    <div className="font-medium">{formatNumber(campaign.total_sent)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">Opens</div>
+                    <div className="font-medium">{formatNumber(campaign.opens)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">Clicks</div>
+                    <div className="font-medium">{formatNumber(campaign.clicks)}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm text-gray-500">Rate</div>
+                    <div className="font-medium">{(campaign.open_rate || 0).toFixed(1)}%</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-        
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            <HiUsers className="h-5 w-5 inline mr-2" />
-            Engagement Metrics
-          </h3>
-          <div className="h-64 flex items-center justify-center text-gray-500">
-            Chart visualization will be implemented here
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Recent Activity */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-        <div className="space-y-4">
-          {analytics?.recent_activity?.map((activity, index) => (
-            <div key={index} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-              <div className="flex items-center">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                  <HiMail className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                  <p className="text-xs text-gray-500">{formatDate(activity.timestamp)}</p>
-                </div>
-              </div>
-              <div className="text-sm text-gray-500">
-                {formatNumber(activity.count)} emails
+      {/* Additional Analytics Sections */}
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Geographic Performance */}
+          {analytics.geographic_data && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Geographic Performance</h2>
+              <div className="space-y-3">
+                {analytics.geographic_data.slice(0, 5).map((region) => (
+                  <div key={region.country} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">{region.country}</span>
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm font-medium">{formatNumber(region.sent)}</span>
+                      <span className="text-sm text-gray-500">{(region.open_rate || 0).toFixed(1)}%</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          )) || (
-            <div className="text-center py-8 text-gray-500">
-              No recent activity data available
+          )}
+
+          {/* Device Performance */}
+          {analytics.device_data && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">Device Performance</h2>
+              <div className="space-y-3">
+                {analytics.device_data.slice(0, 5).map((device) => (
+                  <div key={device.type} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">{device.type}</span>
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm font-medium">{formatNumber(device.sent)}</span>
+                      <span className="text-sm text-gray-500">{(device.open_rate || 0).toFixed(1)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

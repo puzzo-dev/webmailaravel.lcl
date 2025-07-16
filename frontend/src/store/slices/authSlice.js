@@ -1,22 +1,32 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { authService } from '../../services/api';
 
 // Async thunks
 export const initializeAuth = createAsyncThunk(
   'auth/initialize',
   async (_, { rejectWithValue }) => {
     try {
-      // For session auth, just check if user is authenticated
-      const response = await api.get('/user/profile');
-      // The backend returns: { success: true, message: "...", data: { user data } }
-      const user = response.data || response;
+      // Check if we have a token first
+      const token = sessionStorage.getItem('jwt_token');
+      if (!token) {
+        return { user: null };
+      }
+
+      // Check if user is authenticated by calling /user/me endpoint
+      const response = await authService.getProfile();
+      const user = response.data?.user || response.data;
       if (!user) {
+        // Clear invalid data
+        sessionStorage.removeItem('jwt_token');
+        sessionStorage.removeItem('user');
         return { user: null };
       }
       return { user };
     } catch (error) {
       console.error('Auth initialization error:', error);
-      // Don't throw error, just return null user for session auth
+      // Clear auth data if token is invalid - this is expected for expired tokens
+      sessionStorage.removeItem('jwt_token');
+      sessionStorage.removeItem('user');
       return { user: null };
     }
   }
@@ -26,24 +36,27 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ identifier, password, remember }, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/login', {
+      const response = await authService.login({
         identifier,
         password,
         remember: remember,
       });
       
-      // Handle the backend response structure
-      const responseData = response.data || response;
-      const user = responseData.user || responseData;
-      
-      if (!user) {
-        throw new Error('No user data received from server');
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+        if (token && user) {
+          sessionStorage.setItem('jwt_token', token);
+          sessionStorage.setItem('user', JSON.stringify(user));
+        }
+      } else {
+        throw new Error('Missing user or token in response');
       }
       
-      return { user };
+      return response;
     } catch (error) {
-      console.error('Login error:', error);
-      return rejectWithValue(handleApiError(error).message);
+      console.error('Login error in authSlice:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -52,18 +65,23 @@ export const register = createAsyncThunk(
   'auth/register',
   async (userData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/register', userData);
-      // Handle the backend response structure
-      const responseData = response.data || response;
-      const user = responseData.user || responseData;
+      const response = await authService.register(userData);
       
-      if (!user) {
-        throw new Error('No user data received from server');
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+        if (token && user) {
+          sessionStorage.setItem('jwt_token', token);
+          sessionStorage.setItem('user', JSON.stringify(user));
+        }
+      } else {
+        throw new Error('Missing user or token in response');
       }
       
-      return { user };
+      return response;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      console.error('Register error in authSlice:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -72,11 +90,24 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      await api.post('/auth/logout');
-      return null;
+      await authService.logout();
+      return {};
     } catch (error) {
-      // Even if logout fails, we consider it successful for session auth
-      return null;
+      console.error('Logout error:', error);
+      // Even if logout fails, clear local data
+      return {};
+    }
+  }
+);
+
+export const refreshToken = createAsyncThunk(
+  'auth/refreshToken',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await authService.refreshToken();
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Token refresh failed');
     }
   }
 );
@@ -85,53 +116,46 @@ export const forgotPassword = createAsyncThunk(
   'auth/forgotPassword',
   async (email, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/forgot-password', { email });
-      return response;
+      const response = await authService.forgotPassword(email);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || 'Password reset request failed');
     }
   }
 );
 
 export const resetPassword = createAsyncThunk(
   'auth/resetPassword',
-  async ({ token, password }, { rejectWithValue }) => {
+  async (resetData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/reset-password', {
-        token,
-        password,
-      });
-      return response;
+      const response = await authService.resetPassword(resetData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || 'Password reset failed');
     }
   }
 );
 
 export const verify2FA = createAsyncThunk(
   'auth/verify2FA',
-  async (code, { rejectWithValue }) => {
+  async (verificationData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/security/2fa/verify', { code });
-      return response;
+      const response = await authService.verify2FA(verificationData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || '2FA verification failed');
     }
   }
 );
 
 export const changePassword = createAsyncThunk(
   'auth/changePassword',
-  async ({ currentPassword, newPassword }, { rejectWithValue }) => {
+  async (passwordData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/security/change-password', {
-        current_password: currentPassword,
-        new_password: newPassword,
-        new_password_confirmation: newPassword,
-      });
-      return response;
+      const response = await authService.changePassword(passwordData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || 'Password change failed');
     }
   }
 );
@@ -140,12 +164,10 @@ export const updatePassword = createAsyncThunk(
   'auth/updatePassword',
   async (passwordData, { rejectWithValue }) => {
     try {
-      const response = await api.put('/user/password', passwordData);
-      // Handle the backend response structure
-      const responseData = response.data || response;
-      return responseData;
+      const response = await authService.updatePassword(passwordData);
+      return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || 'Password update failed');
     }
   }
 );
@@ -154,26 +176,22 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (profileData, { rejectWithValue }) => {
     try {
-      const response = await api.put('/user/profile', profileData);
-      // Handle the backend response structure
-      const responseData = response.data || response;
+      const response = await authService.updateProfile(profileData);
+      const responseData = await response.json();
       const user = responseData.user || responseData;
+      
       return { user };
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(error.message || 'Profile update failed');
     }
   }
 );
 
 const initialState = {
-  user: null,
-  isAuthenticated: false,
+  user: authService.getCurrentUser(), // Initialize with stored user data
+  isAuthenticated: authService.isAuthenticated(), // Initialize with auth status
   isLoading: false,
   error: null,
-  requires2FA: false,
-  is2FAVerified: false,
-  loginAttempts: 0,
-  lastLoginAttempt: null,
 };
 
 const authSlice = createSlice({
@@ -183,126 +201,163 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    setRequires2FA: (state, action) => {
-      state.requires2FA = action.payload;
+    setUser: (state, action) => {
+      state.user = action.payload;
+      state.isAuthenticated = !!action.payload;
     },
-    set2FAVerified: (state, action) => {
-      state.is2FAVerified = action.payload;
-    },
-    incrementLoginAttempts: (state) => {
-      state.loginAttempts += 1;
-      state.lastLoginAttempt = new Date().toISOString();
-    },
-    resetLoginAttempts: (state) => {
-      state.loginAttempts = 0;
-      state.lastLoginAttempt = null;
-    },
-    updateUser: (state, action) => {
-      state.user = { ...state.user, ...action.payload };
+    clearAuth: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
-    // Initialize Auth
     builder
+      // Initialize Auth
       .addCase(initializeAuth.pending, (state) => {
         state.isLoading = true;
+        state.error = null;
       })
       .addCase(initializeAuth.fulfilled, (state, action) => {
         state.isLoading = false;
-        if (action.payload.user) {
-          state.user = action.payload.user;
-          state.isAuthenticated = true;
-          state.requires2FA = action.payload.user.two_factor_enabled || false;
-          state.is2FAVerified = !action.payload.user.two_factor_enabled;
-        } else {
-          state.user = null;
-          state.isAuthenticated = false;
-          state.requires2FA = false;
-          state.is2FAVerified = false;
-        }
+        state.user = action.payload.user;
+        state.isAuthenticated = !!action.payload.user;
       })
-      .addCase(initializeAuth.rejected, (state) => {
+      .addCase(initializeAuth.rejected, (state, action) => {
         state.isLoading = false;
         state.user = null;
         state.isAuthenticated = false;
-        state.requires2FA = false;
-        state.is2FAVerified = false;
-      });
-
-    // Login
-    builder
+      })
+      // Login
       .addCase(login.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = true;
         state.user = action.payload.user;
-        state.requires2FA = action.payload.user.two_factor_enabled;
-        state.is2FAVerified = !action.payload.user.two_factor_enabled;
-        state.loginAttempts = 0;
-        state.lastLoginAttempt = null;
+        state.isAuthenticated = true;
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
-        state.isAuthenticated = false;
-        state.user = null;
-        state.requires2FA = false;
-        state.is2FAVerified = false;
-      });
-
-    // Register
-    builder
+      })
+      // Register
       .addCase(register.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(register.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = true;
         state.user = action.payload.user;
-        state.requires2FA = action.payload.user.two_factor_enabled;
-        state.is2FAVerified = !action.payload.user.two_factor_enabled;
+        state.isAuthenticated = true;
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
-      });
-
-    // Logout
-    builder
+      })
+      // Logout
+      .addCase(logout.pending, (state) => {
+        state.isLoading = true;
+      })
       .addCase(logout.fulfilled, (state) => {
+        state.isLoading = false;
         state.user = null;
         state.isAuthenticated = false;
-        state.requires2FA = false;
-        state.is2FAVerified = false;
-        state.loginAttempts = 0;
-        state.lastLoginAttempt = null;
-      });
-
-    // Update Profile
-    builder
-      .addCase(updateProfile.fulfilled, (state, action) => {
-        state.user = { ...state.user, ...action.payload.user };
-      });
-
-    // Update Password
-    builder
+        state.error = null;
+      })
+      .addCase(logout.rejected, (state) => {
+        state.isLoading = false;
+        state.user = null;
+        state.isAuthenticated = false;
+        state.error = null;
+      })
+      // Refresh Token
+      .addCase(refreshToken.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(refreshToken.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(refreshToken.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Forgot Password
+      .addCase(forgotPassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(forgotPassword.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(forgotPassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Reset Password
+      .addCase(resetPassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(resetPassword.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Verify 2FA
+      .addCase(verify2FA.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(verify2FA.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(verify2FA.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Change Password
+      .addCase(changePassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(changePassword.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Update Password
+      .addCase(updatePassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(updatePassword.fulfilled, (state) => {
-        // Password updated successfully
+        state.isLoading = false;
+      })
+      .addCase(updatePassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      // Update Profile
+      .addCase(updateProfile.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
       });
   },
 });
 
-export const {
-  clearError,
-  setRequires2FA,
-  set2FAVerified,
-  incrementLoginAttempts,
-  resetLoginAttempts,
-  updateUser,
-} = authSlice.actions;
-
+export const { clearError, setUser, clearAuth } = authSlice.actions;
 export default authSlice.reducer; 

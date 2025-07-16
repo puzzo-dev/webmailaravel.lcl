@@ -36,10 +36,6 @@ export const formatPercentage = (value, decimals = 1) => {
   return `${formatNumber(value, decimals)}%`;
 };
 
-export const formatPercent = (value, decimals = 1) => {
-  return `${formatNumber(value, decimals)}%`;
-};
-
 export const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;

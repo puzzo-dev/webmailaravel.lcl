@@ -36,7 +36,7 @@ const AdminDashboard = () => {
   const dispatch = useDispatch();
   const { analytics, isLoading } = useSelector((state) => state.analytics);
   const { campaigns } = useSelector((state) => state.campaigns);
-  const { users } = useSelector((state) => state.users);
+  const { users } = useSelector((state) => state.user);
   const [selectedPeriod, setSelectedPeriod] = useState('7d');
 
   useEffect(() => {

@@ -15,3 +15,8 @@ use App\Http\Controllers\HomeController;
 */
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+
+// Login route to handle auth middleware redirects
+Route::get('/login', function () {
+    return redirect('/');
+})->name('login');
