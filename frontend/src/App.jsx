@@ -40,6 +40,9 @@ import AdminLogs from './pages/admin/AdminLogs';
 import AdminBackups from './pages/admin/AdminBackups';
 import AdminPowerMTA from './pages/admin/AdminPowerMTA';
 import AdminSystem from './pages/admin/AdminSystem';
+import SystemSettings from './pages/SystemSettings';
+import UserActivity from './pages/UserActivity';
+import AdminNotifications from './pages/admin/AdminNotifications';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -79,6 +82,7 @@ const mainRoutes = [
   { path: '/analytics', component: Analytics },
   { path: '/notifications', component: Notifications },
   { path: '/account', component: Account },
+  { path: '/activity', component: UserActivity },
 ];
 
 const featureRoutes = [
@@ -95,6 +99,8 @@ const adminRoutes = [
   { path: '/admin/backups', component: AdminBackups },
   { path: '/admin/powermta', component: AdminPowerMTA },
   { path: '/admin/system', component: AdminSystem },
+  { path: '/admin/system-settings', component: SystemSettings },
+  { path: '/admin/notifications', component: AdminNotifications },
 ];
 
 const adminPlaceholderRoutes = [

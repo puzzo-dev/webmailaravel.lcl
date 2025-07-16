@@ -6,71 +6,43 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 // Configure axios defaults for JWT authentication
 axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
+axios.defaults.withCredentials = true; // Enable sending cookies with requests
 
-// Secure token storage using httpOnly cookies (if available) or sessionStorage
+// Cookie-based authentication - no local storage needed
 const secureStorage = {
   setToken: (token) => {
-    // Try to use httpOnly cookie first, fallback to sessionStorage
-    try {
-      // For JWT, we'll use sessionStorage (more secure than localStorage)
-      sessionStorage.setItem('jwt_token', token);
-    } catch (error) {
-      console.error('Failed to store token:', error);
-    }
+    // Tokens are handled by HTTP-only cookies from the backend
+    // No local storage needed
   },
 
   getToken: () => {
-    try {
-      return sessionStorage.getItem('jwt_token');
-    } catch (error) {
-      console.error('Failed to retrieve token:', error);
-      return null;
-    }
+    // Tokens are sent automatically via cookies
+    return null;
   },
 
   removeToken: () => {
-    try {
-      sessionStorage.removeItem('jwt_token');
-    } catch (error) {
-      console.error('Failed to remove token:', error);
-    }
+    // Token removal is handled by the backend logout endpoint
   },
 
   setUser: (user) => {
-    try {
-      sessionStorage.setItem('user_data', JSON.stringify(user));
-    } catch (error) {
-      console.error('Failed to store user data:', error);
-    }
+    // User data is managed by Redux state, no local storage needed
   },
 
   getUser: () => {
-    try {
-      const user = sessionStorage.getItem('user_data');
-      return user ? JSON.parse(user) : null;
-    } catch (error) {
-      console.error('Failed to retrieve user data:', error);
-      return null;
-    }
+    // User data is managed by Redux state
+    return null;
   },
 
   clearAuth: () => {
-    try {
-      sessionStorage.removeItem('jwt_token');
-      sessionStorage.removeItem('user_data');
-    } catch (error) {
-      console.error('Failed to clear auth data:', error);
-    }
+    // Auth state is managed by Redux and HTTP-only cookies
   }
 };
 
-// Request interceptor - add JWT token for authenticated requests
+// Request interceptor - ensure credentials are sent with requests
 axios.interceptors.request.use(
   (config) => {
-    const token = secureStorage.getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Ensure credentials (cookies) are sent with every request
+    config.withCredentials = true;
     return config;
   },
   (error) => {
@@ -102,8 +74,11 @@ axios.interceptors.response.use(
 
     // Skip refresh logic for the refresh endpoint itself
     if (originalRequest.url?.includes('/auth/refresh')) {
-      secureStorage.clearAuth();
-      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+
+    // Skip automatic redirects for auth initialization calls
+    if (originalRequest.url?.includes('/user/me') && originalRequest._isAuthInit) {
       return Promise.reject(error);
     }
 
@@ -114,7 +89,7 @@ axios.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
+          // Token is automatically sent via cookies
           return axios(originalRequest);
         }).catch(err => {
           return Promise.reject(err);
@@ -127,21 +102,16 @@ axios.interceptors.response.use(
       try {
         // Try to refresh the token
         const response = await axios.post('/auth/refresh');
-        const newToken = response.data.data.token;
         
-        // Store the new token
-        secureStorage.setToken(newToken);
-        
+        // Token is automatically set in HTTP-only cookie by backend
         // Process queued requests
-        processQueue(null, newToken);
+        processQueue(null, 'refreshed');
         
-        // Retry the original request with the new token
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        // Retry the original request
         return axios(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, clear auth and redirect to login
+        // If refresh fails, redirect to login (Redux will handle state clearing)
         processQueue(refreshError, null);
-        secureStorage.clearAuth();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       } finally {
@@ -149,9 +119,8 @@ axios.interceptors.response.use(
       }
     }
 
-    // If we get a 403 (Forbidden), clear auth and redirect to login
+    // If we get a 403 (Forbidden), redirect to login
     if (error.response?.status === 403) {
-      secureStorage.clearAuth();
       window.location.href = '/login';
     }
 
@@ -162,10 +131,10 @@ axios.interceptors.response.use(
 // Common API methods
 export const api = {
   // GET request with query parameters
-  get: async (endpoint, params = {}) => {
+  get: async (endpoint, params = {}, config = {}) => {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-    const response = await axios.get(url);
+    const response = await axios.get(url, config);
     return response.data;
   },
 
@@ -187,8 +156,8 @@ export const api = {
   },
 
   // DELETE request
-  delete: async (endpoint) => {
-    const response = await axios.delete(endpoint);
+  delete: async (endpoint, data = {}) => {
+    const response = await axios.delete(endpoint, { data });
     return response.data;
   },
 
@@ -239,35 +208,36 @@ export const auth = {
     return secureStorage.getToken();
   },
 
-  // Check if user is authenticated
+  // Check if user is authenticated (this should be handled by Redux state)
   isAuthenticated: () => {
-    return !!secureStorage.getToken();
+    // This will be handled by Redux state, not local storage
+    return false;
   },
 
-  // Set user data
+  // Set user data (handled by Redux)
   setUser: (user) => {
-    secureStorage.setUser(user);
+    // User data is managed by Redux
   },
 
-  // Get user data
+  // Get user data (handled by Redux)
   getUser: () => {
-    return secureStorage.getUser();
+    // User data is managed by Redux
+    return null;
   },
 
-  // Clear all auth data
+  // Clear all auth data (handled by Redux and logout endpoint)
   clearAuth: () => {
-    secureStorage.clearAuth();
+    // Auth clearing is handled by Redux and backend logout
   },
 
   // Refresh token
   refreshToken: async () => {
     try {
       const response = await axios.post('/auth/refresh');
-      const newToken = response.data.data.token;
-      secureStorage.setToken(newToken);
-      return newToken;
+      // Token is automatically set in HTTP-only cookie by backend
+      return response.data;
     } catch (error) {
-      secureStorage.clearAuth();
+      // Token refresh failed, let Redux handle state clearing
       throw error;
     }
   },

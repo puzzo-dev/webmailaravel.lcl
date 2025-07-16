@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Traits\SuppressionListTrait;
 use App\Traits\FileProcessingTrait;
+use App\Traits\CacheManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class SuppressionListController extends Controller
 {
-    use SuppressionListTrait, FileProcessingTrait;
+    use SuppressionListTrait, FileProcessingTrait, CacheManagementTrait;
 
     /**
      * Handle unsubscribe request

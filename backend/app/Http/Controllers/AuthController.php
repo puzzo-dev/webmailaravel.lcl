@@ -51,17 +51,29 @@ class AuthController extends Controller
         try {
             // Generate JWT token
             $token = JWTAuth::fromUser($user);
+            
+            // Set the JWT token in a secure HTTP-only cookie
+            $cookie = cookie(
+                'jwt_token',
+                $token,
+                config('jwt.ttl'), // TTL in minutes
+                '/', // Path
+                null, // Domain
+                request()->secure(), // Secure flag (true for HTTPS)
+                true, // HTTP only
+                false, // Raw
+                'Lax' // SameSite
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful',
                 'data' => [
                     'user' => $user,
-                    'token' => $token,
                     'token_type' => 'Bearer',
                     'expires_in' => config('jwt.ttl') * 60 // Convert to seconds
                 ]
-            ]);
+            ])->withCookie($cookie);
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
@@ -98,17 +110,29 @@ class AuthController extends Controller
         try {
             // Generate JWT token
             $token = JWTAuth::fromUser($user);
+            
+            // Set the JWT token in a secure HTTP-only cookie
+            $cookie = cookie(
+                'jwt_token',
+                $token,
+                config('jwt.ttl'), // TTL in minutes
+                '/', // Path
+                null, // Domain
+                request()->secure(), // Secure flag (true for HTTPS)
+                true, // HTTP only
+                false, // Raw
+                'Lax' // SameSite
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Registration successful',
                 'data' => [
                     'user' => $user,
-                    'token' => $token,
                     'token_type' => 'Bearer',
                     'expires_in' => config('jwt.ttl') * 60 // Convert to seconds
                 ]
-            ], 201);
+            ], 201)->withCookie($cookie);
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
@@ -122,10 +146,13 @@ class AuthController extends Controller
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
             
+            // Clear the JWT cookie
+            $cookie = cookie()->forget('jwt_token');
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Logged out successfully'
-            ]);
+            ])->withCookie($cookie);
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
@@ -150,15 +177,27 @@ class AuthController extends Controller
         try {
             $token = JWTAuth::refresh(JWTAuth::getToken());
             
+            // Set the new JWT token in a secure HTTP-only cookie
+            $cookie = cookie(
+                'jwt_token',
+                $token,
+                config('jwt.ttl'), // TTL in minutes
+                '/', // Path
+                null, // Domain
+                request()->secure(), // Secure flag (true for HTTPS)
+                true, // HTTP only
+                false, // Raw
+                'Lax' // SameSite
+            );
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Token refreshed successfully',
                 'data' => [
-                    'token' => $token,
                     'token_type' => 'Bearer',
                     'expires_in' => config('jwt.ttl') * 60 // Convert to seconds
                 ]
-            ]);
+            ])->withCookie($cookie);
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,

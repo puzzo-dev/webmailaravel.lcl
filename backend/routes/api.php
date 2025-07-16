@@ -18,6 +18,7 @@ use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\SuppressionListController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SystemSettingsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +79,16 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/devices', [UserController::class, 'getDevices']);
         Route::get('/sessions', [UserController::class, 'getSessions']);
         Route::get('/me', [AuthController::class, 'me']);
+        
+        // User settings routes
+        Route::get('/settings', [UserController::class, 'getSettings']);
+        Route::put('/settings/general', [UserController::class, 'updateGeneralSettings']);
+        Route::put('/settings/notifications', [UserController::class, 'updateNotificationSettings']);
+        Route::put('/settings/security', [UserController::class, 'updateSecuritySettings']);
+        Route::put('/settings/api', [UserController::class, 'updateApiSettings']);
+        Route::put('/settings/telegram', [UserController::class, 'updateTelegramSettings']);
+        Route::post('/settings/api/generate-key', [UserController::class, 'generateApiKey']);
+        Route::post('/settings/telegram/test', [UserController::class, 'testTelegram']);
     });
 
     // Auth routes (require authentication)
@@ -293,5 +304,15 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/devices/{device}/trust', [SecurityController::class, 'trustDevice']);
         Route::get('/sessions', [SecurityController::class, 'getActiveSessions']);
         Route::delete('/sessions/{session}', [SecurityController::class, 'revokeSession']);
+    });
+
+    // Admin System Settings routes (admin only)
+    Route::prefix('admin')->group(function () {
+        Route::prefix('system-settings')->group(function () {
+            Route::get('/', [SystemSettingsController::class, 'index']);
+            Route::put('/', [SystemSettingsController::class, 'update']);
+            Route::post('/test-smtp', [SystemSettingsController::class, 'testSmtp']);
+            Route::get('/env-variables', [SystemSettingsController::class, 'getEnvVariables']);
+        });
     });
 }); 

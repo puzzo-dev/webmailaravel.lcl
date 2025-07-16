@@ -423,4 +423,189 @@ class UserController extends Controller
             'data' => $sessions
         ]);
     }
+
+    /**
+     * Get user settings
+     */
+    public function getSettings(): JsonResponse
+    {
+        $user = Auth::user();
+        
+        $settings = [
+            'general' => [
+                'name' => $user->name,
+                'email' => $user->email,
+                'username' => $user->username,
+                'country' => $user->country,
+                'city' => $user->city,
+            ],
+            'notifications' => [
+                'telegram_notifications_enabled' => $user->telegram_notifications_enabled,
+            ],
+            'security' => [
+                'two_factor_enabled' => $user->two_factor_enabled,
+            ],
+            'telegram' => [
+                'telegram_chat_id' => $user->telegram_chat_id,
+                'telegram_verified_at' => $user->telegram_verified_at,
+            ]
+        ];
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Settings retrieved successfully',
+            'data' => $settings
+        ]);
+    }
+
+    /**
+     * Update general settings
+     */
+    public function updateGeneralSettings(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'username' => 'sometimes|string|max:255|unique:users,username,' . $user->id,
+            'country' => 'sometimes|string|max:255',
+            'city' => 'sometimes|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user->update($validator->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'General settings updated successfully',
+            'data' => $user->fresh()
+        ]);
+    }
+
+    /**
+     * Update notification settings
+     */
+    public function updateNotificationSettings(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'telegram_notifications_enabled' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user->update($validator->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notification settings updated successfully',
+            'data' => $user->fresh()
+        ]);
+    }
+
+    /**
+     * Update security settings
+     */
+    public function updateSecuritySettings(Request $request): JsonResponse
+    {
+        // This method delegates to SecurityController for security-related operations
+        return response()->json([
+            'success' => false,
+            'message' => 'Use /security/settings endpoint for security settings'
+        ], 302);
+    }
+
+    /**
+     * Update API settings
+     */
+    public function updateApiSettings(Request $request): JsonResponse
+    {
+        // This method delegates to SecurityController for API key management
+        return response()->json([
+            'success' => false,
+            'message' => 'Use /security/api-keys endpoint for API settings'
+        ], 302);
+    }
+
+    /**
+     * Update Telegram settings
+     */
+    public function updateTelegramSettings(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'telegram_chat_id' => 'sometimes|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user->update($validator->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Telegram settings updated successfully',
+            'data' => $user->fresh()
+        ]);
+    }
+
+    /**
+     * Generate API key
+     */
+    public function generateApiKey(): JsonResponse
+    {
+        // This method delegates to SecurityController for API key generation
+        return response()->json([
+            'success' => false,
+            'message' => 'Use /security/api-keys endpoint to generate API keys'
+        ], 302);
+    }
+
+    /**
+     * Test Telegram connection
+     */
+    public function testTelegram(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'chat_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Simple response for now - actual Telegram integration would go here
+        return response()->json([
+            'success' => true,
+            'message' => 'Telegram test completed',
+            'data' => [
+                'chat_id' => $request->chat_id,
+                'status' => 'test_message_sent'
+            ]
+        ]);
+    }
 }

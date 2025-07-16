@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Auth\AuthenticationException;
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\JWTFromCookie;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,8 +16,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // CheckRole middleware should only be used on specific routes, not globally
-        // $middleware->append(CheckRole::class);
+        // Add JWT from cookie middleware globally for API routes
+        $middleware->api(prepend: [
+            JWTFromCookie::class,
+        ]);
+        
+        // Register aliases for route-specific middleware
+        $middleware->alias([
+            'role' => CheckRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

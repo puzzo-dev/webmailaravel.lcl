@@ -654,6 +654,72 @@ trait BillingTrait
     }
 
     /**
+     * Renew a BTCPay subscription
+     */
+    protected function renewBTCPaySubscription(Subscription $subscription): array
+    {
+        $this->logMethodEntry(__METHOD__, [
+            'subscription_id' => $subscription->id
+        ]);
+
+        try {
+            // Get the subscription's plan
+            $plan = $subscription->plan;
+            if (!$plan) {
+                return [
+                    'success' => false,
+                    'message' => 'Subscription plan not found'
+                ];
+            }
+
+            // Create a new BTCPay invoice for renewal
+            $invoiceResult = $this->createBTCPayInvoice([
+                'amount' => $plan->price,
+                'currency' => $plan->currency ?? 'USD',
+                'metadata' => [
+                    'subscription_id' => $subscription->id,
+                    'user_id' => $subscription->user_id,
+                    'plan_id' => $subscription->plan_id,
+                    'type' => 'renewal'
+                ]
+            ]);
+
+            if ($invoiceResult['success']) {
+                // Update subscription status to pending renewal
+                $subscription->update([
+                    'status' => 'pending_renewal'
+                ]);
+
+                $this->logInfo('Subscription renewal invoice created', [
+                    'subscription_id' => $subscription->id,
+                    'invoice_id' => $invoiceResult['data']['id']
+                ]);
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'subscription' => $subscription->fresh(),
+                        'invoice' => $invoiceResult['data']
+                    ]
+                ];
+            }
+
+            return $invoiceResult;
+
+        } catch (\Exception $e) {
+            $this->logError('Failed to renew BTCPay subscription', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Failed to renew subscription: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Get BTCPay payment rates
      */
     protected function getBTCPayPaymentRates(): array

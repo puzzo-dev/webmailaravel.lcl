@@ -2,6 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
+import {
   HiInbox,
   HiChartBar,
   HiUser,
@@ -15,7 +32,11 @@ import {
   HiPlus,
   HiCog,
   HiBell,
+  HiRefresh,
+  HiEye,
+  HiCursorClick,
 } from 'react-icons/hi';
+import '../styles/animations.css';
 
 const SmartDashboard = () => {
   const navigate = useNavigate();
@@ -26,6 +47,32 @@ const SmartDashboard = () => {
   const campaigns = useSelector(state => state.campaigns?.campaigns || []);
   const senders = useSelector(state => state.senders?.senders || []);
   const domains = useSelector(state => state.domains?.domains || []);
+
+  // Chart colors
+  const chartColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
+
+  // Sample chart data - this would come from analytics API
+  const performanceData = [
+    { name: 'Jan', sent: 4000, delivered: 3800, opened: 1200, clicked: 240 },
+    { name: 'Feb', sent: 3000, delivered: 2900, opened: 900, clicked: 180 },
+    { name: 'Mar', sent: 2000, delivered: 1950, opened: 650, clicked: 130 },
+    { name: 'Apr', sent: 2780, delivered: 2700, opened: 810, clicked: 162 },
+    { name: 'May', sent: 1890, delivered: 1850, opened: 555, clicked: 111 },
+    { name: 'Jun', sent: 2390, delivered: 2300, opened: 690, clicked: 138 },
+  ];
+
+  const campaignTypeData = [
+    { name: 'Newsletter', value: 45, color: '#8884d8' },
+    { name: 'Promotional', value: 30, color: '#82ca9d' },
+    { name: 'Transactional', value: 15, color: '#ffc658' },
+    { name: 'Welcome Series', value: 10, color: '#ff7c7c' },
+  ];
+
+  const deviceData = [
+    { name: 'Desktop', value: 60 },
+    { name: 'Mobile', value: 35 },
+    { name: 'Tablet', value: 5 },
+  ];
 
   useEffect(() => {
     // Generate contextual suggestions based on system state
@@ -166,16 +213,20 @@ const SmartDashboard = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white rounded-lg shadow-sm p-6 hover-lift animate-fadeInUp">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                <HiInbox className="h-5 w-5 text-blue-600" />
+              <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg animate-bounceIn">
+                <HiInbox className="h-6 w-6 text-white" />
               </div>
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Campaigns</p>
-              <p className="text-2xl font-bold text-gray-900">{campaigns.length}</p>
+              <p className="text-3xl font-bold text-gray-900 animate-scaleIn">{campaigns.length}</p>
+              <div className="flex items-center mt-1">
+                <HiTrendingUp className="h-3 w-3 text-green-500 mr-1" />
+                <span className="text-xs text-green-600 font-medium">+12% from last month</span>
+              </div>
             </div>
           </div>
         </div>
@@ -221,6 +272,161 @@ const SmartDashboard = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Performance Trends */}
+        <div className="bg-white rounded-lg shadow-sm p-6 hover-lift">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Email Performance Trends</h3>
+              <p className="text-sm text-gray-500">Monthly email metrics overview</p>
+            </div>
+            <div className="p-2 bg-blue-100 rounded-lg animate-float">
+              <HiChartBar className="h-5 w-5 text-blue-600" />
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={performanceData}>
+              <defs>
+                <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
+                </linearGradient>
+                <linearGradient id="colorOpened" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="sent" 
+                stroke="#8884d8" 
+                fillOpacity={1} 
+                fill="url(#colorSent)" 
+                strokeWidth={2}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="opened" 
+                stroke="#82ca9d" 
+                fillOpacity={1} 
+                fill="url(#colorOpened)" 
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Campaign Types Distribution */}
+        <div className="bg-white rounded-lg shadow-sm p-6 hover-lift">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Campaign Types</h3>
+              <p className="text-sm text-gray-500">Distribution of campaign categories</p>
+            </div>
+            <div className="p-2 bg-green-100 rounded-lg animate-float" style={{ animationDelay: '0.5s' }}>
+              <HiMail className="h-5 w-5 text-green-600" />
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={campaignTypeData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {campaignTypeData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Legend 
+                verticalAlign="bottom" 
+                height={36}
+                iconType="circle"
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Engagement Metrics */}
+      <div className="bg-white rounded-lg shadow-sm p-6 hover-lift">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Engagement Rates</h3>
+            <p className="text-sm text-gray-500">Open and click rates over time</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="p-2 bg-purple-100 rounded-lg animate-float" style={{ animationDelay: '1s' }}>
+              <HiEye className="h-5 w-5 text-purple-600" />
+            </div>
+            <div className="p-2 bg-orange-100 rounded-lg animate-float" style={{ animationDelay: '1.2s' }}>
+              <HiCursorClick className="h-5 w-5 text-orange-600" />
+            </div>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={performanceData}>
+            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip 
+              contentStyle={{
+                backgroundColor: 'white',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}
+              formatter={(value, name) => [
+                name === 'opened' ? `${((value / performanceData.find(d => d.opened === value)?.sent || 1) * 100).toFixed(1)}%` :
+                name === 'clicked' ? `${((value / performanceData.find(d => d.clicked === value)?.opened || 1) * 100).toFixed(1)}%` :
+                value,
+                name === 'opened' ? 'Open Rate' : 'Click Rate'
+              ]}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="opened" 
+              stroke="#8884d8" 
+              strokeWidth={3}
+              dot={{ fill: '#8884d8', strokeWidth: 2, r: 6 }}
+              activeDot={{ r: 8, stroke: '#8884d8', strokeWidth: 2 }}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="clicked" 
+              stroke="#82ca9d" 
+              strokeWidth={3}
+              dot={{ fill: '#82ca9d', strokeWidth: 2, r: 6 }}
+              activeDot={{ r: 8, stroke: '#82ca9d', strokeWidth: 2 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Recent Activity */}

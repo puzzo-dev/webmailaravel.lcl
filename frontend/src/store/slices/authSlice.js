@@ -6,28 +6,19 @@ export const initializeAuth = createAsyncThunk(
   'auth/initialize',
   async (_, { rejectWithValue }) => {
     try {
-      // Check if we have a token first
-      const token = sessionStorage.getItem('jwt_token');
-      if (!token) {
-        return { user: null };
-      }
-
-      // Check if user is authenticated by calling /user/me endpoint
-      const response = await authService.getProfile();
+      // Try to get user profile - if successful, user is authenticated
+      const response = await authService.getProfile(true); // Mark as auth init
       const user = response.data?.user || response.data;
-      if (!user) {
-        // Clear invalid data
-        sessionStorage.removeItem('jwt_token');
-        sessionStorage.removeItem('user');
-        return { user: null };
+      
+      if (user) {
+        return { user };
+      } else {
+        return rejectWithValue('No user found');
       }
-      return { user };
     } catch (error) {
-      console.error('Auth initialization error:', error);
-      // Clear auth data if token is invalid - this is expected for expired tokens
-      sessionStorage.removeItem('jwt_token');
-      sessionStorage.removeItem('user');
-      return { user: null };
+      // If API call fails (no cookie, expired token, etc.), user is not authenticated
+      console.log('Auth initialization: No valid session found');
+      return rejectWithValue('Not authenticated');
     }
   }
 );
@@ -43,13 +34,13 @@ export const login = createAsyncThunk(
       });
       
       if (response.success && response.data) {
-        const { token, user } = response.data;
-        if (token && user) {
-          sessionStorage.setItem('jwt_token', token);
-          sessionStorage.setItem('user', JSON.stringify(user));
+        const { user } = response.data;
+        if (!user) {
+          throw new Error('Missing user in response');
         }
+        // User data will be stored in Redux state only
       } else {
-        throw new Error('Missing user or token in response');
+        throw new Error('Missing user in response');
       }
       
       return response;
@@ -68,13 +59,13 @@ export const register = createAsyncThunk(
       const response = await authService.register(userData);
       
       if (response.success && response.data) {
-        const { token, user } = response.data;
-        if (token && user) {
-          sessionStorage.setItem('jwt_token', token);
-          sessionStorage.setItem('user', JSON.stringify(user));
+        const { user } = response.data;
+        if (!user) {
+          throw new Error('Missing user in response');
         }
+        // User data will be stored in Redux state only
       } else {
-        throw new Error('Missing user or token in response');
+        throw new Error('Missing user in response');
       }
       
       return response;
@@ -188,8 +179,8 @@ export const updateProfile = createAsyncThunk(
 );
 
 const initialState = {
-  user: authService.getCurrentUser(), // Initialize with stored user data
-  isAuthenticated: authService.isAuthenticated(), // Initialize with auth status
+  user: null, // Will be initialized by initializeAuth
+  isAuthenticated: false, // Will be determined by API call
   isLoading: false,
   error: null,
 };

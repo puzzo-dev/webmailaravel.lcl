@@ -25,6 +25,13 @@ import {
   HiXCircle,
   HiExclamation,
   HiExclamationCircle,
+  HiPencil,
+  HiCamera,
+  HiInformationCircle,
+  HiSparkles,
+  HiShieldExclamation,
+  HiClipboard,
+  HiRefresh
 } from 'react-icons/hi';
 import {
   updateProfile,

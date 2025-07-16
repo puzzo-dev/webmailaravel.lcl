@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   HiBell,
   HiCog,
@@ -14,43 +14,82 @@ import {
   HiGlobe,
   HiMail,
   HiBan,
+  HiExclamation,
+  HiInformationCircle,
 } from 'react-icons/hi';
 import GlobalSearch from '../GlobalSearch';
+import { fetchNotifications, markNotificationAsRead } from '../../store/slices/notificationsSlice';
 
 const Header = ({ onMenuToggle, user, onLogout }) => {
+  const dispatch = useDispatch();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
-  // Mock notifications - replace with actual Redux state
-  const notifications = [
-    {
-      id: 1,
-      type: 'success',
-      title: 'Campaign Sent Successfully',
-      message: 'Your newsletter campaign has been sent to 1,234 recipients',
-      time: '2 minutes ago',
-      read: false,
-    },
-    {
-      id: 2,
-      type: 'warning',
-      title: 'Domain Reputation Alert',
-      message: 'Domain "example.com" reputation dropped to 85%',
-      time: '1 hour ago',
-      read: false,
-    },
-    {
-      id: 3,
-      type: 'info',
-      title: 'New Feature Available',
-      message: 'Sender rotation is now available for better deliverability',
-      time: '3 hours ago',
-      read: true,
-    },
-  ];
+  // Get notifications from Redux store
+  const { notifications, unreadCount, isLoading } = useSelector((state) => state.notifications);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Fetch notifications on component mount
+  useEffect(() => {
+    if (user) {
+      dispatch(fetchNotifications());
+    }
+  }, [dispatch, user]);
+
+  // Handle notification click
+  const handleNotificationClick = async (notification) => {
+    if (!notification.read_at) {
+      await dispatch(markNotificationAsRead(notification.id));
+    }
+  };
+
+  // Format time helper
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+  };
+
+  // Get notification icon based on type
+  const getNotificationIcon = (notification) => {
+    const type = notification.notification_type || notification.type || 'info';
+    switch (type) {
+      case 'success':
+        return <HiInbox className="h-4 w-4 text-green-600" />;
+      case 'warning':
+        return <HiExclamation className="h-4 w-4 text-yellow-600" />;
+      case 'error':
+        return <HiExclamation className="h-4 w-4 text-red-600" />;
+      case 'info':
+      default:
+        return <HiInformationCircle className="h-4 w-4 text-blue-600" />;
+    }
+  };
+
+  // Get notification background color
+  const getNotificationBg = (notification) => {
+    const type = notification.notification_type || notification.type || 'info';
+    switch (type) {
+      case 'success':
+        return 'bg-green-100';
+      case 'warning':
+        return 'bg-yellow-100';
+      case 'error':
+        return 'bg-red-100';
+      case 'info':
+      default:
+        return 'bg-blue-100';
+    }
+  };
 
   const quickActions = [
     { name: 'Campaigns', href: '/campaigns', icon: HiInbox },
@@ -58,7 +97,8 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     { name: 'Senders', href: '/senders', icon: HiSenders },
     { name: 'Domains', href: '/domains', icon: HiGlobe },
     { name: 'Suppression List', href: '/suppression-list', icon: HiBan },
-    { name: 'Account', href: '/account', icon: HiCog },
+    { name: 'Settings', href: '/account', icon: HiCog },
+    { name: 'Mail', href: '/admin/system-settings', icon: HiMail },
   ];
 
   return (
@@ -124,42 +164,38 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     <h3 className="text-lg font-medium text-gray-900">Notifications</h3>
                   </div>
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.length > 0 ? (
+                    {isLoading ? (
+                      <div className="p-4 text-center text-gray-500">
+                        Loading notifications...
+                      </div>
+                    ) : notifications.length > 0 ? (
                       notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
-                            !notification.read ? 'bg-blue-50' : ''
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                            !notification.read_at ? 'bg-blue-50' : ''
                           }`}
                         >
                           <div className="flex items-start">
                             <div className="flex-shrink-0">
-                              {notification.type === 'success' && (
-                                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                                  <HiInbox className="h-4 w-4 text-green-600" />
-                                </div>
-                              )}
-                              {notification.type === 'warning' && (
-                                <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                                  <HiBell className="h-4 w-4 text-yellow-600" />
-                                </div>
-                              )}
-                              {notification.type === 'info' && (
-                                <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                  <HiCog className="h-4 w-4 text-blue-600" />
-                                </div>
-                              )}
+                              <div className={`h-8 w-8 ${getNotificationBg(notification)} rounded-full flex items-center justify-center`}>
+                                {getNotificationIcon(notification)}
+                              </div>
                             </div>
                             <div className="ml-3 flex-1">
                               <p className="text-sm font-medium text-gray-900">
-                                {notification.title}
+                                {notification.title || 'Notification'}
                               </p>
                               <p className="text-sm text-gray-500 mt-1">
-                                {notification.message}
+                                {notification.message || ''}
                               </p>
                               <p className="text-xs text-gray-400 mt-2">
-                                {notification.time}
+                                {formatTime(notification.created_at)}
                               </p>
+                              {!notification.read_at && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1"></div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -171,9 +207,13 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     )}
                   </div>
                   <div className="p-4 border-t border-gray-200">
-                    <button className="text-sm text-blue-600 hover:text-blue-800">
+                    <a 
+                      href="/notifications" 
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                      onClick={() => setShowNotifications(false)}
+                    >
                       View all notifications
-                    </button>
+                    </a>
                   </div>
                 </div>
               )}

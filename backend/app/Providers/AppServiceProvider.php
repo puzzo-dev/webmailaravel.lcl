@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use App\Services\CampaignService;
-use App\Services\FileUploadService;
+
 use App\Services\BTCPayService;
 use App\Services\PowerMTAService;
 
@@ -34,7 +34,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ValidationTrait::class);
 
         // Register core services
-        $this->app->singleton(FileUploadService::class);
         $this->app->singleton(GeoIPService::class);
 
         $this->app->singleton(PowerMTAService::class);
@@ -49,12 +48,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AutomaticTrainingService::class);
         $this->app->singleton(SuppressionListService::class);
 
-        // Register CampaignService with FileUploadService dependency
-        $this->app->singleton(CampaignService::class, function ($app) {
-            return new CampaignService(
-                $app->make(FileUploadService::class)
-            );
-        });
+        // Register CampaignService (no dependencies needed, uses traits)
+        $this->app->singleton(CampaignService::class);
 
         // Register BTCPayService with shared traits
         $this->app->singleton(BTCPayService::class, function ($app) {

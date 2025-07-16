@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { fetchAnalytics } from '../../store/slices/analyticsSlice';
-import { fetchCampaigns } from '../../store/slices/campaignSlice';
-import { fetchUsers } from '../../store/slices/userSlice';
+import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
 import {
   HiUsers,
@@ -30,25 +28,110 @@ import {
   HiPlay,
   HiPause,
   HiStop,
+  HiExclamation,
 } from 'react-icons/hi';
 
 const AdminDashboard = () => {
-  const dispatch = useDispatch();
-  const { analytics, isLoading } = useSelector((state) => state.analytics);
-  const { campaigns } = useSelector((state) => state.campaigns);
-  const { users } = useSelector((state) => state.user);
+  const { user } = useSelector((state) => state.auth);
   const [selectedPeriod, setSelectedPeriod] = useState('7d');
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    stats: {},
+    recent_users: [],
+    recent_campaigns: [],
+  });
+  const [systemStatus, setSystemStatus] = useState({});
+  const [recentActivities, setRecentActivities] = useState([]);
 
   useEffect(() => {
-    dispatch(fetchAnalytics({ period: selectedPeriod }));
-    dispatch(fetchCampaigns({ page: 1, limit: 10 }));
-    dispatch(fetchUsers({ page: 1, limit: 10 }));
-  }, [dispatch, selectedPeriod]);
+    if (user?.role === 'admin') {
+      fetchDashboardData();
+      fetchSystemStatus();
+    }
+  }, [user, selectedPeriod]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [dashboardResponse, analyticsResponse] = await Promise.all([
+        adminService.getDashboard(),
+        adminService.getAnalytics({ period: selectedPeriod })
+      ]);
+      
+      setDashboardData(dashboardResponse.data);
+      
+      // Generate recent activities from the data
+      const activities = generateRecentActivities(
+        dashboardResponse.data.recent_users,
+        dashboardResponse.data.recent_campaigns
+      );
+      setRecentActivities(activities);
+    } catch (error) {
+      toast.error('Failed to load dashboard data');
+      console.error('Dashboard data error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSystemStatus = async () => {
+    try {
+      const response = await adminService.getSystemStatus();
+      setSystemStatus(response.data);
+    } catch (error) {
+      console.error('System status error:', error);
+    }
+  };
+
+  const generateRecentActivities = (users, campaigns) => {
+    const activities = [];
+    
+    // Add recent user registrations
+    users.slice(0, 3).forEach((user, index) => {
+      activities.push({
+        id: `user-${user.id}`,
+        type: 'user',
+        action: 'User registered',
+        user: user.email,
+        time: formatTimeAgo(user.created_at),
+        status: 'success',
+      });
+    });
+
+    // Add recent campaigns
+    campaigns.slice(0, 2).forEach((campaign, index) => {
+      activities.push({
+        id: `campaign-${campaign.id}`,
+        type: 'campaign',
+        action: `Campaign ${campaign.status}`,
+        user: campaign.user?.email || 'System',
+        time: formatTimeAgo(campaign.created_at),
+        status: campaign.status === 'active' ? 'success' : campaign.status === 'failed' ? 'error' : 'warning',
+      });
+    });
+
+    return activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+  };
 
   const systemStats = [
     {
       name: 'Total Users',
-      value: users?.length || 0,
+      value: dashboardData.stats.total_users || 0,
       change: '+12%',
       changeType: 'increase',
       icon: HiUsers,
@@ -56,8 +139,8 @@ const AdminDashboard = () => {
       href: '/admin/users',
     },
     {
-      name: 'Active Campaigns',
-      value: campaigns?.filter(c => c.status === 'active').length || 0,
+      name: 'Total Campaigns',
+      value: dashboardData.stats.total_campaigns || 0,
       change: '+5%',
       changeType: 'increase',
       icon: HiMail,
@@ -65,40 +148,40 @@ const AdminDashboard = () => {
       href: '/admin/campaigns',
     },
     {
-      name: 'Total Revenue',
-      value: `$${analytics?.total_revenue || 0}`,
-      change: '+23%',
-      changeType: 'increase',
-      icon: HiCurrencyDollar,
-      color: 'yellow',
-      href: '/admin/billing',
-    },
-    {
-      name: 'System Health',
-      value: '98%',
-      change: '+2%',
-      changeType: 'increase',
-      icon: HiServer,
-      color: 'green',
-      href: '/admin/system',
-    },
-    {
-      name: 'Active Domains',
-      value: analytics?.active_domains || 0,
+      name: 'Active Campaigns',
+      value: dashboardData.stats.active_campaigns || 0,
       change: '+8%',
       changeType: 'increase',
-      icon: HiGlobe,
-      color: 'purple',
-      href: '/admin/domains',
+      icon: HiPlay,
+      color: 'yellow',
+      href: '/admin/campaigns',
     },
     {
-      name: 'API Requests',
-      value: analytics?.api_requests || 0,
-      change: '+15%',
+      name: 'Emails Sent',
+      value: dashboardData.stats.total_emails_sent || 0,
+      change: '+23%',
       changeType: 'increase',
-      icon: HiKey,
+      icon: HiMail,
+      color: 'purple',
+      href: '/admin/analytics',
+    },
+    {
+      name: 'Avg Open Rate',
+      value: `${Math.round(dashboardData.stats.avg_open_rate || 0)}%`,
+      change: '+2%',
+      changeType: 'increase',
+      icon: HiEye,
+      color: 'green',
+      href: '/admin/analytics',
+    },
+    {
+      name: 'Avg Click Rate',
+      value: `${Math.round(dashboardData.stats.avg_click_rate || 0)}%`,
+      change: '+1%',
+      changeType: 'increase',
+      icon: HiTrendingUp,
       color: 'indigo',
-      href: '/admin/api',
+      href: '/admin/analytics',
     },
   ];
 
@@ -147,48 +230,7 @@ const AdminDashboard = () => {
     },
   ];
 
-  const recentActivities = [
-    {
-      id: 1,
-      type: 'user',
-      action: 'User registered',
-      user: 'john@example.com',
-      time: '2 minutes ago',
-      status: 'success',
-    },
-    {
-      id: 2,
-      type: 'campaign',
-      action: 'Campaign started',
-      user: 'admin@example.com',
-      time: '5 minutes ago',
-      status: 'success',
-    },
-    {
-      id: 3,
-      type: 'system',
-      action: 'System backup completed',
-      user: 'system',
-      time: '1 hour ago',
-      status: 'success',
-    },
-    {
-      id: 4,
-      type: 'billing',
-      action: 'Payment received',
-      user: 'jane@example.com',
-      time: '2 hours ago',
-      status: 'success',
-    },
-    {
-      id: 5,
-      type: 'security',
-      action: 'Failed login attempt',
-      user: 'unknown@example.com',
-      time: '3 hours ago',
-      status: 'warning',
-    },
-  ];
+  // recentActivities is now populated from live data in fetchDashboardData
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -219,6 +261,44 @@ const AdminDashboard = () => {
         return <HiDocumentText className="h-4 w-4" />;
     }
   };
+
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamationTriangle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to access the admin dashboard.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="bg-gradient-to-r from-gray-300 to-gray-400 rounded-lg h-32 mb-6"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-gray-200 rounded-lg h-24"></div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-gray-200 rounded-lg h-64"></div>
+            <div className="bg-gray-200 rounded-lg h-64"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -352,18 +432,32 @@ const AdminDashboard = () => {
       {/* System Health */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">System Health</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center">
-            <div className="text-3xl font-bold text-green-600">98%</div>
-            <div className="text-sm text-gray-500">Uptime</div>
+            <div className={`text-3xl font-bold ${systemStatus.database?.status === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
+              {systemStatus.database?.status === 'connected' ? '✓' : '✗'}
+            </div>
+            <div className="text-sm text-gray-500">Database</div>
+            <div className="text-xs text-gray-400 mt-1">{systemStatus.database?.message}</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600">1.2s</div>
-            <div className="text-sm text-gray-500">Avg Response Time</div>
+            <div className={`text-3xl font-bold ${systemStatus.cache?.status === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
+              {systemStatus.cache?.status === 'connected' ? '✓' : '✗'}
+            </div>
+            <div className="text-sm text-gray-500">Cache</div>
+            <div className="text-xs text-gray-400 mt-1">{systemStatus.cache?.message}</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-purple-600">99.9%</div>
-            <div className="text-sm text-gray-500">Email Delivery Rate</div>
+            <div className="text-3xl font-bold text-blue-600">{systemStatus.memory?.current || 'N/A'}</div>
+            <div className="text-sm text-gray-500">Memory Usage</div>
+            <div className="text-xs text-gray-400 mt-1">Limit: {systemStatus.memory?.limit || 'N/A'}</div>
+          </div>
+          <div className="text-center">
+            <div className={`text-3xl font-bold ${systemStatus.storage?.usage_percent < 80 ? 'text-green-600' : systemStatus.storage?.usage_percent < 90 ? 'text-yellow-600' : 'text-red-600'}`}>
+              {systemStatus.storage?.usage_percent ? `${systemStatus.storage.usage_percent}%` : 'N/A'}
+            </div>
+            <div className="text-sm text-gray-500">Disk Usage</div>
+            <div className="text-xs text-gray-400 mt-1">{systemStatus.storage?.free_space || 'N/A'} free</div>
           </div>
         </div>
       </div>
@@ -372,26 +466,53 @@ const AdminDashboard = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">System Alerts</h2>
         <div className="space-y-3">
-          <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <HiExclamation className="h-5 w-5 text-yellow-600 mr-3" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-800">High CPU Usage</p>
-              <p className="text-sm text-yellow-700">Server CPU usage is at 85%</p>
+          {/* Dynamic alerts based on system status */}
+          {systemStatus.storage?.usage_percent > 85 && (
+            <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+              <HiExclamation className="h-5 w-5 text-red-600 mr-3" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800">High Disk Usage</p>
+                <p className="text-sm text-red-700">Disk usage is at {systemStatus.storage.usage_percent}%</p>
+              </div>
             </div>
-            <button className="text-yellow-600 hover:text-yellow-800">
-              <HiEye className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
-            <HiCheckCircle className="h-5 w-5 text-green-600 mr-3" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-green-800">Backup Completed</p>
-              <p className="text-sm text-green-700">Daily backup completed successfully</p>
+          )}
+          
+          {systemStatus.storage?.usage_percent > 75 && systemStatus.storage?.usage_percent <= 85 && (
+            <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <HiExclamation className="h-5 w-5 text-yellow-600 mr-3" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-800">Moderate Disk Usage</p>
+                <p className="text-sm text-yellow-700">Disk usage is at {systemStatus.storage.usage_percent}%</p>
+              </div>
             </div>
-            <button className="text-green-600 hover:text-green-800">
-              <HiEye className="h-4 w-4" />
-            </button>
-          </div>
+          )}
+
+          {systemStatus.database?.status === 'connected' && systemStatus.cache?.status === 'connected' && (
+            <div className="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+              <HiCheckCircle className="h-5 w-5 text-green-600 mr-3" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-800">System Status Good</p>
+                <p className="text-sm text-green-700">All core services are operational</p>
+              </div>
+            </div>
+          )}
+
+          {(systemStatus.database?.status !== 'connected' || systemStatus.cache?.status !== 'connected') && (
+            <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
+              <HiXCircle className="h-5 w-5 text-red-600 mr-3" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800">Service Issues Detected</p>
+                <p className="text-sm text-red-700">One or more core services are unavailable</p>
+              </div>
+            </div>
+          )}
+
+          {Object.keys(systemStatus).length === 0 && (
+            <div className="text-center text-gray-500 py-4">
+              <HiClock className="h-8 w-8 mx-auto mb-2" />
+              <p>Loading system status...</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

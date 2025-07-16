@@ -165,14 +165,14 @@ class BillingController extends Controller
      */
     public function paymentHistory(Request $request): JsonResponse
     {
-        $userId = Auth::id();
+        $user = Auth::user();
         
         // Admin can view any user's payment history
-        if (Auth::user()->hasRole('admin') && $request->has('user_id')) {
-            $userId = $request->user_id;
+        if ($user->hasRole('admin') && $request->has('user_id')) {
+            $user = User::findOrFail($request->user_id);
         }
 
-        $payments = $this->getBTCPayPaymentHistory($userId);
+        $payments = $this->getPaymentHistory($user);
 
         return $this->successResponse($payments, 'Payment history retrieved successfully');
     }
@@ -196,7 +196,10 @@ class BillingController extends Controller
      */
     public function webhook(Request $request): JsonResponse
     {
-        $result = $this->handleBTCPayWebhook($request->all());
+        $payload = $request->all();
+        $signature = $request->header('BTCPay-Sig') ?? $request->header('X-BTCPay-Signature') ?? '';
+        
+        $result = $this->processBTCPayWebhook($payload, $signature);
 
         if ($result['success']) {
             return $this->successResponse(null, 'Webhook processed successfully');
@@ -222,7 +225,7 @@ class BillingController extends Controller
      */
     public function rates(): JsonResponse
     {
-        $rates = $this->getBTCPayRates();
+        $rates = $this->getBTCPayPaymentRates();
 
         return $this->successResponse($rates, 'Payment rates retrieved successfully');
     }

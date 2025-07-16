@@ -5,14 +5,7 @@ export const authService = {
     async login(credentials) {
         try {
             const response = await api.post('/auth/login', credentials);
-            
-            if (response.success && response.data) {
-                const { token, user } = response.data;
-                if (token && user) {
-                    sessionStorage.setItem('jwt_token', token);
-                    sessionStorage.setItem('user', JSON.stringify(user));
-                }
-            }
+            // Token and user data are handled by backend cookies and Redux
             return response;
         } catch (error) {
             throw error;
@@ -22,14 +15,7 @@ export const authService = {
     async register(userData) {
         try {
             const response = await api.post('/auth/register', userData);
-            
-            if (response.success && response.data) {
-                const { token, user } = response.data;
-                if (token && user) {
-                    sessionStorage.setItem('jwt_token', token);
-                    sessionStorage.setItem('user', JSON.stringify(user));
-                }
-            }
+            // Token and user data are handled by backend cookies and Redux
             return response;
         } catch (error) {
             throw error;
@@ -39,26 +25,26 @@ export const authService = {
     async logout() {
         try {
             await api.post('/auth/logout');
+            // Backend will clear the HTTP-only cookie
         } catch (error) {
-            // Ignore logout errors
-        } finally {
-            sessionStorage.removeItem('jwt_token');
-            sessionStorage.removeItem('user');
+            // Ignore logout errors, backend will still clear cookie
         }
     },
 
-    async getProfile() {
-        const response = await api.get('/user/me');
+    async getProfile(isAuthInit = false) {
+        const config = isAuthInit ? { _isAuthInit: true } : {};
+        const response = await api.get('/user/me', {}, config);
         return response;
     },
 
     isAuthenticated() {
-        return !!sessionStorage.getItem('jwt_token');
+        // Authentication state is managed by Redux, not local storage
+        return false;
     },
 
     getCurrentUser() {
-        const user = sessionStorage.getItem('user');
-        return user ? JSON.parse(user) : null;
+        // User data is managed by Redux, not local storage
+        return null;
     }
 };
 
@@ -376,37 +362,37 @@ export const analyticsService = {
 // Suppression service methods
 export const suppressionService = {
     async getStatistics() {
-        const response = await api.get('/suppression/stats');
+        const response = await api.get('/suppression-list/statistics');
         return response;
     },
 
     async exportList(exportData) {
-        const response = await api.post('/suppression/export', exportData);
+        const response = await api.post('/suppression-list/export', exportData);
         return response;
     },
 
     async importList(importData) {
-        const response = await api.post('/suppression/import', importData);
+        const response = await api.post('/suppression-list/import', importData);
         return response;
     },
 
     async processFBLFile(fileData) {
-        const response = await api.post('/suppression/process-fbl', fileData);
+        const response = await api.post('/suppression-list/process-fbl', fileData);
         return response;
     },
 
     async removeEmail(emailData) {
-        const response = await api.post('/suppression/remove-email', emailData);
+        const response = await api.delete('/suppression-list/remove-email', emailData);
         return response;
     },
 
     async cleanupList(cleanupData) {
-        const response = await api.post('/suppression/cleanup', cleanupData);
+        const response = await api.post('/suppression-list/cleanup', cleanupData);
         return response;
     },
 
     async downloadFile(filename) {
-        const response = await api.get(`/suppression/download/${filename}`);
+        const response = await api.get(`/suppression-list/download/${filename}`);
         return response;
     }
 };
@@ -468,8 +454,18 @@ export const securityService = {
         return response;
     },
 
+    async getActivityLog() {
+        const response = await api.get('/security/activity');
+        return response;
+    },
+
+    async getSecuritySummary() {
+        const response = await api.get('/security/summary');
+        return response;
+    },
+
     async changePassword(passwordData) {
-        const response = await api.put('/security/password', passwordData);
+        const response = await api.post('/security/password/change', passwordData);
         return response;
     }
 };
@@ -487,50 +483,142 @@ export const billingService = {
     },
 
     async cancelSubscription(id) {
-        const response = await api.post(`/billing/subscriptions/${id}/cancel`);
+        const response = await api.delete(`/billing/subscriptions/${id}`);
         return response;
     },
 
     async createBTCPayInvoice(invoiceData) {
-        const response = await api.post('/billing/btcpay/invoice', invoiceData);
+        const response = await api.post('/btcpay/invoice', invoiceData);
         return response;
     },
 
     async getPaymentHistory(params = {}) {
-        const response = await api.get('/billing/payments', params);
+        const response = await api.get('/billing/payment-history', params);
         return response;
     },
 
     async getPaymentRates() {
         const response = await api.get('/billing/rates');
         return response;
-    },
-
-    async createManualPayment(paymentData) {
-        const response = await api.post('/billing/manual-payment', paymentData);
-        return response;
     }
+
+    // Note: Manual payments not implemented in backend
+    // async createManualPayment(paymentData) {
+    //     const response = await api.post('/billing/manual-payment', paymentData);
+    //     return response;
+    // }
 };
 
 // Settings service methods
 export const settingsService = {
     async getSettings() {
-        const response = await api.get('/settings');
+        const response = await api.get('/security/settings');
         return response;
     },
 
     async updateSettings(settingsData) {
-        const response = await api.put('/settings', settingsData);
+        const response = await api.put('/security/settings', settingsData);
         return response;
     },
 
     async getSystemSettings() {
-        const response = await api.get('/admin/system-settings');
+        const response = await api.get('/admin/system-config');
         return response;
     },
 
     async updateSystemSettings(settingsData) {
+        const response = await api.put('/admin/system-config', settingsData);
+        return response;
+    }
+};
+
+// System Settings service methods
+export const systemSettingsService = {
+    async getSettings() {
+        const response = await api.get('/admin/system-settings');
+        return response;
+    },
+
+    async updateSettings(settingsData) {
         const response = await api.put('/admin/system-settings', settingsData);
+        return response;
+    },
+
+    async testSmtp(emailData) {
+        const response = await api.post('/admin/system-settings/test-smtp', emailData);
+        return response;
+    },
+
+    async getEnvVariables() {
+        const response = await api.get('/admin/system-settings/env-variables');
+        return response;
+    }
+};
+
+// Admin service methods
+export const adminService = {
+    async getDashboard() {
+        const response = await api.get('/admin/dashboard');
+        return response;
+    },
+
+    async getUsers(params = {}) {
+        const response = await api.get('/admin/users', { params });
+        return response;
+    },
+
+    async getCampaigns(params = {}) {
+        const response = await api.get('/admin/campaigns', { params });
+        return response;
+    },
+
+    async getAnalytics(params = {}) {
+        const response = await api.get('/admin/analytics', { params });
+        return response;
+    },
+
+    async getSystemStatus() {
+        const response = await api.get('/admin/system-status');
+        return response;
+    },
+
+    async getSystemConfig() {
+        const response = await api.get('/admin/system-config');
+        return response;
+    },
+
+    async updateSystemConfig(configData) {
+        const response = await api.post('/admin/system-config', configData);
+        return response;
+    },
+
+    async getBTCPayConfig() {
+        const response = await api.get('/admin/system-config/btcpay');
+        return response;
+    },
+
+    async updateBTCPayConfig(configData) {
+        const response = await api.post('/admin/system-config/btcpay', configData);
+        return response;
+    },
+
+    async getTelegramConfig() {
+        const response = await api.get('/admin/system-config/telegram');
+        return response;
+    },
+
+    async updateTelegramConfig(configData) {
+        const response = await api.post('/admin/system-config/telegram', configData);
+        return response;
+    },
+
+    async getPowerMTAConfig() {
+        const response = await api.get('/admin/system-config/powermta');
+        return response;
+    },
+
+    async updatePowerMTAConfig(configData) {
+        const response = await api.post('/admin/system-config/powermta', configData);
         return response;
     }
 }; 

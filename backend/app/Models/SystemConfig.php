@@ -13,15 +13,7 @@ class SystemConfig extends Model
     protected $fillable = [
         'key',
         'value',
-        'description',
-        'type',
-        'is_encrypted',
-        'is_public'
-    ];
-
-    protected $casts = [
-        'is_encrypted' => 'boolean',
-        'is_public' => 'boolean'
+        'description'
     ];
 
     /**
@@ -38,15 +30,13 @@ class SystemConfig extends Model
     /**
      * Set config value with cache invalidation
      */
-    public static function setValue(string $key, $value, string $description = null, string $type = 'string', bool $isEncrypted = false): void
+    public static function setValue(string $key, $value, string $description = null): void
     {
         $config = static::updateOrCreate(
             ['key' => $key],
             [
                 'value' => $value,
-                'description' => $description,
-                'type' => $type,
-                'is_encrypted' => $isEncrypted
+                'description' => $description
             ]
         );
 
@@ -54,12 +44,11 @@ class SystemConfig extends Model
     }
 
     /**
-     * Get all public configs
+     * Get all configs
      */
-    public static function getPublicConfigs(): array
+    public static function getAllConfigs(): array
     {
-        return static::where('is_public', true)
-            ->get()
+        return static::all()
             ->pluck('value', 'key')
             ->toArray();
     }
@@ -238,10 +227,7 @@ class SystemConfig extends Model
                 ['key' => $config['key']],
                 [
                     'value' => $config['value'],
-                    'description' => $config['description'],
-                    'type' => 'string',
-                    'is_encrypted' => false,
-                    'is_public' => false
+                    'description' => $config['description']
                 ]
             );
         }
@@ -256,5 +242,21 @@ class SystemConfig extends Model
         foreach ($configs as $config) {
             Cache::forget("system_config:{$config->key}");
         }
+    }
+
+    /**
+     * Helper method for getting config values (alias for getValue)
+     */
+    public static function get(string $key, $default = null)
+    {
+        return static::getValue($key, $default);
+    }
+
+    /**
+     * Helper method for setting config values (alias for setValue)
+     */
+    public static function set(string $key, $value, string $description = null): void
+    {
+        static::setValue($key, $value, $description);
     }
 }

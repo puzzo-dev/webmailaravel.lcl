@@ -9,6 +9,14 @@ use Carbon\Carbon;
 trait CacheManagementTrait
 {
     /**
+     * Simple cache method - alias for getCachedData
+     */
+    protected function cache(string $key, callable $callback, int $ttl = 3600): mixed
+    {
+        return $this->getCachedData($key, $callback, $ttl);
+    }
+
+    /**
      * Get cached data with fallback
      */
     protected function getCachedData(string $key, callable $callback, int $ttl = 3600): mixed
