@@ -16,6 +16,7 @@ import {
 const QuickActions = ({ user }) => {
   const navigate = useNavigate();
 
+  // Define actions based on what users typically need
   const quickActions = [
     {
       id: 'new-campaign',
@@ -27,49 +28,49 @@ const QuickActions = ({ user }) => {
       color: 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700',
     },
     {
-      id: 'analytics',
-      title: 'View Analytics',
-      description: 'Check campaign performance',
-      icon: HiChartBar,
-      action: () => navigate('/analytics'),
-      shortcut: 'Ctrl+A',
+      id: 'campaigns',
+      title: 'View Campaigns',
+      description: 'Manage your campaigns',
+      icon: HiMail,
+      action: () => navigate('/campaigns'),
+      shortcut: 'Ctrl+C',
       color: 'bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700',
     },
     {
-      id: 'senders',
-      title: 'Manage Senders',
-      description: 'Configure sender accounts',
-      icon: HiUser,
-      action: () => navigate('/senders'),
-      shortcut: 'Ctrl+S',
+      id: 'analytics',
+      title: 'Analytics',
+      description: 'Check performance metrics',
+      icon: HiChartBar,
+      action: () => navigate('/analytics'),
+      shortcut: 'Ctrl+A',
       color: 'bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700',
     },
     {
+      id: 'senders',
+      title: 'Senders',
+      description: 'Manage sender accounts',
+      icon: HiUser,
+      action: () => navigate('/senders'),
+      shortcut: 'Ctrl+S',
+      color: 'bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700',
+    },
+    {
       id: 'domains',
-      title: 'Manage Domains',
+      title: 'Domains',
       description: 'Configure sending domains',
       icon: HiGlobe,
       action: () => navigate('/domains'),
       shortcut: 'Ctrl+D',
-      color: 'bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700',
-    },
-    {
-      id: 'inbox',
-      title: 'Inbox',
-      description: 'View incoming emails',
-      icon: HiInbox,
-      action: () => navigate('/inbox'),
-      shortcut: 'Ctrl+I',
       color: 'bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700',
     },
     {
-      id: 'settings',
-      title: 'Settings',
-      description: 'Configure system settings',
-      icon: HiCog,
-      action: () => navigate('/settings'),
-      shortcut: 'Ctrl+,',
-      color: 'bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700',
+      id: 'content',
+      title: 'Content',
+      description: 'Manage email templates',
+      icon: HiDocumentText,
+      action: () => navigate('/content'),
+      shortcut: 'Ctrl+T',
+      color: 'bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700',
     },
   ];
 
@@ -98,9 +99,9 @@ const QuickActions = ({ user }) => {
             e.preventDefault();
             navigate('/domains');
             break;
-          case 'i':
+          case 't':
             e.preventDefault();
-            navigate('/inbox');
+            navigate('/content');
             break;
         }
       }

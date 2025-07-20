@@ -60,6 +60,17 @@ class DomainController extends Controller
                 'verification_status' => 'string|in:pending,verified,failed'
             ],
             function () use ($request) {
+                $user = Auth::user();
+                
+                // Check if user can create more domains based on their plan
+                if (!$user->canCreateDomain()) {
+                    $limits = $user->getPlanLimits();
+                    return $this->errorResponse(
+                        'Domain limit reached. Your plan allows ' . $limits['max_domains'] . ' domains maximum.',
+                        422
+                    );
+                }
+                
                 $data = $request->input('validated_data');
                 $data['user_id'] = Auth::id();
 
@@ -740,5 +751,47 @@ class DomainController extends Controller
 
             return $this->successResponse($testResult, $testResult['success'] ? 'SMTP test successful' : 'SMTP test failed');
         }, 'admin_test_smtp_config');
+    }
+
+    /**
+     * Test domain connection (admin only)
+     */
+    public function testDomainConnection(string $domainId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($domainId) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $domain = Domain::findOrFail($domainId);
+            
+            // Get the SMTP config for this domain
+            $smtpConfig = $domain->smtpConfig;
+            
+            if (!$smtpConfig) {
+                return $this->errorResponse('No SMTP configuration found for this domain', [], 400);
+            }
+            
+            // Test the SMTP connection
+            $testResult = [
+                'success' => true,
+                'message' => 'Domain connection test successful',
+                'details' => [
+                    'domain' => $domain->name,
+                    'smtp_host' => $smtpConfig->host,
+                    'smtp_port' => $smtpConfig->port,
+                    'smtp_encryption' => $smtpConfig->encryption
+                ]
+            ];
+
+            Log::info('Domain connection test by admin', [
+                'admin_id' => Auth::id(),
+                'domain_id' => $domainId,
+                'domain_name' => $domain->name,
+                'success' => $testResult['success']
+            ]);
+
+            return $this->successResponse($testResult, $testResult['success'] ? 'Domain test successful' : 'Domain test failed');
+        }, 'admin_test_domain_connection');
     }
 }

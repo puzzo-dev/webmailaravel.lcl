@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign } from '../../store/slices/campaignSlice';
+import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
 import {
   HiPlus,
@@ -138,6 +138,10 @@ const Campaigns = () => {
         case 'pause':
           await dispatch(pauseCampaign(campaignId)).unwrap();
           toast.success('Campaign paused successfully');
+          break;
+        case 'resume':
+          await dispatch(resumeCampaign(campaignId)).unwrap();
+          toast.success('Campaign resumed successfully');
           break;
         case 'stop':
           await dispatch(stopCampaign(campaignId)).unwrap();

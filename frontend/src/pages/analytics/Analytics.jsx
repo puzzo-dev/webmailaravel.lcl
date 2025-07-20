@@ -11,6 +11,7 @@ import { formatDate, formatNumber } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 import { fetchAnalytics } from '../../store/slices/analyticsSlice';
 import MetricCard from '../../components/shared/MetricCard';
+import PageSubscriptionOverlay from '../../components/common/PageSubscriptionOverlay';
 
 const Analytics = () => {
   const dispatch = useDispatch();
@@ -48,7 +49,12 @@ const Analytics = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageSubscriptionOverlay 
+        feature="advanced analytics"
+        customMessage="Upgrade to Pro to unlock detailed analytics, campaign performance insights, and advanced reporting features."
+      />
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
@@ -198,7 +204,8 @@ const Analytics = () => {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

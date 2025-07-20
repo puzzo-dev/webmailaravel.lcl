@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | This value is the version of your application. This can be used to
+    | display version information in your admin dashboard or other UI elements.
+    |
+    */
+
+    'version' => env('APP_VERSION', '1.0.0'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

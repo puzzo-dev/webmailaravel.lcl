@@ -78,6 +78,9 @@ class AdminController extends Controller
                 'storage' => $this->checkStorageStatus(),
                 'memory' => $this->getMemoryUsage(),
                 'disk' => $this->getDiskUsage(),
+                'system' => $this->getSystemInfo(),
+                'uptime' => $this->getServerUptime(),
+                'cpu' => $this->getCpuUsage(),
             ];
 
             return $this->successResponse($status, 'System status retrieved successfully');
@@ -399,5 +402,101 @@ class AdminController extends Controller
         $bytes /= pow(1024, $pow);
 
         return round($bytes, 2) . ' ' . $units[$pow];
+    }
+
+    private function getSystemInfo()
+    {
+        return [
+            'version' => config('app.version', '1.0.0'),
+            'environment' => config('app.env'),
+            'debug' => config('app.debug'),
+            'timezone' => config('app.timezone'),
+            'php_version' => phpversion(),
+            'laravel_version' => app()->version(),
+        ];
+    }
+
+    private function getServerUptime()
+    {
+        try {
+            // Try to get uptime on Linux/Unix systems
+            if (function_exists('sys_getloadavg') && file_exists('/proc/uptime')) {
+                $uptime = file_get_contents('/proc/uptime');
+                $uptimeSeconds = (float) explode(' ', $uptime)[0];
+                return $this->formatUptime($uptimeSeconds);
+            }
+            
+            // Fallback: calculate PHP process uptime
+            $startTime = $_SERVER['REQUEST_TIME'] ?? time();
+            $uptimeSeconds = time() - $startTime;
+            return $this->formatUptime($uptimeSeconds);
+        } catch (\Exception $e) {
+            return 'Unknown';
+        }
+    }
+
+    private function formatUptime($seconds)
+    {
+        $days = floor($seconds / 86400);
+        $hours = floor(($seconds % 86400) / 3600);
+        $minutes = floor(($seconds % 3600) / 60);
+        
+        if ($days > 0) {
+            return sprintf('%d days, %d hours', $days, $hours);
+        } elseif ($hours > 0) {
+            return sprintf('%d hours, %d minutes', $hours, $minutes);
+        } else {
+            return sprintf('%d minutes', $minutes);
+        }
+    }
+
+    private function getCpuUsage()
+    {
+        try {
+            // Try to get CPU usage on Linux systems
+            if (file_exists('/proc/loadavg')) {
+                $load = file_get_contents('/proc/loadavg');
+                $loadArray = explode(' ', $load);
+                $cpuLoad = (float) $loadArray[0]; // 1-minute load average
+                
+                // Convert load average to percentage (assuming single core)
+                $cpuCores = $this->getCpuCores();
+                $cpuUsage = min(100, ($cpuLoad / $cpuCores) * 100);
+                
+                return [
+                    'usage_percent' => round($cpuUsage, 2),
+                    'load_average' => $cpuLoad,
+                    'cores' => $cpuCores,
+                ];
+            }
+            
+            return [
+                'usage_percent' => 0,
+                'load_average' => 0,
+                'cores' => 1,
+                'message' => 'CPU monitoring not available on this system'
+            ];
+        } catch (\Exception $e) {
+            return [
+                'usage_percent' => 0,
+                'load_average' => 0,
+                'cores' => 1,
+                'message' => 'Error retrieving CPU usage'
+            ];
+        }
+    }
+
+    private function getCpuCores()
+    {
+        try {
+            if (file_exists('/proc/cpuinfo')) {
+                $cpuinfo = file_get_contents('/proc/cpuinfo');
+                $cores = substr_count($cpuinfo, 'processor');
+                return max(1, $cores);
+            }
+            return 1;
+        } catch (\Exception $e) {
+            return 1;
+        }
     }
 }

@@ -7,7 +7,7 @@ export const enable2FA = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/2fa/enable');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -19,7 +19,7 @@ export const verify2FA = createAsyncThunk(
   async (code, { rejectWithValue }) => {
     try {
       const response = await api.post('/security/2fa/verify', { code });
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -31,7 +31,7 @@ export const disable2FA = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.delete('/security/2fa/disable');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -44,7 +44,7 @@ export const fetchApiKeys = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/api-keys');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -56,7 +56,7 @@ export const createApiKey = createAsyncThunk(
   async (keyData, { rejectWithValue }) => {
     try {
       const response = await api.post('/security/api-keys', keyData);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -81,7 +81,7 @@ export const fetchActivityLog = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/activity', params);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -94,7 +94,7 @@ export const changePassword = createAsyncThunk(
   async (passwordData, { rejectWithValue }) => {
     try {
       const response = await api.post('/security/password/change', passwordData);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -107,7 +107,7 @@ export const fetchSecuritySettings = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/settings');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -123,7 +123,7 @@ export const fetchActiveSessions = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/sessions');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -149,7 +149,7 @@ export const fetchTrustedDevices = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/security/devices');
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -162,7 +162,7 @@ export const trustDevice = createAsyncThunk(
   async (deviceData, { rejectWithValue }) => {
     try {
       const response = await api.post('/security/devices/trust', deviceData);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -230,8 +230,8 @@ const securitySlice = createSlice({
       })
       .addCase(enable2FA.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.qrCodeUrl = action.payload.qr_code_url;
-        state.backupCodes = action.payload.backup_codes;
+        state.qrCodeUrl = action.payload.data?.qr_code_url || action.payload.qr_code_url;
+        state.backupCodes = action.payload.data?.backup_codes || action.payload.backup_codes;
       })
       .addCase(enable2FA.rejected, (state, action) => {
         state.isLoading = false;
@@ -294,8 +294,9 @@ const securitySlice = createSlice({
       })
       .addCase(createApiKey.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.apiKeys.push(action.payload);
-        state.newApiKey = action.payload;
+        const apiKey = action.payload.data || action.payload;
+        state.apiKeys.push(apiKey);
+        state.newApiKey = apiKey;
       })
       .addCase(createApiKey.rejected, (state, action) => {
         state.isLoading = false;
@@ -355,8 +356,8 @@ const securitySlice = createSlice({
       })
       .addCase(fetchSecuritySettings.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.securitySettings = action.payload;
-        state.is2FAEnabled = action.payload.is_2fa_enabled || false;
+        state.securitySettings = action.payload.data || action.payload;
+        state.is2FAEnabled = (action.payload.data || action.payload).is_2fa_enabled || false;
       })
       .addCase(fetchSecuritySettings.rejected, (state, action) => {
         state.isLoading = false;
@@ -416,7 +417,7 @@ const securitySlice = createSlice({
       })
       .addCase(trustDevice.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.trustedDevices.push(action.payload);
+        state.trustedDevices.push(action.payload.data || action.payload);
       })
       .addCase(trustDevice.rejected, (state, action) => {
         state.isLoading = false;

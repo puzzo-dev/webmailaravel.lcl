@@ -20,6 +20,7 @@ import {
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
 import { toast } from 'react-hot-toast';
+import PageSubscriptionOverlay from '../../components/common/PageSubscriptionOverlay';
 import {
   fetchPlans,
   fetchBillingStats,
@@ -180,7 +181,13 @@ const AdminBilling = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageSubscriptionOverlay 
+        feature="billing management"
+        adminOnly={true}
+        customMessage="Admin privileges required to access billing management features."
+      />
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
@@ -754,7 +761,8 @@ const AdminBilling = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

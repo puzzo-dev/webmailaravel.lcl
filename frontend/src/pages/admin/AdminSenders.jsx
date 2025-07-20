@@ -553,11 +553,8 @@ const AdminSenders = () => {
                           setTestSender(sender);
                           setShowTestModal(true);
                         }}
-                        className={`text-green-600 hover:text-green-900 ${
-                          !sender.domain?.smtpConfig ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        title={sender.domain?.smtpConfig ? "Test Sender" : "No SMTP configuration available"}
-                        disabled={!sender.domain?.smtpConfig}
+                        className="text-green-600 hover:text-green-900"
+                        title="Test Sender"
                       >
                         <PaperAirplaneIcon className="h-4 w-4" />
                       </button>
@@ -754,19 +751,7 @@ const AdminSenders = () => {
                   </p>
                 </div>
                 
-                {!testSender?.domain?.smtpConfig && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <div className="flex items-start">
-                      <InformationCircleIcon className="w-4 h-4 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-xs font-medium text-yellow-800">No SMTP Configuration</p>
-                        <p className="text-xs text-yellow-700 mt-1">
-                          This domain doesn't have SMTP configuration. Please add SMTP settings first.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
               </div>
               
               <div className="flex justify-end space-x-3">
@@ -783,12 +768,12 @@ const AdminSenders = () => {
                 </button>
                 <button
                   className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
-                    isTestingSender || !testEmail || !testEmail.includes('@') || !testSender?.domain?.smtpConfig
+                    isTestingSender || !testEmail || !testEmail.includes('@')
                       ? 'bg-gray-400 text-white cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                   onClick={handleTestSender}
-                  disabled={isTestingSender || !testEmail || !testEmail.includes('@') || !testSender?.domain?.smtpConfig}
+                  disabled={isTestingSender || !testEmail || !testEmail.includes('@')}
                 >
                   {isTestingSender ? (
                     <>

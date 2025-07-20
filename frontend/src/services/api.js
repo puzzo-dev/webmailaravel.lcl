@@ -619,6 +619,41 @@ export const adminService = {
         return response.data;
     },
 
+    async testDomainConnection(domainId) {
+        const response = await api.post(`/admin/domains/${domainId}/test`);
+        return response.data;
+    },
+
+    async getSenders(params = {}) {
+        const response = await api.get('/admin/senders', { params });
+        return response.data;
+    },
+
+    async createSender(senderData) {
+        const response = await api.post('/admin/senders', senderData);
+        return response.data;
+    },
+
+    async updateSender(senderId, senderData) {
+        const response = await api.put(`/admin/senders/${senderId}/admin-update`, senderData);
+        return response.data;
+    },
+
+    async deleteSender(senderId) {
+        const response = await api.delete(`/admin/senders/${senderId}`);
+        return response.data;
+    },
+
+    async updateSenderStatus(senderId, isActive) {
+        const response = await api.put(`/admin/senders/${senderId}/admin-update`, { is_active: isActive });
+        return response.data;
+    },
+
+    async testSenderConnection(senderId, testData) {
+        const response = await api.post(`/senders/${senderId}/test`, testData);
+        return response.data;
+    },
+
     async getSmtpConfigs(params = {}) {
         const response = await api.get('/admin/smtp-configs', { params });
         return response.data;
@@ -645,7 +680,7 @@ export const adminService = {
     },
 
     async getSystemStatus() {
-        const response = await api.get('/admin/system/status');
+        const response = await api.get('/admin/system-status');
         return response.data;
     },
 
@@ -656,6 +691,84 @@ export const adminService = {
 
     async getSystemMetrics() {
         const response = await api.get('/admin/system/metrics');
+        return response.data;
+    },
+
+    // System configuration
+    async getSystemConfig() {
+        const response = await api.get('/admin/system-config');
+        return response.data;
+    },
+
+    async updateSystemConfig(configData) {
+        const response = await api.post('/admin/system-config', configData);
+        return response.data;
+    },
+
+    // System settings (different from config)
+    async getSystemSettings() {
+        const response = await api.get('/admin/system-settings');
+        return response.data;
+    },
+
+    async updateSystemSettings(settingsData) {
+        const response = await api.put('/admin/system-settings', settingsData);
+        return response.data;
+    },
+
+    // Security settings
+    async getSecuritySettings() {
+        const response = await api.get('/admin/security-settings');
+        return response.data;
+    },
+
+    async updateSecuritySettings(securityData) {
+        const response = await api.put('/admin/security-settings', securityData);
+        return response.data;
+    },
+
+    // BTCPay configuration
+    async getBTCPayConfig() {
+        const response = await api.get('/admin/system-config/btcpay');
+        return response.data;
+    },
+
+    async updateBTCPayConfig(btcpayData) {
+        const response = await api.post('/admin/system-config/btcpay', btcpayData);
+        return response.data;
+    },
+
+    // PowerMTA configuration
+    async getPowerMTAConfig() {
+        const response = await api.get('/admin/system-config/powermta');
+        return response.data;
+    },
+
+    async updatePowerMTAConfig(powermtaData) {
+        const response = await api.post('/admin/system-config/powermta', powermtaData);
+        return response.data;
+    },
+
+    // Telegram configuration
+    async getTelegramConfig() {
+        const response = await api.get('/admin/system-config/telegram');
+        return response.data;
+    },
+
+    async updateTelegramConfig(telegramData) {
+        const response = await api.post('/admin/system-config/telegram', telegramData);
+        return response.data;
+    },
+
+    // Environment variables
+    async getEnvVariables() {
+        const response = await api.get('/admin/system-settings/env-variables');
+        return response.data;
+    },
+
+    // Test SMTP
+    async testSystemSmtp(smtpData) {
+        const response = await api.post('/admin/system-settings/test-smtp', smtpData);
         return response.data;
     }
 }; 

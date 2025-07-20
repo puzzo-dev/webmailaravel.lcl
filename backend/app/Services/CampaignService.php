@@ -205,7 +205,12 @@ class CampaignService
                 if (empty($variation['subject'])) {
                     throw new \Exception('Subject is required for each content variation');
                 }
-                if (empty($variation['content'])) {
+                
+                // Check if content is actually empty (handle Quill empty states)
+                $variationContent = $variation['content'] ?? '';
+                $cleanVariationContent = trim(strip_tags(str_replace(['<p><br></p>', '<p></p>', '<br>', '&nbsp;'], '', $variationContent)));
+                
+                if (empty($variationContent) || $cleanVariationContent === '') {
                     throw new \Exception('Content is required for each content variation');
                 }
             }
@@ -214,7 +219,11 @@ class CampaignService
             if (empty($data['subject'])) {
                 throw new \Exception('Subject is required when content switching is disabled');
             }
-            if (empty($data['content'])) {
+            // Check if content is actually empty (handle Quill empty states)
+            $content = $data['content'] ?? '';
+            $cleanContent = trim(strip_tags(str_replace(['<p><br></p>', '<p></p>', '<br>', '&nbsp;'], '', $content)));
+            
+            if (empty($content) || $cleanContent === '') {
                 throw new \Exception('Content is required when content switching is disabled');
             }
         }
@@ -225,18 +234,23 @@ class CampaignService
      */
     private function checkUserCampaignLimits(int $userId): void
     {
-        $activeCampaigns = Campaign::where('user_id', $userId)
-            ->whereIn('status', ['DRAFT', 'RUNNING', 'PAUSED'])
+        $user = User::find($userId);
+        
+        // Check total campaigns limit (100 per user)
+        if (!$user->canCreateCampaign()) {
+            $limits = $user->getPlanLimits();
+            throw new \Exception('Total campaign limit reached. Your plan allows ' . $limits['max_total_campaigns'] . ' campaigns maximum.');
+        }
+        
+        // Check live campaigns limit (10 per user) - only when campaign status would be active
+        $liveCampaigns = Campaign::where('user_id', $userId)
+            ->whereIn('status', ['active', 'running', 'paused'])
             ->count();
 
-        // Get user's subscription limits
-        $user = User::find($userId);
-        $subscription = $user->subscriptions()->where('status', 'active')->first();
+        $limits = $user->getPlanLimits();
         
-        $maxCampaigns = $subscription ? $subscription->plan->max_campaigns : 1;
-        
-        if ($activeCampaigns >= $maxCampaigns) {
-            throw new \Exception('Campaign limit reached for your current plan');
+        if ($liveCampaigns >= $limits['max_live_campaigns']) {
+            throw new \Exception('Live campaign limit reached. Your plan allows ' . $limits['max_live_campaigns'] . ' live campaigns maximum.');
         }
     }
 
@@ -246,18 +260,44 @@ class CampaignService
     private function processContentVariations(array $data, $userContents): array
     {
         $processedData = $data;
+        $contentIds = [];
 
         if (!empty($data['enable_content_switching']) && !empty($data['content_variations'])) {
-            // Content switching mode - use the first variation as the main content/subject
+            // Content switching mode - create Content records for each variation
             $firstVariation = $data['content_variations'][0];
             $processedData['subject'] = $firstVariation['subject'] ?? $data['subject'];
-            $processedData['content_ids'] = []; // We'll create content records for each variation
+            
+            foreach ($data['content_variations'] as $index => $variation) {
+                $content = Content::create([
+                    'user_id' => auth()->id(),
+                    'name' => $data['name'] . ' - Variation ' . ($index + 1),
+                    'subject' => $variation['subject'] ?? $data['subject'],
+                    'html_body' => $variation['content'],
+                    'text_body' => strip_tags($variation['content']),
+                    'is_active' => true,
+                ]);
+                $contentIds[] = $content->id;
+            }
+            
+            $processedData['content_ids'] = $contentIds;
             $processedData['content_variations'] = $data['content_variations'];
             $processedData['enable_content_switching'] = true;
         } else {
-            // Single content mode
+            // Single content mode - create one Content record
+            if (!empty($data['content'])) {
+                $content = Content::create([
+                    'user_id' => auth()->id(),
+                    'name' => $data['name'] . ' - Content',
+                    'subject' => $data['subject'],
+                    'html_body' => $data['content'],
+                    'text_body' => strip_tags($data['content']),
+                    'is_active' => true,
+                ]);
+                $contentIds[] = $content->id;
+            }
+            
             $processedData['enable_content_switching'] = false;
-            $processedData['content_ids'] = [];
+            $processedData['content_ids'] = $contentIds;
             $processedData['content_variations'] = [];
         }
 
@@ -421,6 +461,13 @@ class CampaignService
             // Validate campaign can be started
             if ($campaign->status !== 'DRAFT') {
                 throw new \Exception('Campaign can only be started from DRAFT status');
+            }
+
+            // Check live campaign limits before starting
+            $user = $campaign->user;
+            if (!$user->canCreateLiveCampaign()) {
+                $limits = $user->getPlanLimits();
+                throw new \Exception('Live campaign limit reached. Your plan allows ' . $limits['max_live_campaigns'] . ' live campaigns maximum.');
             }
 
             // Check if recipient list exists

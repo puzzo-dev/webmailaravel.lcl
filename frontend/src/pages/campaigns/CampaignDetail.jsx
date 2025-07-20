@@ -16,7 +16,7 @@ import {
   HiClock,
   HiUserGroup,
 } from 'react-icons/hi';
-import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign } from '../../store/slices/campaignSlice';
+import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
 
 const CampaignDetail = () => {
@@ -26,6 +26,7 @@ const CampaignDetail = () => {
   
   const { currentCampaign, campaignStats, campaignTracking, isLoading } = useSelector((state) => state.campaigns);
   const [activeTab, setActiveTab] = useState('overview');
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -34,6 +35,29 @@ const CampaignDetail = () => {
       dispatch(fetchCampaignTracking(id));
     }
   }, [dispatch, id]);
+
+  // Auto-refresh for running campaigns
+  useEffect(() => {
+    let intervalId;
+    
+    if (currentCampaign && (
+      currentCampaign.status?.toLowerCase() === 'running' || 
+      currentCampaign.status?.toLowerCase() === 'active'
+    )) {
+      // Refresh every 30 seconds for running campaigns
+      intervalId = setInterval(() => {
+        dispatch(fetchCampaign(id));
+        dispatch(fetchCampaignStats(id));
+        dispatch(fetchCampaignTracking(id));
+      }, 30000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [currentCampaign?.status, dispatch, id]);
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
@@ -48,6 +72,7 @@ const CampaignDetail = () => {
   };
 
   const handleAction = async (action) => {
+    setActionLoading(true);
     try {
       switch (action) {
         case 'start':
@@ -58,6 +83,10 @@ const CampaignDetail = () => {
           await dispatch(pauseCampaign(id)).unwrap();
           toast.success('Campaign paused successfully');
           break;
+        case 'resume':
+          await dispatch(resumeCampaign(id)).unwrap();
+          toast.success('Campaign resumed successfully');
+          break;
         case 'stop':
           await dispatch(stopCampaign(id)).unwrap();
           toast.success('Campaign stopped successfully');
@@ -65,8 +94,16 @@ const CampaignDetail = () => {
         default:
           break;
       }
+      // Refresh campaign data after action
+      await Promise.all([
+        dispatch(fetchCampaign(id)),
+        dispatch(fetchCampaignStats(id)),
+        dispatch(fetchCampaignTracking(id))
+      ]);
     } catch (error) {
       toast.error(`Failed to ${action} campaign`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -74,10 +111,12 @@ const CampaignDetail = () => {
     const statusConfig = {
       'draft': { color: 'bg-gray-100 text-gray-800', label: 'Draft' },
       'scheduled': { color: 'bg-blue-100 text-blue-800', label: 'Scheduled' },
-      'active': { color: 'bg-success-100 text-success-800', label: 'Active' },
-      'paused': { color: 'bg-warning-100 text-warning-800', label: 'Paused' },
-      'stopped': { color: 'bg-danger-100 text-danger-800', label: 'Stopped' },
-      'completed': { color: 'bg-primary-100 text-primary-800', label: 'Completed' },
+      'running': { color: 'bg-green-100 text-green-800', label: 'Running' },
+      'active': { color: 'bg-green-100 text-green-800', label: 'Active' },
+      'paused': { color: 'bg-yellow-100 text-yellow-800', label: 'Paused' },
+      'stopped': { color: 'bg-red-100 text-red-800', label: 'Stopped' },
+      'completed': { color: 'bg-blue-100 text-blue-800', label: 'Completed' },
+      'failed': { color: 'bg-red-100 text-red-800', label: 'Failed' },
     };
 
     const config = statusConfig[status?.toLowerCase()] || statusConfig.draft;
@@ -140,33 +179,49 @@ const CampaignDetail = () => {
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            {currentCampaign.status === 'draft' && (
+            {(currentCampaign.status?.toLowerCase() === 'draft') && (
               <button
                 onClick={() => handleAction('start')}
-                className="btn btn-success flex items-center"
+                disabled={actionLoading}
+                className="btn btn-success flex items-center disabled:opacity-50"
               >
                 <HiPlay className="h-5 w-5 mr-2" />
-                Start
+                {actionLoading ? 'Starting...' : 'Start'}
               </button>
             )}
             
-            {currentCampaign.status === 'active' && (
+            {(currentCampaign.status?.toLowerCase() === 'running' || currentCampaign.status?.toLowerCase() === 'active') && (
               <button
                 onClick={() => handleAction('pause')}
-                className="btn btn-warning flex items-center"
+                disabled={actionLoading}
+                className="btn btn-warning flex items-center disabled:opacity-50"
               >
                 <HiPause className="h-5 w-5 mr-2" />
-                Pause
+                {actionLoading ? 'Pausing...' : 'Pause'}
               </button>
             )}
             
-            {(currentCampaign.status === 'active' || currentCampaign.status === 'paused') && (
+            {currentCampaign.status?.toLowerCase() === 'paused' && (
+              <button
+                onClick={() => handleAction('resume')}
+                disabled={actionLoading}
+                className="btn btn-success flex items-center disabled:opacity-50"
+              >
+                <HiPlay className="h-5 w-5 mr-2" />
+                {actionLoading ? 'Resuming...' : 'Resume'}
+              </button>
+            )}
+            
+            {(currentCampaign.status?.toLowerCase() === 'running' || 
+              currentCampaign.status?.toLowerCase() === 'active' || 
+              currentCampaign.status?.toLowerCase() === 'paused') && (
               <button
                 onClick={() => handleAction('stop')}
-                className="btn btn-danger flex items-center"
+                disabled={actionLoading}
+                className="btn btn-danger flex items-center disabled:opacity-50"
               >
                 <HiStop className="h-5 w-5 mr-2" />
-                Stop
+                {actionLoading ? 'Stopping...' : 'Stop'}
               </button>
             )}
             
@@ -228,7 +283,7 @@ const CampaignDetail = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-500">Bounced</span>
-              <span className="text-sm font-medium text-gray-900">{currentCampaign.bounced || 0}</span>
+              <span className="text-sm font-medium text-gray-900">{currentCampaign.bounces || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-500">Failed</span>
@@ -264,7 +319,7 @@ const CampaignDetail = () => {
       <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8 px-6">
-            {['overview', 'content', 'recipients', 'tracking', 'analytics'].map((tab) => (
+            {['overview', 'content', 'senders', 'recipients', 'tracking', 'analytics'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -293,14 +348,57 @@ const CampaignDetail = () => {
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">From Name</h4>
                     <p className="text-gray-600">{currentCampaign.from_name || 'Not set'}</p>
+                    {currentCampaign.senders && currentCampaign.senders.length > 1 && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Sender shuffling: {currentCampaign.senders.length} senders rotating
+                      </p>
+                    )}
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">From Email</h4>
                     <p className="text-gray-600">{currentCampaign.from_email || 'Not set'}</p>
+                    {currentCampaign.senders && currentCampaign.senders.length > 1 && (
+                      <div className="mt-1">
+                        <p className="text-xs text-gray-500">All sender emails:</p>
+                        <div className="text-xs text-gray-600">
+                          {currentCampaign.senders.map((sender, idx) => (
+                            <div key={idx}>{sender.email}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Reply To</h4>
                     <p className="text-gray-600">{currentCampaign.reply_to || 'Not set'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Configuration</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={currentCampaign.senders && currentCampaign.senders.length > 1}
+                      disabled
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-900">
+                      Sender Shuffling {currentCampaign.senders && currentCampaign.senders.length > 1 ? `(${currentCampaign.senders.length} senders)` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={currentCampaign.enable_content_switching}
+                      disabled
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm text-gray-900">
+                      Content Switching {currentCampaign.contents && currentCampaign.contents.length > 1 ? `(${currentCampaign.contents.length} variations)` : ''}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -338,7 +436,7 @@ const CampaignDetail = () => {
                   <div className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={currentCampaign.enable_unsubscribe}
+                      checked={currentCampaign.enable_unsubscribe_link}
                       disabled
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
@@ -352,9 +450,103 @@ const CampaignDetail = () => {
           {activeTab === 'content' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Email Content</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div dangerouslySetInnerHTML={{ __html: currentCampaign.email_content || 'No content available' }} />
-              </div>
+              
+              {currentCampaign.enable_content_switching && currentCampaign.contents && currentCampaign.contents.length > 1 ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>Content Switching Enabled:</strong> This campaign uses {currentCampaign.contents.length} content variations for A/B testing
+                    </p>
+                  </div>
+                  
+                  {currentCampaign.contents.map((content, index) => (
+                    <div key={content.id || index} className="border border-gray-200 rounded-lg">
+                      <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
+                        <h4 className="font-medium text-gray-900">
+                          {content.name || `Variation ${index + 1}`}
+                        </h4>
+                        {content.subject && (
+                          <p className="text-sm text-gray-600">Subject: {content.subject}</p>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div dangerouslySetInnerHTML={{ 
+                          __html: content.html_body || content.body || content.content || 'No content available' 
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : currentCampaign.contents && currentCampaign.contents.length === 1 ? (
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-2">
+                      {currentCampaign.contents[0].name || 'Campaign Content'}
+                    </h4>
+                    <div dangerouslySetInnerHTML={{ 
+                      __html: currentCampaign.contents[0].html_body || 
+                               currentCampaign.contents[0].body || 
+                               currentCampaign.email_content || 
+                               'No content available' 
+                    }} />
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div dangerouslySetInnerHTML={{ __html: currentCampaign.email_content || 'No content available' }} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'senders' && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Sender Configuration</h3>
+              
+              {currentCampaign.senders && currentCampaign.senders.length > 0 ? (
+                <div className="space-y-4">
+                  {currentCampaign.senders.length > 1 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800">
+                        <strong>Sender Shuffling Active:</strong> Campaign is rotating between {currentCampaign.senders.length} senders to improve deliverability
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentCampaign.senders.map((sender, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-gray-900">Sender {index + 1}</h4>
+                          {currentCampaign.senders.length > 1 && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              Active in rotation
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-500">Name:</span>
+                            <span className="ml-2 text-gray-900">{sender.name}</span>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-500">Email:</span>
+                            <span className="ml-2 text-gray-900">{sender.email}</span>
+                          </div>
+                          {sender.reply_to && (
+                            <div>
+                              <span className="font-medium text-gray-500">Reply To:</span>
+                              <span className="ml-2 text-gray-900">{sender.reply_to}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-500">No senders configured for this campaign</p>
+              )}
             </div>
           )}
 
@@ -377,29 +569,62 @@ const CampaignDetail = () => {
           {activeTab === 'tracking' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Tracking Data</h3>
-              {campaignTracking ? (
+              {campaignTracking || currentCampaign ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="bg-blue-50 p-4 rounded-lg">
                       <div className="flex items-center">
                         <HiEye className="h-5 w-5 text-blue-600 mr-2" />
                         <span className="text-sm font-medium text-blue-900">Opens</span>
                       </div>
-                      <div className="mt-2 text-2xl font-bold text-blue-900">{campaignTracking.opens || 0}</div>
+                      <div className="mt-2 text-2xl font-bold text-blue-900">
+                        {campaignTracking?.opens || currentCampaign?.opens || 0}
+                      </div>
+                      {currentCampaign?.open_rate && (
+                        <div className="text-xs text-blue-700 mt-1">
+                          Rate: {currentCampaign.open_rate}%
+                        </div>
+                      )}
                     </div>
                     <div className="bg-green-50 p-4 rounded-lg">
                       <div className="flex items-center">
                         <HiCursorClick className="h-5 w-5 text-green-600 mr-2" />
                         <span className="text-sm font-medium text-green-900">Clicks</span>
                       </div>
-                      <div className="mt-2 text-2xl font-bold text-green-900">{campaignTracking.clicks || 0}</div>
+                      <div className="mt-2 text-2xl font-bold text-green-900">
+                        {campaignTracking?.clicks || currentCampaign?.clicks || 0}
+                      </div>
+                      {currentCampaign?.click_rate && (
+                        <div className="text-xs text-green-700 mt-1">
+                          Rate: {currentCampaign.click_rate}%
+                        </div>
+                      )}
                     </div>
                     <div className="bg-red-50 p-4 rounded-lg">
                       <div className="flex items-center">
                         <HiMail className="h-5 w-5 text-red-600 mr-2" />
                         <span className="text-sm font-medium text-red-900">Bounces</span>
                       </div>
-                      <div className="mt-2 text-2xl font-bold text-red-900">{campaignTracking.bounces || 0}</div>
+                      <div className="mt-2 text-2xl font-bold text-red-900">
+                        {campaignTracking?.bounces || currentCampaign?.bounces || 0}
+                      </div>
+                      {currentCampaign?.bounce_rate && (
+                        <div className="text-xs text-red-700 mt-1">
+                          Rate: {currentCampaign.bounce_rate}%
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <div className="flex items-center">
+                        <HiMail className="h-5 w-5 text-yellow-600 mr-2" />
+                        <span className="text-sm font-medium text-yellow-900">Sent</span>
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-yellow-900">
+                        {campaignTracking?.total_sent || currentCampaign?.emails_sent || currentCampaign?.total_sent || 0}
+                      </div>
+                      <div className="text-xs text-yellow-700 mt-1">
+                        of {currentCampaign?.total_recipients || 0} recipients
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -412,7 +637,7 @@ const CampaignDetail = () => {
           {activeTab === 'analytics' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Analytics</h3>
-              {campaignStats ? (
+              {campaignStats || currentCampaign ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-lg">
@@ -420,23 +645,74 @@ const CampaignDetail = () => {
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Delivery Rate</span>
-                          <span className="text-sm font-medium text-gray-900">{campaignStats.delivery_rate || 0}%</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {campaignStats?.delivery_rate || 
+                             (currentCampaign?.total_recipients > 0 ? 
+                              ((currentCampaign.emails_sent - currentCampaign.bounces - currentCampaign.failed) / currentCampaign.total_recipients * 100).toFixed(2) : 0)}%
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Open Rate</span>
-                          <span className="text-sm font-medium text-gray-900">{campaignStats.open_rate || 0}%</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {campaignStats?.open_rate || currentCampaign?.open_rate || 0}%
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Click Rate</span>
-                          <span className="text-sm font-medium text-gray-900">{campaignStats.click_rate || 0}%</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {campaignStats?.click_rate || currentCampaign?.click_rate || 0}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Bounce Rate</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {campaignStats?.bounce_rate || currentCampaign?.bounce_rate || 0}%
+                          </span>
                         </div>
                       </div>
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-2">Geographic Data</h4>
-                      <p className="text-sm text-gray-600">Geographic analytics coming soon...</p>
+                      <h4 className="font-medium text-gray-900 mb-2">Campaign Details</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Total Recipients</span>
+                          <span className="text-sm font-medium text-gray-900">{currentCampaign?.total_recipients || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Emails Sent</span>
+                          <span className="text-sm font-medium text-gray-900">{currentCampaign?.emails_sent || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Total Opens</span>
+                          <span className="text-sm font-medium text-gray-900">{currentCampaign?.opens || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">Total Clicks</span>
+                          <span className="text-sm font-medium text-gray-900">{currentCampaign?.clicks || 0}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  
+                  {currentCampaign?.enable_content_switching && currentCampaign?.contents?.length > 1 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">A/B Testing Results</h4>
+                      <p className="text-sm text-gray-600">
+                        This campaign uses {currentCampaign.contents.length} content variations. 
+                        Detailed A/B testing analytics will be available after sufficient data collection.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {currentCampaign?.senders?.length > 1 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">Sender Performance</h4>
+                      <p className="text-sm text-gray-600">
+                        This campaign rotates between {currentCampaign.senders.length} senders for improved deliverability. 
+                        Individual sender performance analytics coming soon.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-gray-500">No analytics data available</p>

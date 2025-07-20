@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plans API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            white-space: pre-wrap;
+        }
+        .success {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+    </style>
+</head>
+<body>
+    <h1>Public Plans API Test</h1>
+    <p>This tests whether the billing plans can be fetched without authentication.</p>
+    
+    <button onclick="testPlans()">Test /api/billing/plans</button>
+    <button onclick="testRates()">Test /api/billing/rates</button>
+    <div id="result"></div>
+
+    <script>
+        async function testPlans() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing plans endpoint...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/billing/plans', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+✅ SUCCESS - Plans endpoint working publicly!
+
+Status: ${response.status}
+Plans found: ${data.data ? data.data.length : 0}
+
+Response:
+${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+❌ FAILED - Plans endpoint returned error
+
+Status: ${response.status}
+Error: ${data.message || 'Unknown error'}
+
+Response:
+${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+❌ NETWORK ERROR
+
+Error: ${error.message}
+
+This could mean:
+- Backend server is not running on port 8001
+- CORS issues
+- Network connectivity problems`;
+            }
+        }
+
+        async function testRates() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing rates endpoint...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/billing/rates', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+✅ SUCCESS - Rates endpoint working publicly!
+
+Status: ${response.status}
+
+Response:
+${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+❌ FAILED - Rates endpoint returned error
+
+Status: ${response.status}
+Error: ${data.message || 'Unknown error'}
+
+Response:
+${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+❌ NETWORK ERROR
+
+Error: ${error.message}
+
+This could mean:
+- Backend server is not running on port 8001
+- CORS issues
+- Network connectivity problems`;
+            }
+        }
+    </script>
+</body>
+</html>

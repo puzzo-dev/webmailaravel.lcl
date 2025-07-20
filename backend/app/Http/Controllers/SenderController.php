@@ -61,7 +61,24 @@ class SenderController extends Controller
                 'is_active' => 'boolean'
             ],
             function () use ($request) {
+                $user = Auth::user();
                 $data = $request->input('validated_data');
+                
+                // Check if domain belongs to user
+                $domain = \App\Models\Domain::findOrFail($data['domain_id']);
+                if ($domain->user_id !== Auth::id() && !$user->hasRole('admin')) {
+                    return $this->forbiddenResponse('You can only add senders to your own domains');
+                }
+                
+                // Check if domain can have more senders (5 per domain limit)
+                if (!$user->canAddSenderToDomain($domain)) {
+                    $limits = $user->getPlanLimits();
+                    return $this->errorResponse(
+                        'Sender limit reached for this domain. Each domain allows ' . $limits['max_senders_per_domain'] . ' senders maximum.',
+                        422
+                    );
+                }
+                
                 $data['user_id'] = Auth::id();
 
                 $sender = Sender::create($data);

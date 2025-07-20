@@ -14,6 +14,7 @@ import {
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
 import toast from 'react-hot-toast';
+import PageSubscriptionOverlay from '../../components/common/PageSubscriptionOverlay';
 import {
   fetchMonitoringStatus,
   fetchMonitoringResults,
@@ -90,7 +91,12 @@ const Monitoring = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      <PageSubscriptionOverlay 
+        feature="domain monitoring"
+        customMessage="Upgrade to Pro to unlock real-time domain monitoring, PowerMTA health checks, and advanced performance analytics."
+      />
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
@@ -310,7 +316,8 @@ const Monitoring = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

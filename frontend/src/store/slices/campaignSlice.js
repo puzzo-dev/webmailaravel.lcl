@@ -17,7 +17,8 @@ export const fetchRecentCampaigns = createAsyncThunk(
   'campaigns/fetchRecentCampaigns',
   async (params, { rejectWithValue }) => {
     try {
-      return await api.get('/campaigns/recent', params);
+      const response = await api.get('/campaigns/recent', params);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -28,7 +29,8 @@ export const fetchCampaign = createAsyncThunk(
   'campaigns/fetchCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.get(`/campaigns/${campaignId}`);
+      const response = await api.get(`/campaigns/${campaignId}`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -77,7 +79,8 @@ export const deleteCampaign = createAsyncThunk(
   'campaigns/deleteCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.delete(`/campaigns/${campaignId}`);
+      const response = await api.delete(`/campaigns/${campaignId}`);
+      return campaignId;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -88,7 +91,8 @@ export const startCampaign = createAsyncThunk(
   'campaigns/startCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.post(`/campaigns/${campaignId}/start`);
+      const response = await api.post(`/campaigns/${campaignId}/start`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -99,7 +103,8 @@ export const pauseCampaign = createAsyncThunk(
   'campaigns/pauseCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.post(`/campaigns/${campaignId}/pause`);
+      const response = await api.post(`/campaigns/${campaignId}/pause`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -110,7 +115,20 @@ export const stopCampaign = createAsyncThunk(
   'campaigns/stopCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.post(`/campaigns/${campaignId}/stop`);
+      const response = await api.post(`/campaigns/${campaignId}/stop`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(handleApiError(error).message);
+    }
+  }
+);
+
+export const resumeCampaign = createAsyncThunk(
+  'campaigns/resumeCampaign',
+  async (campaignId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/campaigns/${campaignId}/resume`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -121,7 +139,8 @@ export const fetchCampaignStats = createAsyncThunk(
   'campaigns/fetchCampaignStats',
   async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.get(`/campaigns/${campaignId}/stats`);
+      const response = await api.get(`/campaigns/${campaignId}/stats`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -130,9 +149,10 @@ export const fetchCampaignStats = createAsyncThunk(
 
 export const fetchCampaignTracking = createAsyncThunk(
   'campaigns/fetchCampaignTracking',
-  async ({ campaignId, type }, { rejectWithValue }) => {
+  async (campaignId, { rejectWithValue }) => {
     try {
-      return await api.get(`/campaigns/${campaignId}/tracking`, { type });
+      const response = await api.get(`/campaigns/${campaignId}/tracking`);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -312,45 +332,60 @@ const campaignSlice = createSlice({
 
       // Start Campaign
       .addCase(startCampaign.fulfilled, (state, action) => {
-        const index = state.campaigns.findIndex(c => c.id === action.payload.id);
+        const campaign = action.payload.data || action.payload;
+        const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
-          state.campaigns[index] = action.payload;
+          state.campaigns[index] = campaign;
         }
-        if (state.currentCampaign?.id === action.payload.id) {
-          state.currentCampaign = action.payload;
+        if (state.currentCampaign?.id === campaign.id) {
+          state.currentCampaign = campaign;
         }
       })
 
       // Pause Campaign
       .addCase(pauseCampaign.fulfilled, (state, action) => {
-        const index = state.campaigns.findIndex(c => c.id === action.payload.id);
+        const campaign = action.payload.data || action.payload;
+        const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
-          state.campaigns[index] = action.payload;
+          state.campaigns[index] = campaign;
         }
-        if (state.currentCampaign?.id === action.payload.id) {
-          state.currentCampaign = action.payload;
+        if (state.currentCampaign?.id === campaign.id) {
+          state.currentCampaign = campaign;
         }
       })
 
       // Stop Campaign
       .addCase(stopCampaign.fulfilled, (state, action) => {
-        const index = state.campaigns.findIndex(c => c.id === action.payload.id);
+        const campaign = action.payload.data || action.payload;
+        const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
-          state.campaigns[index] = action.payload;
+          state.campaigns[index] = campaign;
         }
-        if (state.currentCampaign?.id === action.payload.id) {
-          state.currentCampaign = action.payload;
+        if (state.currentCampaign?.id === campaign.id) {
+          state.currentCampaign = campaign;
+        }
+      })
+
+      // Resume Campaign
+      .addCase(resumeCampaign.fulfilled, (state, action) => {
+        const campaign = action.payload.data || action.payload;
+        const index = state.campaigns.findIndex(c => c.id === campaign.id);
+        if (index !== -1) {
+          state.campaigns[index] = campaign;
+        }
+        if (state.currentCampaign?.id === campaign.id) {
+          state.currentCampaign = campaign;
         }
       })
 
       // Fetch Campaign Stats
       .addCase(fetchCampaignStats.fulfilled, (state, action) => {
-        state.campaignStats = action.payload;
+        state.campaignStats = action.payload.data || action.payload;
       })
 
       // Fetch Campaign Tracking
       .addCase(fetchCampaignTracking.fulfilled, (state, action) => {
-        state.campaignTracking = action.payload;
+        state.campaignTracking = action.payload.data || action.payload;
       })
 
       // Fetch Senders

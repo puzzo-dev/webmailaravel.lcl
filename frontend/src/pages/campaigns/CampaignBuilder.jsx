@@ -20,6 +20,7 @@ import {
   HiPaperAirplane,
 } from 'react-icons/hi';
 import QuillEditor from '../../components/QuillEditor';
+import PageSubscriptionOverlay from '../../components/common/PageSubscriptionOverlay';
 
 // Safe array mapping component
 const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
@@ -141,6 +142,20 @@ const CampaignBuilder = () => {
     setContentVariations((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Helper function to check if HTML content is actually empty
+  const isContentEmpty = (htmlContent) => {
+    if (!htmlContent) return true;
+    
+    const cleanContent = htmlContent
+      .replace(/<p><br><\/p>/g, '')
+      .replace(/<p><\/p>/g, '')
+      .replace(/<br>/g, '')
+      .replace(/&nbsp;/g, '')
+      .trim();
+    
+    return cleanContent === '';
+  };
+
   const validateForm = () => {
     // Check basic required fields
     if (!formData.name.trim()) {
@@ -167,7 +182,7 @@ const CampaignBuilder = () => {
           toast.error(`Please enter a subject for variation ${i + 1}`);
           return false;
         }
-        if (!variation.content.trim()) {
+        if (isContentEmpty(variation.content)) {
           toast.error(`Please enter content for variation ${i + 1}`);
           return false;
         }
@@ -178,7 +193,7 @@ const CampaignBuilder = () => {
         toast.error('Please enter a subject line');
         return false;
       }
-      if (!formData.email_content.trim()) {
+      if (isContentEmpty(formData.email_content)) {
         toast.error('Please enter email content');
         return false;
       }
@@ -202,7 +217,7 @@ const CampaignBuilder = () => {
       // Add basic form fields
       campaignData.append('name', formData.name.trim());
       campaignData.append('subject', formData.subject.trim());
-      campaignData.append('email_content', formData.email_content);
+      campaignData.append('content', formData.email_content);
       campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
       campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
       campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
@@ -342,7 +357,12 @@ const CampaignBuilder = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6">
+    <>
+      <PageSubscriptionOverlay 
+        feature="advanced campaign builder"
+        customMessage="Upgrade to Pro to unlock the advanced campaign builder with custom templates, A/B testing, automation, and premium sending features."
+      />
+      <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
@@ -767,7 +787,8 @@ const CampaignBuilder = () => {
           </div>
         </div>
       )}
-    </form>
+      </form>
+    </>
   );
 };
 

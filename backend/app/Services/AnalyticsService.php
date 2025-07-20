@@ -593,7 +593,7 @@ class AnalyticsService
         
         // Get campaigns within the date range
         $campaigns = $query->whereBetween('created_at', [$startDate, $now])
-            ->with(['user', 'sender'])
+            ->with(['user'])
             ->get();
         
         // Calculate performance metrics

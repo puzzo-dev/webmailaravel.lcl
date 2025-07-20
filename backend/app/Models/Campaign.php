@@ -14,6 +14,7 @@ class Campaign extends Model
         'user_id',
         'name',
         'subject',
+        'scheduled_at',
         'status',
         'job_id',
         'sender_ids',
@@ -65,8 +66,22 @@ class Campaign extends Model
         'click_rate' => 'decimal:2',
         'bounce_rate' => 'decimal:2',
         'complaint_rate' => 'decimal:2',
+        'scheduled_at' => 'datetime',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+    ];
+
+    protected $appends = [
+        'email_content',
+        'total_recipients', 
+        'emails_sent',
+        'delivered',
+        'failed',
+        'from_name',
+        'from_email', 
+        'reply_to',
+        'enable_tracking',
+        'recipient_file'
     ];
 
     // Relationships
@@ -90,6 +105,91 @@ class Campaign extends Model
     public function emailTracking(): HasMany
     {
         return $this->hasMany(EmailTracking::class);
+    }
+
+    // Accessor methods for frontend compatibility
+    public function getEmailContentAttribute()
+    {
+        $variations = $this->getContentVariations();
+        
+        // If content switching is enabled and multiple variations exist
+        if ($this->enable_content_switching && $variations->count() > 1) {
+            return "Multiple content variations (" . $variations->count() . " versions)";
+        }
+        
+        // Return first content variation or fallback
+        $firstContent = $variations->first();
+        return $firstContent?->html_body ?? $firstContent?->body ?? 'No content available';
+    }
+
+    public function getTotalRecipientsAttribute()
+    {
+        return $this->recipient_count;
+    }
+
+    public function getEmailsSentAttribute() 
+    {
+        return $this->total_sent;
+    }
+
+    public function getDeliveredAttribute()
+    {
+        return $this->total_sent - $this->total_failed - $this->bounces;
+    }
+
+    public function getFailedAttribute()
+    {
+        return $this->total_failed;
+    }
+
+    public function getFromNameAttribute()
+    {
+        $senders = $this->getSenders();
+        if ($senders->count() > 1) {
+            return $senders->count() . ' senders (shuffling enabled)';
+        }
+        $sender = $senders->first();
+        return $sender?->name ?? 'Not set';
+    }
+
+    public function getFromEmailAttribute()
+    {
+        $senders = $this->getSenders();
+        if ($senders->count() > 1) {
+            return 'Multiple emails (' . $senders->count() . ' senders)';
+        }
+        $sender = $senders->first();
+        return $sender?->email ?? 'Not set';
+    }
+
+    public function getReplyToAttribute()
+    {
+        $senders = $this->getSenders();
+        if ($senders->count() > 1) {
+            return 'Multiple reply-to addresses';
+        }
+        $sender = $senders->first();
+        return $sender?->reply_to ?? $sender?->email ?? 'Not set';
+    }
+
+    public function getEnableTrackingAttribute()
+    {
+        return $this->enable_open_tracking || $this->enable_click_tracking;
+    }
+
+    public function getRecipientFileAttribute()
+    {
+        return basename($this->recipient_list_path ?? '');
+    }
+
+
+
+    /**
+     * Get first sender for this campaign
+     */
+    public function getFirstSender()
+    {
+        return Sender::whereIn('id', $this->sender_ids ?? [])->first();
     }
 
     /**

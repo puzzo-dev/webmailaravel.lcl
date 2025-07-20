@@ -62,6 +62,12 @@ Route::prefix('tracking')->group(function () {
     Route::get('/unsubscribe/{emailId}', [TrackingController::class, 'unsubscribe']);
 });
 
+// Public billing routes (no authentication required)
+Route::prefix('billing')->group(function () {
+    Route::get('/plans', [BillingController::class, 'plans']);
+    Route::get('/rates', [BillingController::class, 'rates']);
+});
+
 // Protected routes (require JWT authentication)
 Route::middleware(['auth:api'])->group(function () {
     // Test route to verify authentication
@@ -168,7 +174,7 @@ Route::middleware(['auth:api'])->group(function () {
 
 
 
-    // Billing & Subscription routes (consolidated)
+    // Billing & Subscription routes (authenticated users only)
     Route::prefix('billing')->group(function () {
         // Subscription management
         Route::get('/subscriptions', [BillingController::class, 'index']);
@@ -182,8 +188,6 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/invoice', [BillingController::class, 'createInvoice']);
         Route::get('/invoice/{invoice_id}/status', [BillingController::class, 'invoiceStatus']);
         Route::get('/payment-history', [BillingController::class, 'paymentHistory']);
-        Route::get('/rates', [BillingController::class, 'rates']);
-        Route::get('/plans', [BillingController::class, 'plans']);
         
         // Webhook for payment processing
         Route::post('/webhook', [BillingController::class, 'webhook']);
@@ -245,13 +249,16 @@ Route::middleware(['auth:api'])->group(function () {
         // Admin sender management routes (admin only)
         Route::prefix('senders')->group(function () {
             Route::get('/', [SenderController::class, 'index']);
+            Route::post('/', [SenderController::class, 'store']);
             Route::put('/{sender}/admin-update', [SenderController::class, 'updateSender']);
+            Route::delete('/{sender}', [SenderController::class, 'destroy']);
             Route::put('/bulk-update', [SenderController::class, 'updateSenders']);
         });
 
         // Admin domains management routes (admin only)
         Route::prefix('domains')->group(function () {
             Route::get('/', [DomainController::class, 'index']);
+            Route::post('/{domain}/test', [DomainController::class, 'testDomainConnection']);
         });
 
         // Admin SMTP configs management routes (admin only)
@@ -352,18 +359,23 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/{subscription}/renew', [BillingController::class, 'renew']);
     });
 
-    // Analytics routes (require active subscription)
-    Route::prefix('analytics')->middleware(['subscription'])->group(function () {
-        Route::get('/', [AnalyticsController::class, 'index']);
+    // Analytics routes
+    Route::prefix('analytics')->group(function () {
+        // Dashboard route (accessible to all authenticated users)
         Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']);
-        Route::get('/campaigns', [AnalyticsController::class, 'getCampaignAnalytics']);
-        Route::get('/users', [AnalyticsController::class, 'getUserAnalytics']);
-        Route::get('/revenue', [AnalyticsController::class, 'getRevenueAnalytics']);
-        Route::get('/deliverability', [AnalyticsController::class, 'getDeliverabilityAnalytics']);
-        Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']);
-        Route::get('/trending', [AnalyticsController::class, 'getTrendingMetrics']);
-        Route::get('/campaign/{campaign}/performance', [AnalyticsController::class, 'getCampaignPerformanceReport']);
-        Route::get('/export', [AnalyticsController::class, 'export']);
+        
+        // Advanced analytics routes (require active subscription)
+        Route::middleware(['subscription'])->group(function () {
+            Route::get('/', [AnalyticsController::class, 'index']);
+            Route::get('/campaigns', [AnalyticsController::class, 'getCampaignAnalytics']);
+            Route::get('/users', [AnalyticsController::class, 'getUserAnalytics']);
+            Route::get('/revenue', [AnalyticsController::class, 'getRevenueAnalytics']);
+            Route::get('/deliverability', [AnalyticsController::class, 'getDeliverabilityAnalytics']);
+            Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']);
+            Route::get('/trending', [AnalyticsController::class, 'getTrendingMetrics']);
+            Route::get('/campaign/{campaign}/performance', [AnalyticsController::class, 'getCampaignPerformanceReport']);
+            Route::get('/export', [AnalyticsController::class, 'export']);
+        });
     });
 
     // Security routes

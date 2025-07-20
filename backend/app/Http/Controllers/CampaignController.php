@@ -36,15 +36,28 @@ class CampaignController extends Controller
             // Check if user is admin
             if (Auth::user()->hasRole('admin')) {
                 // Admin sees all campaigns
-                $query = Campaign::with(['contents', 'senders', 'user']);
+                $query = Campaign::with(['user']);
                 $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+                
+                // Load related data for each campaign
+                $results->getCollection()->transform(function ($campaign) {
+                    $campaign->senders = $campaign->getSenders();
+                    $campaign->contents = $campaign->getContentVariations();
+                    return $campaign;
+                });
                 
                 return $this->paginatedResponse($results, 'All campaigns retrieved successfully');
             } else {
                 // Regular users see only their campaigns
-                $query = Campaign::with(['contents', 'senders'])
-                    ->where('user_id', Auth::id());
+                $query = Campaign::query()->where('user_id', Auth::id());
                 $results = $query->paginate($perPage, ['*'], 'page', $page);
+                
+                // Load related data for each campaign  
+                $results->getCollection()->transform(function ($campaign) {
+                    $campaign->senders = $campaign->getSenders();
+                    $campaign->contents = $campaign->getContentVariations();
+                    return $campaign;
+                });
                 
                 return $this->paginatedResponse($results, 'Campaigns retrieved successfully');
             }
@@ -142,7 +155,11 @@ class CampaignController extends Controller
                     ]);
                 }
 
-                return $this->createdResponse($campaign->load(['contents', 'senders']), 'Campaign created successfully');
+                // Load related data manually
+                $campaign->senders = $campaign->getSenders();
+                $campaign->contents = $campaign->getContentVariations();
+                
+                return $this->createdResponse($campaign, 'Campaign created successfully');
             },
             'create_campaign'
         );
@@ -155,7 +172,7 @@ class CampaignController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($id) {
             try {
-                $campaign = Campaign::with(['contents', 'senders', 'user'])->findOrFail($id);
+                $campaign = Campaign::with(['user'])->findOrFail($id);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
                 return $this->errorResponse('Campaign not found', null, 404);
             }
@@ -163,6 +180,10 @@ class CampaignController extends Controller
             if (!$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
+            
+            // Load related data manually since we're using JSON arrays
+            $campaign->senders = $campaign->getSenders();
+            $campaign->contents = $campaign->getContentVariations();
             
             return $this->successResponse($campaign, 'Campaign retrieved successfully');
         }, 'view_campaign');
@@ -201,7 +222,12 @@ class CampaignController extends Controller
             }
             
             $campaign->update($validator->validated());
-            return $this->successResponse($campaign->load(['contents', 'senders']), 'Campaign updated successfully');
+            
+            // Load related data manually
+            $campaign->senders = $campaign->getSenders();
+            $campaign->contents = $campaign->getContentVariations();
+            
+            return $this->successResponse($campaign, 'Campaign updated successfully');
         }, 'update_campaign');
     }
 
@@ -234,7 +260,12 @@ class CampaignController extends Controller
             }
             
             $campaign->update($validator->validated());
-            return $this->successResponse($campaign->load(['contents', 'senders']), 'Campaign updated successfully');
+            
+            // Load related data manually
+            $campaign->senders = $campaign->getSenders();
+            $campaign->contents = $campaign->getContentVariations();
+            
+            return $this->successResponse($campaign, 'Campaign updated successfully');
         }, 'update_campaign');
     }
 
