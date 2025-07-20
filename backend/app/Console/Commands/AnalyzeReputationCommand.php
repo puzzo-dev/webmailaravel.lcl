@@ -92,7 +92,7 @@ class AnalyzeReputationCommand extends Command
     protected function analyzeDomain(Domain $domain, string $date, bool $showOutput = true): void
     {
         if ($showOutput) {
-            $this->info("Analyzing domain: {$domain->domain} for date: {$date}");
+            $this->info("Analyzing domain: {$domain->name} for date: {$date}");
         }
 
         try {
@@ -100,11 +100,11 @@ class AnalyzeReputationCommand extends Command
             AnalyzeReputationJob::dispatch($domain->id, $date);
             
             if ($showOutput) {
-                $this->info("Job dispatched for domain: {$domain->domain}");
+                $this->info("Job dispatched for domain: {$domain->name}");
             }
         } catch (\Exception $e) {
             if ($showOutput) {
-                $this->error("Failed to analyze domain {$domain->domain}: " . $e->getMessage());
+                $this->error("Failed to analyze domain {$domain->name}: " . $e->getMessage());
             }
         }
     }

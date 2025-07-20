@@ -19,9 +19,8 @@ import {
   HiMail,
   HiGlobe,
   HiCog,
-  HiExclamationTriangle,
 } from 'react-icons/hi';
-import { adminService, notificationService } from '../../services/api';
+import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminNotifications = () => {
@@ -52,34 +51,35 @@ const AdminNotifications = () => {
     try {
       setLoading(true);
       const [notificationsResponse, dashboardResponse] = await Promise.all([
-        adminService.getUsers({ 
+        adminService.getNotifications({ 
           page: pagination.current_page,
           limit: pagination.per_page,
-          include: 'notifications'
+          filter: filter !== 'all' ? filter : undefined
         }),
         adminService.getDashboard()
       ]);
 
-      // Extract notifications from users
-      const allNotifications = [];
-      notificationsResponse.data.data?.forEach(user => {
-        if (user.notifications) {
-          user.notifications.forEach(notification => {
-            allNotifications.push({
-              ...notification,
-              user_name: user.name,
-              user_email: user.email,
-            });
-          });
-        }
-      });
+      console.log('Notifications API response:', notificationsResponse);
+      console.log('Notifications data structure:', notificationsResponse.data);
 
-      setNotifications(allNotifications);
+      setNotifications(notificationsResponse.data.data || []);
+      setPagination({
+        current_page: notificationsResponse.data.current_page || 1,
+        last_page: notificationsResponse.data.last_page || 1,
+        per_page: notificationsResponse.data.per_page || 20,
+        total: notificationsResponse.data.total || 0,
+      });
+      
+      // Ensure data is an array before filtering
+      const notificationsArray = Array.isArray(notificationsResponse.data.data) 
+        ? notificationsResponse.data.data 
+        : [];
+      
       setStats({
-        total_notifications: allNotifications.length,
-        unread_notifications: allNotifications.filter(n => !n.read_at).length,
-        total_users: dashboardResponse.data.stats.total_users || 0,
-        recent_activity: allNotifications.slice(0, 5),
+        total_notifications: notificationsResponse.data.total || 0,
+        unread_notifications: notificationsArray.filter(n => !n.read_at).length || 0,
+        total_users: dashboardResponse.data.stats?.total_users || 0,
+        recent_activity: notificationsArray.slice(0, 5) || [],
       });
     } catch (error) {
       toast.error('Failed to load notifications data');
@@ -104,7 +104,7 @@ const AdminNotifications = () => {
   const handleDeleteNotification = async (notificationId) => {
     if (window.confirm('Are you sure you want to delete this notification?')) {
       try {
-        await notificationService.deleteNotification(notificationId);
+        await adminService.deleteNotification(notificationId);
         toast.success('Notification deleted successfully');
         await loadData();
       } catch (error) {
@@ -113,7 +113,28 @@ const AdminNotifications = () => {
     }
   };
 
-  const filteredNotifications = notifications.filter(notification => {
+  const handleMarkAsRead = async (notificationId) => {
+    try {
+      await adminService.markNotificationAsRead(notificationId);
+      toast.success('Notification marked as read');
+      await loadData();
+    } catch (error) {
+      toast.error('Failed to mark notification as read');
+    }
+  };
+
+  const handleCreateNotification = async (notificationData) => {
+    try {
+      await adminService.createNotification(notificationData);
+      toast.success('Notification created successfully');
+      setShowCreateModal(false);
+      await loadData();
+    } catch (error) {
+      toast.error('Failed to create notification');
+    }
+  };
+
+  const filteredNotifications = (Array.isArray(notifications) ? notifications : []).filter(notification => {
     // Filter by status
     if (filter === 'unread' && notification.read_at) return false;
     if (filter === 'read' && !notification.read_at) return false;
@@ -124,8 +145,8 @@ const AdminNotifications = () => {
       return (
         notification.title?.toLowerCase().includes(searchLower) ||
         notification.message?.toLowerCase().includes(searchLower) ||
-        notification.user_name?.toLowerCase().includes(searchLower) ||
-        notification.user_email?.toLowerCase().includes(searchLower)
+        notification.user?.name?.toLowerCase().includes(searchLower) ||
+        notification.user?.email?.toLowerCase().includes(searchLower)
       );
     }
     
@@ -139,7 +160,7 @@ const AdminNotifications = () => {
       case 'warning':
         return <HiExclamation className="h-5 w-5 text-yellow-500" />;
       case 'error':
-        return <HiExclamationTriangle className="h-5 w-5 text-red-500" />;
+        return <HiExclamation className="h-5 w-5 text-red-500" />;
       case 'info':
       default:
         return <HiInformationCircle className="h-5 w-5 text-blue-500" />;
@@ -167,7 +188,7 @@ const AdminNotifications = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
-            <HiExclamationTriangle className="h-5 w-5 text-red-400" />
+            <HiExclamation className="h-5 w-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
               <div className="mt-2 text-sm text-red-700">
@@ -382,8 +403,8 @@ const AdminNotifications = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{notification.user_name}</div>
-                      <div className="text-sm text-gray-500">{notification.user_email}</div>
+                      <div className="text-sm text-gray-900">{notification.user?.name}</div>
+                      <div className="text-sm text-gray-500">{notification.user?.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -424,6 +445,14 @@ const AdminNotifications = () => {
                         >
                           <HiTrash className="h-4 w-4" />
                         </button>
+                        {!notification.read_at && (
+                          <button
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            <HiCheckCircle className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -478,8 +507,8 @@ const AdminNotifications = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">User</label>
-                <p className="text-sm text-gray-900">{selectedNotification.user_name}</p>
-                <p className="text-sm text-gray-500">{selectedNotification.user_email}</p>
+                <p className="text-sm text-gray-900">{selectedNotification.user?.name}</p>
+                <p className="text-sm text-gray-500">{selectedNotification.user?.email}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Created</label>

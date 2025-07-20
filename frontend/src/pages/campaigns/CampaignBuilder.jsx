@@ -9,7 +9,6 @@ import {
   HiTrash,
   HiPlus,
   HiSave,
-  HiPlay,
   HiCalendar,
   HiClock,
   HiUserGroup,
@@ -18,13 +17,14 @@ import {
   HiEyeOff,
   HiX,
   HiShieldCheck,
+  HiPaperAirplane,
 } from 'react-icons/hi';
 import QuillEditor from '../../components/QuillEditor';
 
 // Safe array mapping component
 const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
   const safeItems = Array.isArray(items) ? items : [];
-  
+
   return (
     <>
       <option value="">{placeholder}</option>
@@ -36,11 +36,32 @@ const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
 const CampaignBuilder = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isLoading, senders, domains, contents } = useSelector((state) => state.campaigns);
+  const { senders = [], isLoading: isSendersLoading } = useSelector((state) => state.senders || {});
+  const { domains = [], isLoading: isDomainsLoading } = useSelector((state) => state.domains || {});
+  const { contents = [], isLoading: isContentsLoading } = useSelector((state) => state.contents || {});
+  const { user, currentView } = useSelector((state) => state.auth || {});
+
+  // Filter domains and senders based on current view
+  const isAdminView = currentView === 'admin';
+  const isAdmin = user?.role === 'admin';
+
+  // In user view, only show domains and senders that belong to the current user
+  // In admin view, show all domains and senders
+  const filteredDomains = isAdmin && isAdminView
+    ? domains
+    : domains.filter(domain => domain.user_id === user?.id);
+
+  const filteredSenders = isAdmin && isAdminView
+    ? senders
+    : senders.filter(sender => {
+      // Find the domain for this sender
+      const senderDomain = domains.find(domain => domain.id === sender.domain_id);
+      return senderDomain && senderDomain.user_id === user?.id;
+    });
 
   // Ensure arrays are always defined and are arrays
-  const safeSenders = Array.isArray(senders) ? senders : [];
-  const safeDomains = Array.isArray(domains) ? domains : [];
+  const safeSenders = Array.isArray(filteredSenders) ? filteredSenders : [];
+  const safeDomains = Array.isArray(filteredDomains) ? filteredDomains : [];
   const safeContents = Array.isArray(contents) ? contents : [];
 
   const [formData, setFormData] = useState({
@@ -62,6 +83,7 @@ const CampaignBuilder = () => {
   const [contentVariations, setContentVariations] = useState([
     { subject: '', content: '' }
   ]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     dispatch(fetchSenders());
@@ -78,13 +100,28 @@ const CampaignBuilder = () => {
   };
 
   const handleFileUpload = (e) => {
+    console.log('handleFileUpload called');
+    console.log('Event:', e);
+    console.log('Event target:', e.target);
+    console.log('Event target files:', e.target.files);
+    console.log('Event target files length:', e.target.files.length);
+
     const file = e.target.files[0];
     if (file) {
+      console.log('File selected:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified
+      });
       setSelectedFile(file);
       setFormData(prev => ({
         ...prev,
         recipient_file: file,
       }));
+      console.log('File state updated');
+    } else {
+      console.log('No file selected in handleFileUpload');
     }
   };
 
@@ -104,46 +141,92 @@ const CampaignBuilder = () => {
     setContentVariations((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name || (!enableContentSwitching && !formData.email_content)) {
-      toast.error('Please fill in all required fields');
-      return;
+  const validateForm = () => {
+    // Check basic required fields
+    if (!formData.name.trim()) {
+      toast.error('Please enter a campaign name');
+      return false;
     }
 
     if (!selectedFile) {
       toast.error('Please upload a recipient file');
+      return false;
+    }
+
+    // Check content based on mode
+    if (enableContentSwitching) {
+      // Validate content variations
+      if (contentVariations.length === 0) {
+        toast.error('Please add at least one content variation');
+        return false;
+      }
+
+      for (let i = 0; i < contentVariations.length; i++) {
+        const variation = contentVariations[i];
+        if (!variation.subject.trim()) {
+          toast.error(`Please enter a subject for variation ${i + 1}`);
+          return false;
+        }
+        if (!variation.content.trim()) {
+          toast.error(`Please enter content for variation ${i + 1}`);
+          return false;
+        }
+      }
+    } else {
+      // Single content mode
+      if (!formData.subject.trim()) {
+        toast.error('Please enter a subject line');
+        return false;
+      }
+      if (!formData.email_content.trim()) {
+        toast.error('Please enter email content');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const campaignData = new FormData();
-      
-      // Add basic form fields
-      campaignData.append('name', formData.name);
-      campaignData.append('subject', formData.subject);
-      campaignData.append('enable_open_tracking', formData.enable_open_tracking);
-      campaignData.append('enable_click_tracking', formData.enable_click_tracking);
-      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link);
-      campaignData.append('enable_template_variables', formData.enable_template_variables);
-      
-      if (formData.template_variables) {
-        campaignData.append('template_variables', formData.template_variables);
-      }
 
-      // Add file
+      // Add basic form fields
+      campaignData.append('name', formData.name.trim());
+      campaignData.append('subject', formData.subject.trim());
+      campaignData.append('email_content', formData.email_content);
+      campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
+      campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
+      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
+      campaignData.append('enable_template_variables', formData.enable_template_variables ? '1' : '0');
+      campaignData.append('enable_content_switching', enableContentSwitching ? '1' : '0');
+
+      // Add recipient file - important: append the File object directly
       if (selectedFile) {
         campaignData.append('recipient_file', selectedFile);
       }
 
-      // Add content switching data
-      campaignData.append('enable_content_switching', enableContentSwitching);
+      if (formData.template_variables) {
+        campaignData.append('template_variables', formData.template_variables);
+      }
+
+      // Add content variations if enabled
       if (enableContentSwitching) {
         campaignData.append('content_variations', JSON.stringify(contentVariations));
-      } else {
-        // Single content mode
-        campaignData.append('content', formData.email_content);
+      }
+
+      // Debug log
+      console.log('Submitting campaign with file:', selectedFile);
+      for (let [key, value] of campaignData.entries()) {
+        console.log(`${key}:`, value instanceof File ? `File: ${value.name}` : value);
       }
 
       const result = await dispatch(createCampaign(campaignData)).unwrap();
@@ -152,12 +235,98 @@ const CampaignBuilder = () => {
     } catch (error) {
       console.error('Campaign creation error:', error);
       toast.error(error || 'Failed to create campaign');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleSaveDraft = () => {
-    // Save as draft logic
-    toast.success('Draft saved successfully');
+  const handleSaveDraft = async () => {
+    if (!formData.name.trim()) {
+      toast.error('Please enter a campaign name to save as draft');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const campaignData = new FormData();
+
+      // Add basic form fields for draft
+      campaignData.append('name', formData.name.trim());
+      campaignData.append('status', 'DRAFT');
+      campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
+      campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
+      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
+      campaignData.append('enable_template_variables', formData.enable_template_variables ? '1' : '0');
+      campaignData.append('enable_content_switching', enableContentSwitching ? '1' : '0');
+
+      if (formData.template_variables) {
+        campaignData.append('template_variables', formData.template_variables);
+      }
+
+      // Add file if selected
+      if (selectedFile) {
+        console.log('Attaching file to FormData (draft):', {
+          name: selectedFile.name,
+          size: selectedFile.size,
+          type: selectedFile.type
+        });
+        campaignData.append('recipient_file', selectedFile);
+        console.log('File attached to FormData (draft)');
+      } else {
+        console.log('No selectedFile to attach (draft)');
+      }
+
+      // Debug: Check if file is in FormData
+      console.log('FormData has recipient_file (draft):', campaignData.has('recipient_file'));
+      if (campaignData.has('recipient_file')) {
+        const file = campaignData.get('recipient_file');
+        console.log('FormData get recipient_file (draft):', {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+      }
+
+      // Add content data
+      if (enableContentSwitching) {
+        campaignData.append('content_variations', JSON.stringify(contentVariations));
+      } else {
+        campaignData.append('subject', formData.subject.trim());
+        campaignData.append('content', formData.email_content);
+      }
+
+      // Debug: Log FormData contents
+      for (let [key, value] of campaignData.entries()) {
+        console.log(key, value);
+      }
+
+      // Debug: Check FormData type
+      console.log('FormData type:', typeof campaignData);
+      console.log('FormData instanceof FormData:', campaignData instanceof FormData);
+      console.log('FormData constructor:', campaignData.constructor.name);
+
+      // Debug: Log the actual request
+      console.log('About to send request with data:', {
+        name: formData.name.trim(),
+        enable_content_switching: enableContentSwitching ? '1' : '0',
+        has_file: !!selectedFile,
+        file_name: selectedFile?.name,
+        file_size: selectedFile?.size,
+        content_variations: enableContentSwitching ? contentVariations : null,
+        subject: !enableContentSwitching ? formData.subject.trim() : null,
+        content: !enableContentSwitching ? formData.email_content : null
+      });
+
+      const result = await dispatch(createCampaign(campaignData)).unwrap();
+      toast.success('Draft saved successfully');
+      navigate(`/campaigns/${result.data?.id || result.id}`);
+    } catch (error) {
+      console.error('Draft save error:', error);
+      toast.error(error || 'Failed to save draft');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePreview = () => {
@@ -173,16 +342,27 @@ const CampaignBuilder = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Create New Campaign</h1>
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">Create New Campaign</h1>
+              {isAdmin && (
+                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${isAdminView
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-green-100 text-green-800'
+                  }`}>
+                  {isAdminView ? 'Admin View' : 'User View'}
+                </span>
+              )}
+            </div>
             <p className="text-gray-600 mt-1">Build and configure your email campaign</p>
           </div>
           <div className="flex items-center space-x-3">
             <button
+              type="button"
               onClick={handleSaveDraft}
               className="btn btn-secondary flex items-center"
             >
@@ -190,6 +370,7 @@ const CampaignBuilder = () => {
               Save Draft
             </button>
             <button
+              type="button"
               onClick={handlePreview}
               className="btn btn-secondary flex items-center"
             >
@@ -202,6 +383,23 @@ const CampaignBuilder = () => {
                 <>
                   <HiEye className="h-5 w-5 mr-2" />
                   Preview
+                </>
+              )}
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn btn-primary flex items-center"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <HiPaperAirplane className="h-5 w-5 mr-2" />
+                  Create Campaign
                 </>
               )}
             </button>
@@ -240,18 +438,6 @@ const CampaignBuilder = () => {
                   required
                 />
               </div>
-              <div>
-                <label className="form-label">Subject Line *</label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleInputChange}
-                  className="input"
-                  placeholder="Enter email subject"
-                  required
-                />
-              </div>
             </div>
           </div>
 
@@ -264,7 +450,7 @@ const CampaignBuilder = () => {
                 <div>
                   <h4 className="text-sm font-medium text-blue-900">Automatic Sender Management</h4>
                   <p className="text-sm text-blue-700 mt-1">
-                    All your active senders will be automatically used for this campaign. 
+                    All your active senders will be automatically used for this campaign.
                     The system will rotate between them to optimize delivery, maintain reputation, and avoid rate limits.
                   </p>
                 </div>
@@ -331,6 +517,7 @@ const CampaignBuilder = () => {
                     />
                     <label className="form-label">Email Content *</label>
                     <QuillEditor
+                      key={`variation-${idx}`}
                       value={variation.content}
                       onChange={data => handleContentVariationChange(idx, 'content', data.html)}
                       placeholder="Enter your email content here. You can use HTML tags for formatting."
@@ -360,6 +547,7 @@ const CampaignBuilder = () => {
                 />
                 <label className="form-label">Email Content *</label>
                 <QuillEditor
+                  key="single-content"
                   value={formData.email_content}
                   onChange={data => handleInputChange({ target: { name: 'email_content', value: data.html } })}
                   placeholder="Enter your email content here. You can use HTML tags for formatting."
@@ -391,6 +579,15 @@ const CampaignBuilder = () => {
                         <HiTrash className="h-4 w-4 mr-1" />
                         Remove
                       </button>
+                      <button
+                        onClick={() => {
+                          console.log('Test: selectedFile state:', selectedFile);
+                          console.log('Test: formData.recipient_file:', formData.recipient_file);
+                        }}
+                        className="btn btn-secondary btn-sm flex items-center"
+                      >
+                        Test File
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -403,9 +600,15 @@ const CampaignBuilder = () => {
                       </label>
                       <input
                         id="file-upload"
+                        name="recipient_file"
                         type="file"
                         accept=".txt,.csv,.xls,.xlsx"
-                        onChange={handleFileUpload}
+                        onChange={(e) => {
+                          console.log('File input change event triggered');
+                          console.log('Event target files:', e.target.files);
+                          console.log('Event target files length:', e.target.files.length);
+                          handleFileUpload(e);
+                        }}
                         className="hidden"
                       />
                     </div>
@@ -468,7 +671,12 @@ const CampaignBuilder = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Subject Line</span>
-                <span className="text-sm font-medium text-gray-900">{formData.subject || 'Not set'}</span>
+                <span className="text-sm font-medium text-gray-900">
+                  {enableContentSwitching
+                    ? (contentVariations.length > 0 ? `${contentVariations.length} variations` : 'Not set')
+                    : (formData.subject || 'Not set')
+                  }
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Recipients</span>
@@ -490,25 +698,19 @@ const CampaignBuilder = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-4">Actions</h3>
             <div className="space-y-3">
               <button
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="btn btn-primary w-full flex items-center justify-center"
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSendersLoading || isDomainsLoading || isContentsLoading || isSubmitting}
+                className="btn btn-secondary w-full flex items-center justify-center"
               >
-                {isLoading ? (
+                {isSendersLoading || isDomainsLoading || isContentsLoading || isSubmitting ? (
                   <div className="loading-spinner h-4 w-4"></div>
                 ) : (
                   <>
-                    <HiPlay className="h-5 w-5 mr-2" />
-                    Create Campaign
+                    <HiSave className="h-5 w-5 mr-2" />
+                    Save as Draft
                   </>
                 )}
-              </button>
-              <button
-                onClick={handleSaveDraft}
-                className="btn btn-secondary w-full flex items-center justify-center"
-              >
-                <HiSave className="h-5 w-5 mr-2" />
-                Save as Draft
               </button>
             </div>
           </div>
@@ -565,7 +767,7 @@ const CampaignBuilder = () => {
           </div>
         </div>
       )}
-    </div>
+    </form>
   );
 };
 
@@ -579,4 +781,4 @@ const formatDate = (dateString) => {
   });
 };
 
-export default CampaignBuilder; 
+export default CampaignBuilder;

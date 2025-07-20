@@ -347,3 +347,8 @@ body {
     background: var(--danger-gradient);
   }
 }
+
+
+.quill > .ql-toolbar:first-child {
+  display: none !important;
+  }

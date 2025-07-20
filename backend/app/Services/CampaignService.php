@@ -172,7 +172,7 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Failed to filter suppressed emails', [
                 'original_path' => $originalPath,
-                'error' => $e->getMessage()
+                'error' => $e
             ]);
             
             // Return original path if filtering fails
@@ -185,28 +185,37 @@ class CampaignService
      */
     private function validateCampaignData(array $data): void
     {
-        $requiredFields = ['name', 'subject'];
+        $requiredFields = ['name'];
         $validation = $this->validateRequiredFields($data, $requiredFields);
         
         if (!$validation['is_valid']) {
             throw new \Exception(implode(', ', $validation['errors']));
         }
 
-        // Validate content variations if content switching is enabled
-        if (!empty($data['enable_content_switching']) && empty($data['content_variations'])) {
-            throw new \Exception('Content variations are required when content switching is enabled');
-        }
+        // Check if content switching is enabled
+        $enableContentSwitching = $data['enable_content_switching'] ?? false;
 
-        if (!empty($data['content_variations'])) {
-            foreach ($data['content_variations'] as $contentId) {
-                $content = Content::where('id', $contentId)
-                    ->where('user_id', auth()->id())
-                    ->where('is_active', true)
-                    ->first();
-                
-                if (!$content) {
-                    throw new \Exception("Invalid content ID: {$contentId}");
+        if ($enableContentSwitching) {
+            // Content switching mode - validate content variations
+            if (empty($data['content_variations'])) {
+                throw new \Exception('Content variations are required when content switching is enabled');
+            }
+
+            foreach ($data['content_variations'] as $variation) {
+                if (empty($variation['subject'])) {
+                    throw new \Exception('Subject is required for each content variation');
                 }
+                if (empty($variation['content'])) {
+                    throw new \Exception('Content is required for each content variation');
+                }
+            }
+        } else {
+            // Single content mode - validate subject and content
+            if (empty($data['subject'])) {
+                throw new \Exception('Subject is required when content switching is disabled');
+            }
+            if (empty($data['content'])) {
+                throw new \Exception('Content is required when content switching is disabled');
             }
         }
     }
@@ -239,16 +248,16 @@ class CampaignService
         $processedData = $data;
 
         if (!empty($data['enable_content_switching']) && !empty($data['content_variations'])) {
-            // Use the first variation as the main content/subject
-            $firstContent = Content::find($data['content_variations'][0]);
-            $processedData['subject'] = $firstContent->subject ?? $data['subject'];
-            $processedData['content_ids'] = $data['content_variations'];
-            $processedData['content_variations'] = $userContents->whereIn('id', $data['content_variations'])->toArray();
+            // Content switching mode - use the first variation as the main content/subject
+            $firstVariation = $data['content_variations'][0];
+            $processedData['subject'] = $firstVariation['subject'] ?? $data['subject'];
+            $processedData['content_ids'] = []; // We'll create content records for each variation
+            $processedData['content_variations'] = $data['content_variations'];
             $processedData['enable_content_switching'] = true;
         } else {
-            // Disable content switching if no variations provided
+            // Single content mode
             $processedData['enable_content_switching'] = false;
-            $processedData['content_ids'] = !empty($data['content_id']) ? [$data['content_id']] : [];
+            $processedData['content_ids'] = [];
             $processedData['content_variations'] = [];
         }
 
@@ -261,12 +270,12 @@ class CampaignService
     private function storeContentVariations(Campaign $campaign, array $contentVariations): void
     {
         $variations = [];
-        foreach ($contentVariations as $content) {
+        foreach ($contentVariations as $variation) {
             $variations[] = [
-                'id' => $content['id'],
-                'subject' => $content['subject'],
-                'html_body' => $content['html_body'],
-                'text_body' => $content['text_body'],
+                'subject' => $variation['subject'],
+                'content' => $variation['content'],
+                'html_body' => $variation['content'], // Use content as html_body
+                'text_body' => strip_tags($variation['content']), // Strip HTML for text version
             ];
         }
 
@@ -303,7 +312,86 @@ class CampaignService
         })->toArray();
 
         $cacheKey = "campaign:{$campaign->id}:senders";
-        $this->cache($cacheKey, json_encode($senderList), 3600); // 1 hour TTL
+        $this->cache($cacheKey, function() use ($senderList) {
+            return json_encode($senderList);
+        }, 3600); // 1 hour TTL
+    }
+
+    /**
+     * Upload recipient list file
+     */
+    private function uploadRecipientList($file, string $campaignName): array
+    {
+        try {
+            $uploadResult = $this->uploadFile($file, 'campaigns/recipients', [
+                'disk' => 'local',
+                'visibility' => 'private',
+                'max_size' => 10240, // 10MB
+                'allowed_extensions' => ['txt', 'csv', 'xlsx', 'xls'],
+                'generate_unique_name' => true,
+                'preserve_original_name' => false
+            ]);
+
+            if (!$uploadResult['success']) {
+                return [
+                    'success' => false,
+                    'error' => $uploadResult['error']
+                ];
+            }
+
+            // Process recipient data
+            $recipientData = $this->processRecipientData($uploadResult['processed_data']);
+
+            return [
+                'success' => true,
+                'path' => $uploadResult['path'],
+                'filename' => $uploadResult['filename'],
+                'size' => $uploadResult['size'],
+                'mime_type' => $uploadResult['mime_type'],
+                'recipient_data' => $recipientData
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Recipient list upload failed', [
+                'campaign_name' => $campaignName,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Process recipient data from uploaded file
+     */
+    private function processRecipientData(array $processedData): array
+    {
+        if (!$processedData['processed']) {
+            return [];
+        }
+
+        $recipients = [];
+        
+        switch ($processedData['type']) {
+            case 'csv':
+                $recipients = $processedData['sample_data'] ?? [];
+                break;
+            case 'excel':
+                // For Excel files, we'll need to implement proper processing
+                $recipients = [];
+                break;
+            case 'txt':
+                // For text files, assume one email per line
+                $recipients = array_map(function($email) {
+                    return ['email' => trim($email)];
+                }, $processedData['sample_data'] ?? []);
+                break;
+        }
+
+        return $recipients;
     }
 
     /**
@@ -346,8 +434,19 @@ class CampaignService
                 'started_at' => now()
             ]);
 
-            // Dispatch campaign processing job
-            ProcessCampaignJob::dispatch($campaign);
+            // Dispatch campaign processing job and store the job ID
+            $job = ProcessCampaignJob::dispatch($campaign);
+            
+            // Store job ID if the column exists
+            try {
+                $campaign->update(['job_id' => $job->getJobId()]);
+            } catch (\Exception $e) {
+                // If job_id column doesnt exist yet, just log it
+                $this->logWarning('job_id column not available yet', [
+                    'campaign_id' => $campaign->id,
+                    'job_id' => $job->getJobId()
+                ]);
+            }
 
             // Broadcast status change
             event(new CampaignStatusChanged($campaign));
@@ -358,10 +457,11 @@ class CampaignService
             $this->logInfo('Campaign started', [
                 'campaign_id' => $campaign->id,
                 'user_id' => $campaign->user_id,
-                'recipient_count' => $campaign->recipient_count
+                'recipient_count' => $campaign->recipient_count,
+                'job_id' => $job->getJobId()
             ]);
 
-            $this->logMethodExit(__METHOD__, ['success' => true]);
+           
 
         } catch (\Exception $e) {
             $this->logError('Campaign start failed', [
@@ -369,6 +469,218 @@ class CampaignService
                 'error' => $e->getMessage()
             ]);
             throw $e;
+        }
+    }
+
+    /**
+     * Pause campaign
+     */
+    public function pauseCampaign(Campaign $campaign): array
+    {
+        $this->logMethodEntry(__METHOD__, ['campaign_id' => $campaign->id]);
+
+        try {
+            // Validate campaign can be paused
+            if (!in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
+                throw new \Exception('Campaign can only be paused from RUNNING or SCHEDULED status');
+            }
+
+            // Update campaign status
+            $campaign->update([
+                'status' => 'PAUSED',
+                'paused_at' => now()
+            ]);
+
+            // Cancel any running jobs for this campaign
+            $this->cancelCampaignJobs($campaign->id);
+
+            // Broadcast status change
+            event(new CampaignStatusChanged($campaign));
+
+            // Send notification
+            $campaign->user->notify(new CampaignStatusNotification($campaign));
+
+            $this->logInfo('Campaign paused', [
+                'campaign_id' => $campaign->id,
+                'user_id' => $campaign->user_id
+            ]);
+
+            return ['success' => true, 'campaign' => $campaign];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign pause failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Resume campaign
+     */
+    public function resumeCampaign(Campaign $campaign): array
+    {
+        $this->logMethodEntry(__METHOD__, ['campaign_id' => $campaign->id]);
+
+        try {
+            // Validate campaign can be resumed
+            if ($campaign->status !== 'PAUSED') {
+                throw new \Exception('Campaign can only be resumed from PAUSED status');
+            }
+
+            // Update campaign status
+            $campaign->update([
+                'status' => 'RUNNING',
+                'resumed_at' => now()
+            ]);
+
+            // Dispatch campaign processing job and store the job ID
+            $job = ProcessCampaignJob::dispatch($campaign);
+            
+            // Store job ID if the column exists
+            try {
+                $campaign->update(['job_id' => $job->getJobId()]);
+            } catch (\Exception $e) {
+                // If job_id column doesnt exist yet, just log it
+                $this->logWarning('job_id column not available yet', [
+                    'campaign_id' => $campaign->id,
+                    'job_id' => $job->getJobId()
+                ]);
+            }
+
+            // Broadcast status change
+            event(new CampaignStatusChanged($campaign));
+
+            // Send notification
+            $campaign->user->notify(new CampaignStatusNotification($campaign));
+
+            $this->logInfo('Campaign resumed', [
+                'campaign_id' => $campaign->id,
+                'user_id' => $campaign->user_id,
+                'job_id' => $job->getJobId
+            ]);
+
+            return ['success' => true, 'campaign' => $campaign];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign resume failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Stop campaign
+     */
+    public function stopCampaign(Campaign $campaign): array
+    {
+        $this->logMethodEntry(__METHOD__, ['campaign_id' => $campaign->id]);
+
+        try {
+            // Validate campaign can be stopped
+            if (!in_array($campaign->status, ['RUNNING', 'PAUSED', 'SCHEDULED'])) {
+                throw new \Exception('Campaign can only be stopped from RUNNING, PAUSED, or SCHEDULED status');
+            }
+
+            // Update campaign status
+            $campaign->update([
+                'status' => 'STOPPED',
+                'stopped_at' => now()
+            ]);
+
+            // Cancel any running jobs for this campaign
+            $this->cancelCampaignJobs($campaign->id);
+
+            // Broadcast status change
+            event(new CampaignStatusChanged($campaign));
+
+            // Send notification
+            $campaign->user->notify(new CampaignStatusNotification($campaign));
+
+            $this->logInfo('Campaign stopped', [
+                'campaign_id' => $campaign->id,
+                'user_id' => $campaign->user_id
+            ]);
+
+            return ['success' => true, 'campaign' => $campaign];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign stop failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Delete campaign
+     */
+    public function deleteCampaign(Campaign $campaign): array
+    {
+        $this->logMethodEntry(__METHOD__, ['campaign_id' => $campaign->id]);
+
+        try {
+            // Check if campaign can be deleted
+            if (in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
+                throw new \Exception('Cannot delete campaign while it is running or scheduled');
+            }
+
+            // Cancel any running jobs for this campaign
+            $this->cancelCampaignJobs($campaign->id);
+
+            // Clean up campaign files
+            $this->cleanupCampaignFiles($campaign);
+
+            // Delete campaign
+            $campaign->delete();
+
+            $this->logInfo('Campaign deleted', [
+                'campaign_id' => $campaign->id,
+                'user_id' => $campaign->user_id
+            ]);
+
+            return ['success' => true];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign deletion failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Clean up campaign files
+     */
+    private function cleanupCampaignFiles(Campaign $campaign): void
+    {
+        try {
+            // Delete recipient list file
+            if ($campaign->recipient_list_path && $this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
+                $this->deleteFile($campaign->recipient_list_path, 'local');
+            }
+
+            // Delete sent list file
+            if ($campaign->sent_list_path && $this->fileExists($campaign->sent_list_path, ['disk' => 'local'])) {
+                $this->deleteFile($campaign->sent_list_path, 'local');
+            }
+
+            // Clear cache entries
+            $this->forgetCachedData("campaign:{$campaign->id}:content_variations");
+            $this->forgetCachedData("campaign:{$campaign->id}:recipient_data");
+            $this->forgetCachedData("campaign:{$campaign->id}:senders");
+            $this->logInfo('Campaign files cleaned up', ['campaign_id' => $campaign->id]);
+
+        } catch (\Exception $e) {
+            $this->logError('Failed to cleanup campaign files', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 
@@ -444,4 +756,222 @@ class CampaignService
             $campaign->update(['sent_list_path' => $sentListPath]);
         }
     }
-} 
+
+    /**
+     * Update campaign (admin functionality)
+     */
+    public function updateCampaign(Campaign $campaign, array $data): array
+    {
+        $this->logMethodEntry(__METHOD__, [
+            'campaign_id' => $campaign->id,
+            'update_data' => array_keys($data)
+        ]);
+
+        try {
+            // Validate status transitions
+            if (isset($data['status'])) {
+                $this->validateStatusTransition($campaign, $data['status']);
+            }
+
+            // Update campaign
+            $campaign->update($data);
+
+            // Broadcast status change if status was updated
+            if (isset($data['status'])) {
+                event(new CampaignStatusChanged($campaign));
+                $campaign->user->notify(new CampaignStatusNotification($campaign));
+            }
+
+            $this->logInfo('Campaign updated by admin', [
+                'campaign_id' => $campaign->id,
+                'updated_fields' => array_keys($data)
+            ]);
+
+            return ['success' => true, 'campaign' => $campaign];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign update failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Update multiple campaigns with common data (admin functionality)
+     */
+    public function updateCampaigns(array $campaignIds, array $data): array
+    {
+        $this->logMethodEntry(__METHOD__, [
+            'campaign_ids' => $campaignIds,
+            'update_data' => array_keys($data)
+        ]);
+
+        try {
+            $campaigns = Campaign::whereIn('id', $campaignIds)->get();
+            $updatedCount = 0;
+            $errors = [];
+
+            foreach ($campaigns as $campaign) {
+                try {
+                    // Validate status transitions if status is being updated
+                    if (isset($data['status'])) {
+                        $this->validateStatusTransition($campaign, $data['status']);
+                    }
+
+                    $campaign->update($data);
+                    $updatedCount++;
+
+                    // Broadcast status change if status was updated
+                    if (isset($data['status'])) {
+                        event(new CampaignStatusChanged($campaign));
+                        $campaign->user->notify(new CampaignStatusNotification($campaign));
+                    }
+
+                } catch (\Exception $e) {
+                    $errors[] = "Campaign {$campaign->id}: " . $e->getMessage();
+                }
+            }
+
+            $this->logInfo('Bulk campaign update completed', [
+                'total_campaigns' => count($campaignIds),
+                'updated_count' => $updatedCount,
+                'error_count' => count($errors)
+            ]);
+
+            return [
+                'success' => true,
+                'updated_count' => $updatedCount,
+                'total_count' => count($campaignIds),
+                'errors' => $errors
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Bulk campaign update failed', [
+                'campaign_ids' => $campaignIds,
+                'error' => $e->getMessage()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Validate status transition
+     */
+    private function validateStatusTransition(Campaign $campaign, string $newStatus): void
+    {
+        $allowedTransitions = [
+            'draft' => ['scheduled', 'sending'],
+            'scheduled' => ['sending', 'draft'],
+            'sending' => ['paused', 'completed', 'failed'],
+            'paused' => ['sending', 'completed', 'failed'],
+            'completed' => [],
+            'failed' => ['draft']
+        ];
+
+        $currentStatus = strtolower($campaign->status);
+        $newStatus = strtolower($newStatus);
+
+        if (!isset($allowedTransitions[$currentStatus]) || 
+            !in_array($newStatus, $allowedTransitions[$currentStatus])) {
+            throw new \Exception("Invalid status transition from {$currentStatus} to {$newStatus}");
+        }
+    }
+
+    /**
+     * Cancel campaign jobs
+     */
+    private function cancelCampaignJobs(int $campaignId): void
+    {
+        try {
+            $campaign = Campaign::find($campaignId);
+            if (!$campaign) {
+                return;
+            }
+
+            // Check if job_id column exists and has a value
+            if (!isset($campaign->job_id) || !$campaign->job_id) {
+                $this->logInfo('No job to cancel for campaign', ['campaign_id' => $campaignId]);
+                return;
+            }
+
+            // Get the queue connection
+            $queue = app('queue');
+            
+            // Try to cancel the specific job
+            try {
+                // This is a simplified approach - in production you would implement proper job cancellation
+                // Laravel doesn't have built-in job cancellation, so you'd need to:
+                // 1. Store job IDs in the database
+                // 2. Implement a custom job cancellation mechanism
+                // 3. Use job tags or custom job handling
+                
+                $this->logInfo('Attempting to cancel job for campaign', [
+                   'campaign_id' => $campaignId,
+                   'job_id' => $campaign->job_id
+                ]);
+                
+                // Clear the job ID from the campaign
+                try {
+                    $campaign->update(['job_id' => null]);
+                } catch (\Exception $e) {
+                    // If job_id column doesnt exist yet, just log it
+                    $this->logWarning('job_id column not available for update', [
+                        'campaign_id' => $campaignId,
+                        'job_id' => $campaign->job_id
+                    ]);
+                }
+                
+            } catch (\Exception $e) {
+                $this->logError('Failed to cancel specific job', [
+                   'campaign_id' => $campaignId,
+                   'job_id' => $campaign->job_id,
+                   'error' => $e->getMessage()
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            $this->logError('Failed to cancel campaign jobs', [
+                'campaign_id' => $campaignId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Count recipients in uploaded file
+     */
+    private function countRecipients(string $filePath): int
+    {
+        try {
+            $content = $this->readFile($filePath, ['disk' => 'local']);
+            $lines = array_filter(array_map('trim', explode("\n", $content)));
+            
+            $count = 0;
+            foreach ($lines as $line) {
+                if (!empty($line) && $this->validateEmail($line)) {
+                    $count++;
+                }
+            }
+            
+            return $count;
+            
+        } catch (\Exception $e) {
+            $this->logError('Failed to count recipients', [
+                'file_path' => $filePath,
+                'error' => $e->getMessage()
+            ]);
+            
+            return 0;
+        }
+    }
+
+    /**
+     * Validate email format
+     */
+    private function validateEmail(string $email): bool
+    {
+        return filter_var(trim($email), FILTER_VALIDATE_EMAIL) !== false;
+    }
+}

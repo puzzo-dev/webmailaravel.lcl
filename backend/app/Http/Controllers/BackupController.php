@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Backup;
 use App\Services\BackupService;
-use App\Traits\FileResponseTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class BackupController extends Controller
 {
-    use FileResponseTrait;
+    use FileProcessingTrait;
     
     protected BackupService $backupService;
 
@@ -23,65 +24,99 @@ class BackupController extends Controller
      */
     public function create(Request $request): JsonResponse
     {
-        return $this->backupRestore(
-            function () {
-                return $this->backupService->createBackup();
-            },
-            'backup_creation'
-        );
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = auth()->user();
+            $description = $request->input('description');
+            
+            $backup = $this->backupService->createBackup($user, $description);
+            
+            if ($backup) {
+                return $this->successResponse($backup, 'Backup created successfully');
+            } else {
+                return $this->errorResponse('Failed to create backup', 400);
+            }
+        }, 'backup_creation');
     }
 
     /**
      * Restore from backup
      */
-    public function restore(Request $request): JsonResponse
+    public function restore(Backup $backup): JsonResponse
     {
-        return $this->validateAndExecute(
-            $request,
-            ['backup_file' => 'required|string'],
-            function () use ($request) {
-                $backupFile = $request->input('validated_data')['backup_file'];
-                return $this->backupService->restoreBackup($backupFile);
-            },
-            'backup_restore'
-        );
+        return $this->executeWithErrorHandling(function () use ($backup) {
+            $user = auth()->user();
+            
+            $success = $this->backupService->restoreBackup($backup, $user);
+            
+            if ($success) {
+                return $this->successResponse(null, 'Backup restored successfully');
+            } else {
+                return $this->errorResponse('Failed to restore backup', 400);
+            }
+        }, 'backup_restore');
     }
 
     /**
      * List available backups
      */
-    public function list(): JsonResponse
+    public function index(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            $backups = $this->backupService->listBackups();
+            $backups = Backup::with('createdBy')->orderBy('created_at', 'desc')->get();
             return $this->successResponse($backups, 'Backups retrieved successfully');
         }, 'backup_listing');
     }
 
     /**
+     * Show individual backup details
+     */
+    public function show(Backup $backup): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($backup) {
+            $backup->load('createdBy');
+            return $this->successResponse($backup, 'Backup details retrieved successfully');
+        }, 'backup_show');
+    }
+
+    /**
+     * Get backup statistics
+     */
+    public function getStatistics(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            $stats = $this->backupService->getBackupStats();
+            return $this->successResponse($stats, 'Backup statistics retrieved successfully');
+        }, 'backup_statistics');
+    }
+
+    /**
      * Download backup
      */
-    public function download(string $filename): JsonResponse
+    public function download(Backup $backup): JsonResponse
     {
-        return $this->downloadFile(
-            storage_path("app/backups/{$filename}"),
-            $filename,
-            'backup_download'
-        );
+        return $this->executeWithErrorHandling(function () use ($backup) {
+            $filePath = $this->backupService->downloadBackup($backup);
+            
+            if ($filePath && file_exists($filePath)) {
+                return response()->download($filePath, $backup->filename);
+            } else {
+                return $this->errorResponse('Backup file not found', 400);
+            }
+        }, 'backup_download');
     }
 
     /**
      * Delete backup
      */
-    public function delete(string $filename): JsonResponse
+    public function destroy(Backup $backup): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($filename) {
-            $result = $this->backupService->deleteBackup($filename);
+        return $this->executeWithErrorHandling(function () use ($backup) {
+            $success = $this->backupService->deleteBackup($backup);
             
-            if ($result['success']) {
+            if ($success) {
                 return $this->successResponse(null, 'Backup deleted successfully');
             } else {
-                return $this->badRequestResponse('Failed to delete backup: ' . $result['error']);
+                return $this->errorResponse('Failed to delete backup', 400);
             }
         }, 'backup_deletion');
     }

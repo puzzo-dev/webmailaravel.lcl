@@ -61,9 +61,8 @@ const Login = () => {
   };
 
   const handleDemoLogin = () => {
-    setValue('email', 'demo@example.com');
-    setValue('password', 'password');
-    handleSubmit(onSubmit)();
+    // Show a message that demo login is not available
+    toast.error('Demo login is not available. Please use your actual credentials.');
   };
 
   return (
@@ -185,15 +184,15 @@ const Login = () => {
           </button>
         </div>
 
-        {/* Demo login button */}
+        {/* Demo login button - disabled for security */}
         <div className="text-center">
           <button
             type="button"
             onClick={handleDemoLogin}
             disabled={isLoading}
-            className="text-sm text-gray-600 hover:text-gray-500 underline"
+            className="text-sm text-gray-400 cursor-not-allowed"
           >
-            Try demo account
+            Demo login disabled for security
           </button>
         </div>
       </form>

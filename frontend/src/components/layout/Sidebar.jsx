@@ -19,9 +19,24 @@ import {
   HiTemplate,
   HiLogout,
   HiBan,
+  HiDatabase,
+  HiKey,
+  HiEye,
+  HiPencil,
+  HiTrash,
+  HiPlay,
+  HiPause,
+  HiStop,
+  HiViewBoards,
+  HiCollection,
+  HiDocumentReport,
+  HiCog as HiSystem,
+  HiCloud as HiBackup,
+  HiClipboardList,
+  HiServer as HiPowerMTA,
 } from 'react-icons/hi';
 
-const navigation = [
+const userNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HiHome },
   { name: 'Campaigns', href: '/campaigns', icon: HiInbox },
   { name: 'Analytics', href: '/analytics', icon: HiChartBar },
@@ -32,12 +47,25 @@ const navigation = [
 ];
 
 const adminNavigation = [
+  { name: 'Admin Dashboard', href: '/admin', icon: HiHome },
   { name: 'Users', href: '/admin/users', icon: HiUsers },
+  { name: 'Campaigns', href: '/admin/campaigns', icon: HiInbox },
+  { name: 'Domains', href: '/admin/domains', icon: HiGlobe },
+  { name: 'Senders', href: '/admin/senders', icon: HiServer },
+  { name: 'SMTP', href: '/admin/smtp', icon: HiKey },
+  { name: 'System', href: '/admin/system', icon: HiSystem },
+  { name: 'Billing', href: '/admin/billing', icon: HiCreditCard },
+  { name: 'Backups', href: '/admin/backups', icon: HiBackup },
+  { name: 'Logs', href: '/admin/logs', icon: HiClipboardList },
+  { name: 'PowerMTA', href: '/admin/powermta', icon: HiPowerMTA },
+  { name: 'Notifications', href: '/admin/notifications', icon: HiBell },
 ];
 
 const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
   const location = useLocation();
+  const { currentView } = useSelector((state) => state.auth);
   const isAdmin = user?.role === 'admin';
+  const isAdminView = currentView === 'admin';
 
   return (
     <div className={`hidden md:flex md:flex-shrink-0`}>
@@ -60,32 +88,42 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
           {/* Navigation */}
           <div className="flex-1 flex flex-col overflow-y-auto">
             <nav className="flex-1 px-2 py-4 space-y-1">
-              {navigation.map((item) => {
-                const isActive = location.pathname === item.href;
-                return (
-                  <NavLink
-                    key={item.name}
-                    to={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
-                      isActive
-                        ? 'bg-primary-100 text-primary-900'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <item.icon
-                      className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                        isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                      }`}
-                    />
-                    {item.name}
-                  </NavLink>
-                );
-              })}
-              
-              {/* Admin Navigation */}
-              {isAdmin && (
+              {/* User Navigation - Show for regular users OR admin users in user view */}
+              {(!isAdmin || (isAdmin && !isAdminView)) && (
                 <>
-                  <div className="pt-6 pb-2">
+                  <div className="pb-2">
+                    <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      User
+                    </h3>
+                  </div>
+                  {userNavigation.map((item) => {
+                    const isActive = location.pathname === item.href;
+                    return (
+                      <NavLink
+                        key={item.name}
+                        to={item.href}
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
+                          isActive
+                            ? 'bg-primary-100 text-primary-900'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        <item.icon
+                          className={`mr-3 flex-shrink-0 h-6 w-6 ${
+                            isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                          }`}
+                        />
+                        {item.name}
+                      </NavLink>
+                    );
+                  })}
+                </>
+              )}
+              
+              {/* Admin Navigation - Show only for admin users in admin view */}
+              {isAdmin && isAdminView && (
+                <>
+                  <div className="pb-2">
                     <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       Admin
                     </h3>
@@ -129,6 +167,11 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-700">{user?.name || 'User'}</p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
+                {isAdmin && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                    {isAdminView ? 'Admin View' : 'User View'}
+                  </span>
+                )}
               </div>
             </div>
             <button

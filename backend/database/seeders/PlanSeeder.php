@@ -2,8 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\Plan;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Plan;
 
 class PlanSeeder extends Seeder
 {
@@ -14,35 +15,72 @@ class PlanSeeder extends Seeder
     {
         $plans = [
             [
-                'name' => 'Free',
-                'max_campaigns' => 1,
-                'max_emails_per_day' => 100,
-                'price' => 0,
-                'description' => 'Basic plan for getting started',
+                'name' => 'Starter',
+                'description' => 'Perfect for small businesses and individuals',
+                'price' => 19.99,
+                'currency' => 'USD',
+                'duration_days' => 30,
+                'max_domains' => 1,
+                'max_senders_per_domain' => 2,
+                'max_total_campaigns' => 10,
+                'max_live_campaigns' => 1,
+                'daily_sending_limit' => 1000,
+                'features' => [
+                    'Basic Analytics',
+                    'Email Support',
+                    'Standard Templates',
+                    'Basic Reporting'
+                ],
+                'is_active' => true,
             ],
             [
-                'name' => 'Pro',
-                'max_campaigns' => 10,
-                'max_emails_per_day' => 1000,
-                'price' => 29.99,
-                'description' => 'Professional plan for growing businesses',
+                'name' => 'Professional',
+                'description' => 'Ideal for growing businesses and marketing teams',
+                'price' => 49.99,
+                'currency' => 'USD',
+                'duration_days' => 30,
+                'max_domains' => 3,
+                'max_senders_per_domain' => 5,
+                'max_total_campaigns' => 50,
+                'max_live_campaigns' => 3,
+                'daily_sending_limit' => 5000,
+                'features' => [
+                    'Advanced Analytics',
+                    'Priority Support',
+                    'Custom Domains',
+                    'API Access',
+                    'Advanced Reporting',
+                    'A/B Testing'
+                ],
+                'is_active' => true,
             ],
             [
                 'name' => 'Enterprise',
-                'max_campaigns' => -1, // Unlimited
-                'max_emails_per_day' => 10000,
+                'description' => 'For large organizations with high-volume needs',
                 'price' => 99.99,
-                'description' => 'Enterprise plan for large-scale operations',
+                'currency' => 'USD',
+                'duration_days' => 30,
+                'max_domains' => 10,
+                'max_senders_per_domain' => 10,
+                'max_total_campaigns' => 200,
+                'max_live_campaigns' => 10,
+                'daily_sending_limit' => 25000,
+                'features' => [
+                    'Advanced Analytics',
+                    'Dedicated Support',
+                    'Custom Domains',
+                    'API Access',
+                    'White-label Options',
+                    'Advanced Reporting',
+                    'A/B Testing',
+                    'Custom Integrations'
+                ],
+                'is_active' => true,
             ],
         ];
 
         foreach ($plans as $planData) {
-            Plan::firstOrCreate(
-                ['name' => $planData['name']],
-                $planData
-            );
+            Plan::create($planData);
         }
-
-        $this->command->info('✅ Plans seeded successfully!');
     }
 } 

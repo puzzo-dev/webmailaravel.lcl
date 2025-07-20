@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign } from '../../store/slices/campaignSlice';
@@ -28,10 +28,15 @@ import {
   HiDotsVertical,
 } from 'react-icons/hi';
 import { debounce } from 'lodash';
+import { useSubscriptionError } from '../../hooks/useSubscriptionError';
 
 const Campaigns = () => {
   const dispatch = useDispatch();
   const { campaigns, isLoading, pagination } = useSelector((state) => state.campaigns);
+  const { handleSubscriptionError } = useSubscriptionError();
+  
+  // Ensure campaigns is always an array
+  const safeCampaigns = Array.isArray(campaigns) ? campaigns : [];
   
   // State management
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +49,11 @@ const Campaigns = () => {
   const [bulkAction, setBulkAction] = useState('');
   const [isPerformingBulkAction, setIsPerformingBulkAction] = useState(false);
 
-  // Debounced search function
+  // Use refs to track previous values and prevent infinite loops
+  const prevFilters = useRef({ searchTerm, statusFilter, dateFilter, sortBy, sortOrder });
+  const isInitialMount = useRef(true);
+
+  // Debounced search function - memoized to prevent recreation
   const debouncedSearch = useCallback(
     debounce((search, status, date, sortBy, sortOrder) => {
       dispatch(fetchCampaigns({ 
@@ -55,18 +64,42 @@ const Campaigns = () => {
         date_filter: date,
         sort_by: sortBy,
         sort_order: sortOrder
-      }));
+      })).catch(error => {
+        handleSubscriptionError(error);
+      });
     }, 300),
-    [dispatch]
+    [] // Empty dependency array to prevent recreation
   );
 
+  // Initial load
   useEffect(() => {
-    debouncedSearch(searchTerm, statusFilter, dateFilter, sortBy, sortOrder);
-  }, [searchTerm, statusFilter, dateFilter, sortBy, sortOrder, debouncedSearch]);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    dispatch(fetchCampaigns({ page: 1, limit: 10 })).catch(error => {
+      handleSubscriptionError(error);
+    });
+    }
+  }, [dispatch, handleSubscriptionError]);
 
+  // Handle filter changes
   useEffect(() => {
-    dispatch(fetchCampaigns({ page: 1, limit: 10 }));
-  }, [dispatch]);
+    if (!isInitialMount.current) {
+      const currentFilters = { searchTerm, statusFilter, dateFilter, sortBy, sortOrder };
+      const prevFiltersValue = prevFilters.current;
+      
+      // Only trigger search if filters actually changed
+      if (
+        currentFilters.searchTerm !== prevFiltersValue.searchTerm ||
+        currentFilters.statusFilter !== prevFiltersValue.statusFilter ||
+        currentFilters.dateFilter !== prevFiltersValue.dateFilter ||
+        currentFilters.sortBy !== prevFiltersValue.sortBy ||
+        currentFilters.sortOrder !== prevFiltersValue.sortOrder
+      ) {
+        debouncedSearch(searchTerm, statusFilter, dateFilter, sortBy, sortOrder);
+        prevFilters.current = currentFilters;
+      }
+    }
+  }, [searchTerm, statusFilter, dateFilter, sortBy, sortOrder, debouncedSearch]);
 
   const handlePageChange = (page) => {
     dispatch(fetchCampaigns({ 
@@ -77,7 +110,9 @@ const Campaigns = () => {
       date_filter: dateFilter,
       sort_by: sortBy,
       sort_order: sortOrder
-    }));
+    })).catch(error => {
+      handleSubscriptionError(error);
+    });
   };
 
   const handleDelete = async (campaignId) => {
@@ -86,7 +121,9 @@ const Campaigns = () => {
         await dispatch(deleteCampaign(campaignId)).unwrap();
         toast.success('Campaign deleted successfully');
       } catch (error) {
-        toast.error('Failed to delete campaign');
+        if (!handleSubscriptionError(error)) {
+          toast.error('Failed to delete campaign');
+        }
       }
     }
   };
@@ -110,7 +147,9 @@ const Campaigns = () => {
           break;
       }
     } catch (error) {
-      toast.error(`Failed to ${action} campaign`);
+      if (!handleSubscriptionError(error)) {
+        toast.error(`Failed to ${action} campaign`);
+      }
     }
   };
 
@@ -130,7 +169,9 @@ const Campaigns = () => {
       setSelectedCampaigns([]);
       setBulkAction('');
     } catch (error) {
-      toast.error(`Failed to perform bulk ${bulkAction}`);
+      if (!handleSubscriptionError(error)) {
+        toast.error(`Failed to perform bulk ${bulkAction}`);
+      }
     } finally {
       setIsPerformingBulkAction(false);
     }
@@ -138,7 +179,7 @@ const Campaigns = () => {
 
   const handleSelectAll = (checked) => {
     if (checked) {
-      setSelectedCampaigns(campaigns.map(c => c.id));
+      setSelectedCampaigns(safeCampaigns.map(c => c.id));
     } else {
       setSelectedCampaigns([]);
     }
@@ -357,7 +398,7 @@ const Campaigns = () => {
             {hasActiveFilters && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">
-                  {campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} found
+                  {safeCampaigns.length} campaign{safeCampaigns.length !== 1 ? 's' : ''} found
                 </span>
                 <button
                   onClick={clearFilters}
@@ -438,7 +479,7 @@ const Campaigns = () => {
               ))}
             </div>
           </div>
-        ) : campaigns.length === 0 ? (
+        ) : safeCampaigns.length === 0 ? (
           <div className="p-6 text-center">
             <HiMail className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No campaigns found</h3>
@@ -469,7 +510,7 @@ const Campaigns = () => {
                     <th className="table-header-cell w-4">
                       <input
                         type="checkbox"
-                        checked={selectedCampaigns.length === campaigns.length && campaigns.length > 0}
+                        checked={selectedCampaigns.length === safeCampaigns.length && safeCampaigns.length > 0}
                         onChange={(e) => handleSelectAll(e.target.checked)}
                         className="form-checkbox"
                       />
@@ -485,7 +526,7 @@ const Campaigns = () => {
                   </tr>
                 </thead>
                 <tbody className="table-body">
-                  {campaigns.map((campaign) => (
+                  {safeCampaigns.map((campaign) => (
                     <tr key={campaign.id} className="table-row hover:bg-gray-50 transition-colors">
                       <td className="table-cell">
                         <input

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   HiPlus,
   HiTrash,
@@ -12,96 +12,119 @@ import {
   HiShieldCheck,
   HiCog,
   HiDownload,
+  HiRefresh,
+  HiDocumentText,
+  HiX,
 } from 'react-icons/hi';
+import { adminService } from '../../services/api';
+import toast from 'react-hot-toast';
 import { formatDate, formatFileSize } from '../../utils/helpers';
 
 const AdminLogs = () => {
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [selectedFile, setSelectedFile] = useState('laravel.log');
   const [searchTerm, setSearchTerm] = useState('');
   const [logLevel, setLogLevel] = useState('all');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showLogDetail, setShowLogDetail] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [logFiles, setLogFiles] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    last_page: 1,
+    per_page: 50,
+    total: 0,
+  });
 
-  // Mock data - replace with actual API calls
-  const logFiles = [
-    'laravel.log',
-    'auth.log',
-    'campaigns.log',
-    'powermta.log',
-    'errors.log',
-  ];
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadLogFiles();
+    }
+  }, [user]);
 
-  const logs = [
-    {
-      id: 1,
-      timestamp: '2024-01-15 10:30:45',
-      level: 'INFO',
-      message: 'Campaign started successfully',
-      context: {
-        user_id: 1,
-        campaign_id: 123,
-        ip: '192.168.1.1',
-      },
-      stack_trace: null,
-    },
-    {
-      id: 2,
-      timestamp: '2024-01-15 10:29:30',
-      level: 'ERROR',
-      message: 'Failed to connect to SMTP server',
-      context: {
-        user_id: 1,
-        sender_id: 5,
-        error: 'Connection timeout',
-      },
-      stack_trace: 'Stack trace at line 45...',
-    },
-    {
-      id: 3,
-      timestamp: '2024-01-15 10:28:15',
-      level: 'WARNING',
-      message: 'High bounce rate detected',
-      context: {
-        domain: 'example.com',
-        bounce_rate: 15.2,
-      },
-      stack_trace: null,
-    },
-  ];
+  useEffect(() => {
+    if (selectedFile && user?.role === 'admin') {
+      loadLogs();
+    }
+  }, [selectedFile, pagination.current_page, logLevel, user]);
 
-  const logLevels = [
-    { value: 'all', label: 'All Levels', color: 'gray' },
-    { value: 'INFO', label: 'Info', color: 'blue' },
-    { value: 'WARNING', label: 'Warning', color: 'yellow' },
-    { value: 'ERROR', label: 'Error', color: 'red' },
-    { value: 'DEBUG', label: 'Debug', color: 'gray' },
-  ];
+  const loadLogFiles = async () => {
+    try {
+      const response = await adminService.getLogFiles();
+      setLogFiles(response.data.files || []);
+      if (response.data.files?.length > 0 && !selectedFile) {
+        setSelectedFile(response.data.files[0]);
+      }
+    } catch (error) {
+      toast.error('Failed to load log files');
+      console.error('Load log files error:', error);
+    }
+  };
+
+  const loadLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.getLogs({
+        file: selectedFile,
+        page: pagination.current_page,
+        limit: pagination.per_page,
+        level: logLevel !== 'all' ? logLevel : undefined,
+        search: searchTerm || undefined,
+      });
+      
+      setLogs(response.data.logs || []);
+      setPagination({
+        current_page: response.data.current_page || 1,
+        last_page: response.data.last_page || 1,
+        per_page: response.data.per_page || 50,
+        total: response.data.total || 0,
+      });
+    } catch (error) {
+      toast.error('Failed to load logs');
+      console.error('Load logs error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLoadLogs = async () => {
-    setIsLoading(true);
-    try {
-      // Implement load logs API call
-      console.log('Loading logs for file:', selectedFile);
-    } catch (error) {
-      console.error('Failed to load logs:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    await loadLogs();
   };
 
   const handleClearLogs = async () => {
     if (!confirm('Are you sure you want to clear all logs? This action cannot be undone.')) return;
     
-    setIsLoading(true);
     try {
-      // Implement clear logs API call
-      console.log('Clearing logs for file:', selectedFile);
+      setLoading(true);
+      await adminService.clearLogs(selectedFile);
+      toast.success('Logs cleared successfully');
+      await loadLogs();
     } catch (error) {
-      console.error('Failed to clear logs:', error);
+      toast.error('Failed to clear logs');
+      console.error('Clear logs error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadLogs = async () => {
+    try {
+      const response = await adminService.downloadLogs(selectedFile);
+      // Create a download link
+      const blob = new Blob([response.data], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = selectedFile;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Log file downloaded successfully');
+    } catch (error) {
+      toast.error('Failed to download log file');
+      console.error('Download logs error:', error);
     }
   };
 
@@ -112,8 +135,9 @@ const AdminLogs = () => {
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.context && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLevel = logLevel === 'all' || log.level === logLevel;
+                         (log.context && Array.isArray(log.context) && log.context.length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesLevel = logLevel === 'all' || log.level === logLevel || log.channel === logLevel;
     return matchesSearch && matchesLevel;
   });
 
@@ -124,6 +148,7 @@ const AdminLogs = () => {
       case 'WARNING':
         return 'text-yellow-600 bg-yellow-100';
       case 'INFO':
+      case 'LOCAL':
         return 'text-blue-600 bg-blue-100';
       case 'DEBUG':
         return 'text-gray-600 bg-gray-100';
@@ -139,6 +164,7 @@ const AdminLogs = () => {
       case 'WARNING':
         return <HiExclamation className="h-4 w-4" />;
       case 'INFO':
+      case 'LOCAL':
         return <HiInformationCircle className="h-4 w-4" />;
       case 'DEBUG':
         return <HiDocumentText className="h-4 w-4" />;
@@ -147,9 +173,54 @@ const AdminLogs = () => {
     }
   };
 
-  useEffect(() => {
-    handleLoadLogs();
-  }, [selectedFile]);
+  const logLevels = [
+    { value: 'all', label: 'All Levels', color: 'gray' },
+    { value: 'LOCAL', label: 'Local', color: 'blue' },
+    { value: 'INFO', label: 'Info', color: 'blue' },
+    { value: 'WARNING', label: 'Warning', color: 'yellow' },
+    { value: 'ERROR', label: 'Error', color: 'red' },
+    { value: 'DEBUG', label: 'Debug', color: 'gray' },
+  ];
+
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamation className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to access system logs.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && logs.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-24 bg-gray-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+          <div className="h-16 bg-gray-200 rounded-lg"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -163,19 +234,27 @@ const AdminLogs = () => {
           <div className="flex space-x-3">
             <button
               onClick={handleLoadLogs}
-              disabled={isLoading}
+              disabled={loading}
               className="btn btn-secondary flex items-center"
             >
-              <HiRefresh className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              <HiRefresh className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={handleClearLogs}
-              disabled={isLoading}
+              disabled={loading}
               className="btn btn-danger flex items-center"
             >
               <HiTrash className="h-5 w-5 mr-2" />
               Clear Logs
+            </button>
+            <button
+              onClick={handleDownloadLogs}
+              disabled={loading}
+              className="btn btn-primary flex items-center"
+            >
+              <HiDownload className="h-5 w-5 mr-2" />
+              Download
             </button>
           </div>
         </div>
@@ -221,7 +300,7 @@ const AdminLogs = () => {
               Search
             </label>
             <div className="relative">
-              <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              {/* HiSearch icon is not imported, so it's removed */}
               <input
                 type="text"
                 value={searchTerm}
@@ -254,7 +333,7 @@ const AdminLogs = () => {
               Log Entries ({filteredLogs.length})
             </h3>
             <div className="text-sm text-gray-500">
-              Showing {filteredLogs.length} of {logs.length} entries
+              Showing {filteredLogs.length} of {pagination.total} entries
             </div>
           </div>
         </div>
@@ -286,16 +365,27 @@ const AdminLogs = () => {
                     {formatDate(log.timestamp)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLevelColor(log.level)}`}>
-                      {getLevelIcon(log.level)}
-                      <span className="ml-1">{log.level}</span>
-                    </span>
+                    <div className="space-y-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLevelColor(log.level)}`}>
+                        {getLevelIcon(log.level)}
+                        <span className="ml-1">{log.level}</span>
+                      </span>
+                      {log.channel && log.channel !== log.level && (
+                        <div className="text-xs text-gray-500">
+                          Channel: {log.channel}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
                     {log.message}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900">
-                    {log.context ? (
+                    {log.context && Array.isArray(log.context) && log.context.length > 0 ? (
+                      <span className="text-gray-500">
+                        {log.context.length} items
+                      </span>
+                    ) : log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 ? (
                       <span className="text-gray-500">
                         {Object.keys(log.context).length} fields
                       </span>
@@ -316,6 +406,27 @@ const AdminLogs = () => {
             </tbody>
           </table>
         </div>
+        {pagination.last_page > 1 && (
+          <div className="px-6 py-4 flex justify-center items-center">
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page - 1 }))}
+              disabled={pagination.current_page === 1}
+              className="btn btn-secondary mr-2"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-700">
+              Page {pagination.current_page} of {pagination.last_page}
+            </span>
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page + 1 }))}
+              disabled={pagination.current_page === pagination.last_page}
+              className="btn btn-secondary ml-2"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Log Detail Modal */}
@@ -333,7 +444,7 @@ const AdminLogs = () => {
                 </button>
               </div>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Timestamp
@@ -349,6 +460,14 @@ const AdminLogs = () => {
                       <span className="ml-1">{selectedLog.level}</span>
                     </span>
                   </div>
+                  {selectedLog.channel && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Channel
+                      </label>
+                      <p className="text-sm text-gray-900">{selectedLog.channel}</p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -358,7 +477,7 @@ const AdminLogs = () => {
                     {selectedLog.message}
                   </p>
                 </div>
-                {selectedLog.context && (
+                {selectedLog.context && (Array.isArray(selectedLog.context) ? selectedLog.context.length > 0 : Object.keys(selectedLog.context).length > 0) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Context

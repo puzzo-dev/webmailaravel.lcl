@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
@@ -36,43 +36,163 @@ import {
   HiEye,
   HiCursorClick,
 } from 'react-icons/hi';
+import { analyticsService } from '../services/api';
+import { useSubscriptionError } from '../hooks/useSubscriptionError';
+import toast from 'react-hot-toast';
 import '../styles/animations.css';
 
 const SmartDashboard = () => {
   const navigate = useNavigate();
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const dispatch = useDispatch();
+  const { handleSubscriptionError } = useSubscriptionError();
   
-  // Mock data - replace with actual Redux state
+  // Redux state
+  const { isAuthenticated, user } = useSelector(state => state.auth);
   const campaigns = useSelector(state => state.campaigns?.campaigns || []);
   const senders = useSelector(state => state.senders?.senders || []);
   const domains = useSelector(state => state.domains?.domains || []);
+  
+  // Local state
+  const [loading, setLoading] = useState(true);
+  const [analyticsData, setAnalyticsData] = useState({
+    dashboard: {},
+    trending: {},
+    summary: {}
+  });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [selectedPeriod, setSelectedPeriod] = useState('7d');
 
   // Chart colors
   const chartColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
 
-  // Sample chart data - this would come from analytics API
-  const performanceData = [
-    { name: 'Jan', sent: 4000, delivered: 3800, opened: 1200, clicked: 240 },
-    { name: 'Feb', sent: 3000, delivered: 2900, opened: 900, clicked: 180 },
-    { name: 'Mar', sent: 2000, delivered: 1950, opened: 650, clicked: 130 },
-    { name: 'Apr', sent: 2780, delivered: 2700, opened: 810, clicked: 162 },
-    { name: 'May', sent: 1890, delivered: 1850, opened: 555, clicked: 111 },
-    { name: 'Jun', sent: 2390, delivered: 2300, opened: 690, clicked: 138 },
-  ];
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAnalyticsData();
+    }
+  }, [selectedPeriod, isAuthenticated]);
 
-  const campaignTypeData = [
-    { name: 'Newsletter', value: 45, color: '#8884d8' },
-    { name: 'Promotional', value: 30, color: '#82ca9d' },
-    { name: 'Transactional', value: 15, color: '#ffc658' },
-    { name: 'Welcome Series', value: 10, color: '#ff7c7c' },
-  ];
+  const fetchAnalyticsData = async () => {
+    try {
+      setLoading(true);
+      const [analyticsResponse, trendingResponse] = await Promise.all([
+        analyticsService.getAnalytics(),
+        analyticsService.getTrendingMetrics({ days: selectedPeriod === '7d' ? 7 : selectedPeriod === '30d' ? 30 : 90 })
+      ]);
+      
+      setAnalyticsData({
+        dashboard: analyticsResponse.data?.dashboard || {},
+        trending: trendingResponse.data || {},
+        summary: analyticsResponse.data?.summary || {}
+      });
+      
+      // Generate recent activity from analytics data
+      generateRecentActivity(analyticsResponse.data);
+    } catch (error) {
+      if (!handleSubscriptionError(error)) {
+        toast.error('Failed to load analytics data');
+        console.error('Analytics error:', error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const deviceData = [
-    { name: 'Desktop', value: 60 },
-    { name: 'Mobile', value: 35 },
-    { name: 'Tablet', value: 5 },
-  ];
+  const generateRecentActivity = (data) => {
+    const activities = [];
+    
+    // Add recent campaigns if available
+    if (data?.dashboard?.campaigns) {
+      const recentCampaigns = campaigns.slice(0, 3);
+      recentCampaigns.forEach(campaign => {
+        activities.push({
+          id: `campaign-${campaign.id}`,
+          type: 'campaign',
+          action: `Campaign ${campaign.status}`,
+          user: campaign.user?.email || 'You',
+          time: formatTimeAgo(campaign.created_at),
+          status: campaign.status === 'active' ? 'success' : campaign.status === 'failed' ? 'error' : 'warning',
+          icon: HiMail,
+        });
+      });
+    }
+    
+    // Add recent analytics events
+    if (data?.dashboard?.performance) {
+      const performance = data.dashboard.performance;
+      if (performance.total_emails_sent > 0) {
+        activities.push({
+          id: 'emails-sent',
+          type: 'analytics',
+          action: `${performance.total_emails_sent} emails sent`,
+          user: 'System',
+          time: 'Today',
+          status: 'success',
+          icon: HiInbox,
+        });
+      }
+    }
+    
+    setRecentActivity(activities.sort((a, b) => new Date(b.time) - new Date(a.time)));
+  };
+
+  const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+  };
+
+  // Generate performance data from analytics
+  const getPerformanceData = () => {
+    const performance = analyticsData.dashboard?.performance;
+    if (!performance) return [];
+
+    // Generate monthly data from trending metrics
+    const trending = analyticsData.trending?.campaigns || [];
+    return trending.map(item => ({
+      name: new Date(item.date).toLocaleDateString('en-US', { month: 'short' }),
+      sent: item.emails_sent || 0,
+      delivered: item.emails_delivered || 0,
+      opened: item.opens || 0,
+      clicked: item.clicks || 0,
+    }));
+  };
+
+  // Generate campaign type data
+  const getCampaignTypeData = () => {
+    const campaignsByType = campaigns.reduce((acc, campaign) => {
+      const type = campaign.type || 'Other';
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(campaignsByType).map(([type, count], index) => ({
+      name: type,
+      value: count,
+      color: chartColors[index % chartColors.length]
+    }));
+  };
+
+  // Generate device data from analytics
+  const getDeviceData = () => {
+    const performance = analyticsData.dashboard?.performance;
+    if (!performance) return [];
+
+    return [
+      { name: 'Desktop', value: performance.desktop_opens || 60 },
+      { name: 'Mobile', value: performance.mobile_opens || 35 },
+      { name: 'Tablet', value: performance.tablet_opens || 5 },
+    ];
+  };
 
   useEffect(() => {
     // Generate contextual suggestions based on system state
@@ -127,24 +247,37 @@ const SmartDashboard = () => {
       });
     }
     
-    // Performance suggestions
-    const lowPerformingCampaigns = campaigns.filter(c => 
-      c.open_rate < 15 || c.click_rate < 2
-    );
-    
-    if (lowPerformingCampaigns.length > 0) {
-      newSuggestions.push({
-        type: 'optimize_campaigns',
-        title: 'Optimize Campaign Performance',
-        description: `${lowPerformingCampaigns.length} campaign${lowPerformingCampaigns.length > 1 ? 's' : ''} with low engagement`,
-        action: () => navigate('/analytics'),
-        priority: 'low',
-        icon: HiTrendingDown,
-      });
+    // Performance suggestions based on analytics
+    const performance = analyticsData.dashboard?.performance;
+    if (performance) {
+      const avgOpenRate = performance.avg_open_rate || 0;
+      const avgClickRate = performance.avg_click_rate || 0;
+      
+      if (avgOpenRate < 15) {
+        newSuggestions.push({
+          type: 'optimize_opens',
+          title: 'Improve Open Rates',
+          description: `Your average open rate is ${avgOpenRate.toFixed(1)}%. Try better subject lines.`,
+          action: () => navigate('/analytics'),
+          priority: 'medium',
+          icon: HiEye,
+        });
+      }
+      
+      if (avgClickRate < 2) {
+        newSuggestions.push({
+          type: 'optimize_clicks',
+          title: 'Boost Click Rates',
+          description: `Your average click rate is ${avgClickRate.toFixed(1)}%. Improve your content.`,
+          action: () => navigate('/analytics'),
+          priority: 'low',
+          icon: HiCursorClick,
+        });
+      }
     }
     
     setSuggestions(newSuggestions);
-  }, [campaigns, senders, domains, navigate]);
+  }, [campaigns, senders, domains, analyticsData, navigate]);
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -164,6 +297,31 @@ const SmartDashboard = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-24 bg-gray-200 rounded-lg mb-6"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-80 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const performanceData = getPerformanceData();
+  const campaignTypeData = getCampaignTypeData();
+  const deviceData = getDeviceData();
+  const summary = analyticsData.summary;
+
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
@@ -175,9 +333,18 @@ const SmartDashboard = () => {
               Ready to send some amazing emails today?
             </p>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold">{campaigns.length}</div>
-            <div className="text-blue-100 text-sm">Active Campaigns</div>
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <div className="text-3xl font-bold">{summary.total_campaigns || campaigns.length}</div>
+              <div className="text-blue-100 text-sm">Active Campaigns</div>
+            </div>
+            <button
+              onClick={fetchAnalyticsData}
+              className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
+              title="Refresh data"
+            >
+              <HiRefresh className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </div>
@@ -222,7 +389,7 @@ const SmartDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Campaigns</p>
-              <p className="text-3xl font-bold text-gray-900 animate-scaleIn">{campaigns.length}</p>
+              <p className="text-3xl font-bold text-gray-900 animate-scaleIn">{summary.total_campaigns || campaigns.length}</p>
               <div className="flex items-center mt-1">
                 <HiTrendingUp className="h-3 w-3 text-green-500 mr-1" />
                 <span className="text-xs text-green-600 font-medium">+12% from last month</span>
@@ -268,7 +435,12 @@ const SmartDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Avg Open Rate</p>
-              <p className="text-2xl font-bold text-gray-900">24.5%</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {analyticsData.dashboard?.performance?.avg_open_rate ? 
+                  `${analyticsData.dashboard.performance.avg_open_rate.toFixed(1)}%` : 
+                  'N/A'
+                }
+              </p>
             </div>
           </div>
         </div>
@@ -287,47 +459,57 @@ const SmartDashboard = () => {
               <HiChartBar className="h-5 w-5 text-blue-600" />
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={performanceData}>
-              <defs>
-                <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
-                </linearGradient>
-                <linearGradient id="colorOpened" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="sent" 
-                stroke="#8884d8" 
-                fillOpacity={1} 
-                fill="url(#colorSent)" 
-                strokeWidth={2}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="opened" 
-                stroke="#82ca9d" 
-                fillOpacity={1} 
-                fill="url(#colorOpened)" 
-                strokeWidth={2}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {performanceData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={performanceData}>
+                <defs>
+                  <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorOpened" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#82ca9d" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="sent" 
+                  stroke="#8884d8" 
+                  fillOpacity={1} 
+                  fill="url(#colorSent)" 
+                  strokeWidth={2}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="opened" 
+                  stroke="#82ca9d" 
+                  fillOpacity={1} 
+                  fill="url(#colorOpened)" 
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiChartBar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No performance data available</p>
+                <p className="text-sm">Start sending campaigns to see metrics</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Campaign Types Distribution */}
@@ -341,36 +523,46 @@ const SmartDashboard = () => {
               <HiMail className="h-5 w-5 text-green-600" />
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={campaignTypeData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {campaignTypeData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Legend 
-                verticalAlign="bottom" 
-                height={36}
-                iconType="circle"
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {campaignTypeData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={campaignTypeData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {campaignTypeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  iconType="circle"
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiMail className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No campaigns yet</p>
+                <p className="text-sm">Create your first campaign to see distribution</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -390,43 +582,53 @@ const SmartDashboard = () => {
             </div>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={performanceData}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip 
-              contentStyle={{
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-              }}
-              formatter={(value, name) => [
-                name === 'opened' ? `${((value / performanceData.find(d => d.opened === value)?.sent || 1) * 100).toFixed(1)}%` :
-                name === 'clicked' ? `${((value / performanceData.find(d => d.clicked === value)?.opened || 1) * 100).toFixed(1)}%` :
-                value,
-                name === 'opened' ? 'Open Rate' : 'Click Rate'
-              ]}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="opened" 
-              stroke="#8884d8" 
-              strokeWidth={3}
-              dot={{ fill: '#8884d8', strokeWidth: 2, r: 6 }}
-              activeDot={{ r: 8, stroke: '#8884d8', strokeWidth: 2 }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="clicked" 
-              stroke="#82ca9d" 
-              strokeWidth={3}
-              dot={{ fill: '#82ca9d', strokeWidth: 2, r: 6 }}
-              activeDot={{ r: 8, stroke: '#82ca9d', strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {performanceData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={performanceData}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+                formatter={(value, name) => [
+                  name === 'opened' ? `${((value / performanceData.find(d => d.opened === value)?.sent || 1) * 100).toFixed(1)}%` :
+                  name === 'clicked' ? `${((value / performanceData.find(d => d.clicked === value)?.opened || 1) * 100).toFixed(1)}%` :
+                  value,
+                  name === 'opened' ? 'Open Rate' : 'Click Rate'
+                ]}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="opened" 
+                stroke="#8884d8" 
+                strokeWidth={3}
+                dot={{ fill: '#8884d8', strokeWidth: 2, r: 6 }}
+                activeDot={{ r: 8, stroke: '#8884d8', strokeWidth: 2 }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="clicked" 
+                stroke="#82ca9d" 
+                strokeWidth={3}
+                dot={{ fill: '#82ca9d', strokeWidth: 2, r: 6 }}
+                activeDot={{ r: 8, stroke: '#82ca9d', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-80 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <HiTrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>No engagement data available</p>
+              <p className="text-sm">Send campaigns to see engagement metrics</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent Activity */}
@@ -438,7 +640,7 @@ const SmartDashboard = () => {
               <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                 <activity.icon className="h-5 w-5 text-gray-400" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                  <p className="text-sm font-medium text-gray-900">{activity.action}</p>
                   <p className="text-xs text-gray-500">{activity.time}</p>
                 </div>
               </div>

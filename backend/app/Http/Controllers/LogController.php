@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Traits\FileResponseTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\File;
@@ -11,14 +11,14 @@ use Illuminate\Support\Facades\Log;
 
 class LogController extends Controller
 {
-    use FileResponseTrait;
+    use FileProcessingTrait;
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $logFiles = $this->getLogFiles();
+            $logFiles = $this->getLogFilesList();
             $selectedFile = $request->get('file', 'laravel.log');
             
             if (!in_array($selectedFile, $logFiles)) {
@@ -65,7 +65,7 @@ class LogController extends Controller
     public function show(Request $request, $logId): JsonResponse
     {
         try {
-            $logFiles = $this->getLogFiles();
+            $logFiles = $this->getLogFilesList();
             $selectedFile = $request->get('file', 'laravel.log');
             
             if (!in_array($selectedFile, $logFiles)) {
@@ -117,7 +117,7 @@ class LogController extends Controller
     public function destroy(Request $request, $logId): JsonResponse
     {
         try {
-            $logFiles = $this->getLogFiles();
+            $logFiles = $this->getLogFilesList();
             $selectedFile = $request->get('file', 'laravel.log');
             
             if (!in_array($selectedFile, $logFiles)) {
@@ -170,7 +170,7 @@ class LogController extends Controller
     public function clear(Request $request): JsonResponse
     {
         try {
-            $logFiles = $this->getLogFiles();
+            $logFiles = $this->getLogFilesList();
             $clearedCount = 0;
             
             foreach ($logFiles as $file) {
@@ -210,9 +210,101 @@ class LogController extends Controller
     }
 
     /**
+     * Get available log files (admin only)
+     */
+    public function getLogFiles(): JsonResponse
+    {
+        try {
+            if (!auth()->user()->hasRole('admin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Admin access required'
+                ], 403);
+            }
+
+            $logFiles = $this->getLogFilesList();
+            
+            Log::info('Log files listed', [
+                'user_id' => auth()->id(),
+                'files_count' => count($logFiles)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'files' => $logFiles
+                ],
+                'message' => 'Log files retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Log files list failed', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve log files'
+            ], 500);
+        }
+    }
+
+    /**
+     * Download log file (admin only)
+     */
+    public function download(Request $request, $filename): JsonResponse
+    {
+        try {
+            if (!auth()->user()->hasRole('admin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Admin access required'
+                ], 403);
+            }
+
+            $logPath = storage_path("logs/{$filename}");
+            
+            if (!File::exists($logPath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Log file not found'
+                ], 404);
+            }
+
+            Log::info('Log file downloaded', [
+                'user_id' => auth()->id(),
+                'filename' => $filename
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'filename' => $filename,
+                    'size' => File::size($logPath),
+                    'last_modified' => File::lastModified($logPath)
+                ],
+                'message' => 'Log file details retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Log file download failed', [
+                'user_id' => auth()->id(),
+                'filename' => $filename ?? 'unknown',
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve log file'
+            ], 500);
+        }
+    }
+
+    /**
      * Get available log files
      */
-    protected function getLogFiles(): array
+    protected function getLogFilesList(): array
     {
         $logPath = storage_path('logs');
         $files = File::files($logPath);

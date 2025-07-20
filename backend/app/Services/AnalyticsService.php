@@ -345,6 +345,378 @@ class AnalyticsService
             ]
         ];
     }
+
+    /**
+     * Get user growth analytics for admin dashboard
+     * 
+     * @param string $period Period for analysis (daily, weekly, monthly, yearly)
+     * @param int $limit Number of periods to analyze
+     * @return array
+     */
+    public function getUserGrowth(string $period = 'monthly', int $limit = 12): array
+    {
+        $now = now();
+        $growthData = [];
+        
+        switch ($period) {
+            case 'daily':
+                $growthData = $this->getDailyUserGrowth($now, $limit);
+                break;
+            case 'weekly':
+                $growthData = $this->getWeeklyUserGrowth($now, $limit);
+                break;
+            case 'monthly':
+                $growthData = $this->getMonthlyUserGrowth($now, $limit);
+                break;
+            case 'yearly':
+                $growthData = $this->getYearlyUserGrowth($now, $limit);
+                break;
+            default:
+                $growthData = $this->getMonthlyUserGrowth($now, $limit);
+        }
+
+        $totalUsers = User::count();
+        $activeUsers = User::where('is_active', true)->count();
+        $premiumUsers = User::whereHas('subscriptions', function($query) {
+            $query->where('status', 'active');
+        })->count();
+
+        // Calculate growth rates
+        $currentPeriod = $growthData['periods'][count($growthData['periods']) - 1] ?? 0;
+        $previousPeriod = $growthData['periods'][count($growthData['periods']) - 2] ?? 0;
+        $growthRate = $this->calculateGrowthRate($previousPeriod, $currentPeriod);
+
+        // Calculate average growth rate
+        $totalGrowth = 0;
+        $growthCount = 0;
+        for ($i = 1; $i < count($growthData['periods']); $i++) {
+            if ($growthData['periods'][$i - 1] > 0) {
+                $periodGrowth = $this->calculateGrowthRate($growthData['periods'][$i - 1], $growthData['periods'][$i]);
+                $totalGrowth += $periodGrowth;
+                $growthCount++;
+            }
+        }
+        $averageGrowthRate = $growthCount > 0 ? $totalGrowth / $growthCount : 0;
+
+        return [
+            'period' => $period,
+            'limit' => $limit,
+            'total_users' => $totalUsers,
+            'active_users' => $activeUsers,
+            'premium_users' => $premiumUsers,
+            'current_period_signups' => $currentPeriod,
+            'previous_period_signups' => $previousPeriod,
+            'growth_rate' => round($growthRate, 2),
+            'average_growth_rate' => round($averageGrowthRate, 2),
+            'periods' => $growthData['periods'],
+            'labels' => $growthData['labels'],
+            'cumulative_users' => $growthData['cumulative'],
+            'trend' => $growthRate > 0 ? 'up' : ($growthRate < 0 ? 'down' : 'stable'),
+            'summary' => [
+                'total_signups' => array_sum($growthData['periods']),
+                'average_signups_per_period' => count($growthData['periods']) > 0 ? round(array_sum($growthData['periods']) / count($growthData['periods']), 2) : 0,
+                'peak_signups' => max($growthData['periods']),
+                'lowest_signups' => min($growthData['periods'])
+            ]
+        ];
+    }
+
+    /**
+     * Get daily user growth data
+     */
+    private function getDailyUserGrowth(Carbon $endDate, int $limit): array
+    {
+        $startDate = $endDate->copy()->subDays($limit - 1);
+        
+        $dailySignups = User::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $periods = [];
+        $labels = [];
+        $cumulative = [];
+        $totalCumulative = User::where('created_at', '<', $startDate)->count();
+
+        for ($i = 0; $i < $limit; $i++) {
+            $date = $startDate->copy()->addDays($i);
+            $dateKey = $date->format('Y-m-d');
+            $count = $dailySignups->get($dateKey)?->count ?? 0;
+            
+            $periods[] = $count;
+            $labels[] = $date->format('M d');
+            $totalCumulative += $count;
+            $cumulative[] = $totalCumulative;
+        }
+
+        return [
+            'periods' => $periods,
+            'labels' => $labels,
+            'cumulative' => $cumulative
+        ];
+    }
+
+    /**
+     * Get weekly user growth data
+     */
+    private function getWeeklyUserGrowth(Carbon $endDate, int $limit): array
+    {
+        $startDate = $endDate->copy()->subWeeks($limit - 1);
+        
+        $weeklySignups = User::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('strftime("%Y-%W", created_at) as week, COUNT(*) as count')
+            ->groupBy('week')
+            ->orderBy('week')
+            ->get()
+            ->keyBy('week');
+
+        $periods = [];
+        $labels = [];
+        $cumulative = [];
+        $totalCumulative = User::where('created_at', '<', $startDate)->count();
+
+        for ($i = 0; $i < $limit; $i++) {
+            $weekStart = $startDate->copy()->addWeeks($i);
+            $weekKey = $weekStart->format('Y-W');
+            $count = $weeklySignups->get($weekKey)?->count ?? 0;
+            
+            $periods[] = $count;
+            $labels[] = $weekStart->format('M d');
+            $totalCumulative += $count;
+            $cumulative[] = $totalCumulative;
+        }
+
+        return [
+            'periods' => $periods,
+            'labels' => $labels,
+            'cumulative' => $cumulative
+        ];
+    }
+
+    /**
+     * Get monthly user growth data
+     */
+    private function getMonthlyUserGrowth(Carbon $endDate, int $limit): array
+    {
+        $startDate = $endDate->copy()->subMonths($limit - 1);
+        
+        $monthlySignups = User::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('strftime("%Y-%m", created_at) as year_month, COUNT(*) as count')
+            ->groupBy('year_month')
+            ->orderBy('year_month')
+            ->get()
+            ->keyBy('year_month');
+
+        $periods = [];
+        $labels = [];
+        $cumulative = [];
+        $totalCumulative = User::where('created_at', '<', $startDate)->count();
+
+        for ($i = 0; $i < $limit; $i++) {
+            $monthStart = $startDate->copy()->addMonths($i);
+            $yearMonthKey = $monthStart->format('Y-m');
+            $count = $monthlySignups->get($yearMonthKey)?->count ?? 0;
+            
+            $periods[] = $count;
+            $labels[] = $monthStart->format('M Y');
+            $totalCumulative += $count;
+            $cumulative[] = $totalCumulative;
+        }
+
+        return [
+            'periods' => $periods,
+            'labels' => $labels,
+            'cumulative' => $cumulative
+        ];
+    }
+
+    /**
+     * Get yearly user growth data
+     */
+    private function getYearlyUserGrowth(Carbon $endDate, int $limit): array
+    {
+        $startDate = $endDate->copy()->subYears($limit - 1);
+        
+        $yearlySignups = User::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('strftime("%Y", created_at) as year, COUNT(*) as count')
+            ->groupBy('year')
+            ->orderBy('year')
+            ->get()
+            ->keyBy('year');
+
+        $periods = [];
+        $labels = [];
+        $cumulative = [];
+        $totalCumulative = User::where('created_at', '<', $startDate)->count();
+
+        for ($i = 0; $i < $limit; $i++) {
+            $yearStart = $startDate->copy()->addYears($i);
+            $year = $yearStart->format('Y');
+            $count = $yearlySignups->get($year)?->count ?? 0;
+            
+            $periods[] = $count;
+            $labels[] = $yearStart->format('Y');
+            $totalCumulative += $count;
+            $cumulative[] = $totalCumulative;
+        }
+
+        return [
+            'periods' => $periods,
+            'labels' => $labels,
+            'cumulative' => $cumulative
+        ];
+    }
+
+    /**
+     * Get campaign performance analytics for admin dashboard
+     * 
+     * @param array $params Query parameters (period, limit, campaign_id, etc.)
+     * @return array
+     */
+    public function getCampaignPerformance(array $params = []): array
+    {
+        $period = $params['period'] ?? 'monthly';
+        $limit = $params['limit'] ?? 12;
+        $campaignId = $params['campaign_id'] ?? null;
+        
+        $now = now();
+        $startDate = $now->copy()->subMonths($limit - 1);
+        
+        $query = Campaign::query();
+        
+        // Filter by specific campaign if provided
+        if ($campaignId) {
+            $query->where('id', $campaignId);
+        }
+        
+        // Get campaigns within the date range
+        $campaigns = $query->whereBetween('created_at', [$startDate, $now])
+            ->with(['user', 'sender'])
+            ->get();
+        
+        // Calculate performance metrics
+        $totalCampaigns = $campaigns->count();
+        $activeCampaigns = $campaigns->where('status', 'RUNNING')->count();
+        $completedCampaigns = $campaigns->where('status', 'COMPLETED')->count();
+        $failedCampaigns = $campaigns->where('status', 'FAILED')->count();
+        
+        $totalEmailsSent = $campaigns->sum('total_sent');
+        $totalEmailsDelivered = $campaigns->sum('emails_delivered');
+        $totalOpens = $campaigns->sum('opens');
+        $totalClicks = $campaigns->sum('clicks');
+        $totalBounces = $campaigns->sum('bounces');
+        $totalComplaints = $campaigns->sum('complaints');
+        
+        // Calculate rates
+        $deliveryRate = $totalEmailsSent > 0 ? ($totalEmailsDelivered / $totalEmailsSent) * 100 : 0;
+        $openRate = $totalEmailsDelivered > 0 ? ($totalOpens / $totalEmailsDelivered) * 100 : 0;
+        $clickRate = $totalEmailsDelivered > 0 ? ($totalClicks / $totalEmailsDelivered) * 100 : 0;
+        $bounceRate = $totalEmailsSent > 0 ? ($totalBounces / $totalEmailsSent) * 100 : 0;
+        $complaintRate = $totalEmailsSent > 0 ? ($totalComplaints / $totalEmailsSent) * 100 : 0;
+        
+        // Get performance by period
+        $performanceByPeriod = $this->getCampaignPerformanceByPeriod($campaigns, $period, $limit);
+        
+        // Get top performing campaigns
+        $topCampaigns = $campaigns->sortByDesc('opens')
+            ->take(5)
+            ->map(function ($campaign) {
+                return [
+                    'id' => $campaign->id,
+                    'name' => $campaign->name,
+                    'user' => $campaign->user->name ?? 'Unknown',
+                    'status' => $campaign->status,
+                    'emails_sent' => $campaign->total_sent,
+                    'opens' => $campaign->opens,
+                    'clicks' => $campaign->clicks,
+                    'open_rate' => $campaign->open_rate,
+                    'click_rate' => $campaign->click_rate,
+                    'created_at' => $campaign->created_at->format('Y-m-d H:i:s')
+                ];
+            });
+        
+        return [
+            'summary' => [
+                'total_campaigns' => $totalCampaigns,
+                'active_campaigns' => $activeCampaigns,
+                'completed_campaigns' => $completedCampaigns,
+                'failed_campaigns' => $failedCampaigns,
+                'total_emails_sent' => $totalEmailsSent,
+                'total_emails_delivered' => $totalEmailsDelivered,
+                'total_opens' => $totalOpens,
+                'total_clicks' => $totalClicks,
+                'total_bounces' => $totalBounces,
+                'total_complaints' => $totalComplaints
+            ],
+            'rates' => [
+                'delivery_rate' => round($deliveryRate, 2),
+                'open_rate' => round($openRate, 2),
+                'click_rate' => round($clickRate, 2),
+                'bounce_rate' => round($bounceRate, 2),
+                'complaint_rate' => round($complaintRate, 2)
+            ],
+            'performance_by_period' => $performanceByPeriod,
+            'top_campaigns' => $topCampaigns,
+            'period' => $period,
+            'limit' => $limit
+        ];
+    }
+    
+    /**
+     * Get campaign performance data by period
+     */
+    private function getCampaignPerformanceByPeriod($campaigns, string $period, int $limit): array
+    {
+        $now = now();
+        $startDate = $now->copy()->subMonths($limit - 1);
+        
+        $periods = [];
+        $labels = [];
+        $emailsSent = [];
+        $opens = [];
+        $clicks = [];
+        
+        for ($i = 0; $i < $limit; $i++) {
+            $periodStart = $startDate->copy()->addMonths($i);
+            $periodEnd = $periodStart->copy()->addMonth();
+            
+            $periodCampaigns = $campaigns->filter(function ($campaign) use ($periodStart, $periodEnd) {
+                return $campaign->created_at >= $periodStart && $campaign->created_at < $periodEnd;
+            });
+            
+            $periods[] = $periodCampaigns->count();
+            $labels[] = $periodStart->format('M Y');
+            $emailsSent[] = $periodCampaigns->sum('total_sent');
+            $opens[] = $periodCampaigns->sum('opens');
+            $clicks[] = $periodCampaigns->sum('clicks');
+        }
+        
+        return [
+            'periods' => $periods,
+            'labels' => $labels,
+            'emails_sent' => $emailsSent,
+            'opens' => $opens,
+            'clicks' => $clicks
+        ];
+    }
+
+    /**
+     * Get deliverability stats (alias for getDeliverabilityAnalytics)
+     */
+    public function getDeliverabilityStats(string $timeRange = '7d'): array
+    {
+        return $this->getDeliverabilityAnalytics();
+    }
+
+    /**
+     * Get revenue metrics (alias for getRevenueAnalytics)
+     */
+    public function getRevenueMetrics(string $timeRange = '30d'): array
+    {
+        return $this->getRevenueAnalytics();
+    }
 } 
  
  

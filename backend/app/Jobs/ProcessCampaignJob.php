@@ -21,16 +21,14 @@ class ProcessCampaignJob implements ShouldQueue
 
     protected $campaignId;
     protected $batchSize;
-    protected $delay;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(int $campaignId, int $batchSize = 100, int $delay = 0)
+    public function __construct(int $campaignId, int $batchSize = 100)
     {
         $this->campaignId = $campaignId;
         $this->batchSize = $batchSize;
-        $this->delay = $delay;
     }
 
     /**
@@ -45,7 +43,6 @@ class ProcessCampaignJob implements ShouldQueue
                 'campaign_id' => $this->campaignId,
                 'campaign_name' => $campaign->name,
                 'batch_size' => $this->batchSize,
-                'delay' => $this->delay
             ]);
 
             // Check if campaign is still active
@@ -58,7 +55,7 @@ class ProcessCampaignJob implements ShouldQueue
             }
 
             // Process campaign
-            $result = $campaignService->processCampaign($campaign, $this->batchSize, $this->delay);
+            $result = $campaignService->processCampaign($campaign, $this->batchSize);
 
             Log::info('Campaign processed successfully', [
                 'campaign_id' => $this->campaignId,

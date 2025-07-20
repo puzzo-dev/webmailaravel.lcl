@@ -68,7 +68,7 @@ export const deleteAllNotifications = createAsyncThunk(
 );
 
 const initialState = {
-  notifications: [],
+  notifications: [], // Ensure this is always an array
   unreadCount: 0,
   isLoading: false,
   error: null,
@@ -82,12 +82,19 @@ const notificationsSlice = createSlice({
       state.error = null;
     },
     addNotification: (state, action) => {
+      if (!Array.isArray(state.notifications)) {
+        state.notifications = [];
+      }
       state.notifications.unshift(action.payload);
       if (!action.payload.read_at) {
         state.unreadCount += 1;
       }
     },
     updateNotification: (state, action) => {
+      if (!Array.isArray(state.notifications)) {
+        state.notifications = [];
+        return;
+      }
       const index = state.notifications.findIndex(n => n.id === action.payload.id);
       if (index !== -1) {
         const wasUnread = !state.notifications[index].read_at;
@@ -103,6 +110,10 @@ const notificationsSlice = createSlice({
       }
     },
     removeNotification: (state, action) => {
+      if (!Array.isArray(state.notifications)) {
+        state.notifications = [];
+        return;
+      }
       const notification = state.notifications.find(n => n.id === action.payload);
       if (notification && !notification.read_at) {
         state.unreadCount = Math.max(0, state.unreadCount - 1);
@@ -123,7 +134,8 @@ const notificationsSlice = createSlice({
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.notifications = action.payload.data || action.payload;
+        const notifications = action.payload.data || action.payload || [];
+        state.notifications = Array.isArray(notifications) ? notifications : [];
         state.unreadCount = state.notifications.filter(n => !n.read_at).length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
@@ -137,6 +149,10 @@ const notificationsSlice = createSlice({
       })
       .addCase(markNotificationAsRead.fulfilled, (state, action) => {
         state.isLoading = false;
+        if (!Array.isArray(state.notifications)) {
+          state.notifications = [];
+          return;
+        }
         const updatedNotification = action.payload.data || action.payload;
         const index = state.notifications.findIndex(n => n.id === updatedNotification.id);
         if (index !== -1) {
@@ -158,6 +174,11 @@ const notificationsSlice = createSlice({
       })
       .addCase(markAllNotificationsAsRead.fulfilled, (state, action) => {
         state.isLoading = false;
+        if (!Array.isArray(state.notifications)) {
+          state.notifications = [];
+          state.unreadCount = 0;
+          return;
+        }
         state.notifications = state.notifications.map(n => ({
           ...n,
           read_at: n.read_at || new Date().toISOString()
@@ -175,6 +196,10 @@ const notificationsSlice = createSlice({
       })
       .addCase(deleteNotification.fulfilled, (state, action) => {
         state.isLoading = false;
+        if (!Array.isArray(state.notifications)) {
+          state.notifications = [];
+          return;
+        }
         const notification = state.notifications.find(n => n.id === action.payload);
         if (notification && !notification.read_at) {
           state.unreadCount = Math.max(0, state.unreadCount - 1);

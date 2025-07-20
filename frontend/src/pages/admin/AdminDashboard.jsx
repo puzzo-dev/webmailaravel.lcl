@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { adminService } from '../../services/api';
+import { adminService, analyticsService } from '../../services/api';
 import toast from 'react-hot-toast';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
 import {
   HiUsers,
   HiMail,
@@ -28,7 +45,6 @@ import {
   HiPlay,
   HiPause,
   HiStop,
-  HiExclamation,
 } from 'react-icons/hi';
 
 const AdminDashboard = () => {
@@ -42,6 +58,12 @@ const AdminDashboard = () => {
   });
   const [systemStatus, setSystemStatus] = useState({});
   const [recentActivities, setRecentActivities] = useState([]);
+  const [analyticsData, setAnalyticsData] = useState({
+    user_growth: [],
+    campaign_performance: [],
+    deliverability_stats: {},
+    revenue_metrics: {},
+  });
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -55,15 +77,23 @@ const AdminDashboard = () => {
       setLoading(true);
       const [dashboardResponse, analyticsResponse] = await Promise.all([
         adminService.getDashboard(),
-        adminService.getAnalytics({ period: selectedPeriod })
+        analyticsService.getAnalytics({ period: selectedPeriod })
       ]);
       
       setDashboardData(dashboardResponse.data);
+      // Ensure analytics data has the expected structure
+      const analyticsData = analyticsResponse.data || {};
+      setAnalyticsData({
+        user_growth: Array.isArray(analyticsData.user_growth) ? analyticsData.user_growth : [],
+        campaign_performance: Array.isArray(analyticsData.campaign_performance) ? analyticsData.campaign_performance : [],
+        deliverability_stats: analyticsData.deliverability_stats || {},
+        revenue_metrics: analyticsData.revenue_metrics || {},
+      });
       
       // Generate recent activities from the data
       const activities = generateRecentActivities(
-        dashboardResponse.data.recent_users,
-        dashboardResponse.data.recent_campaigns
+        dashboardResponse.data.recent_users || [],
+        dashboardResponse.data.recent_campaigns || []
       );
       setRecentActivities(activities);
     } catch (error) {
@@ -86,8 +116,13 @@ const AdminDashboard = () => {
   const generateRecentActivities = (users, campaigns) => {
     const activities = [];
     
+    // Ensure users and campaigns are arrays
+    const safeUsers = Array.isArray(users) ? users : [];
+    const safeCampaigns = Array.isArray(campaigns) ? campaigns : [];
+    
     // Add recent user registrations
-    users.slice(0, 3).forEach((user, index) => {
+    safeUsers.slice(0, 3).forEach((user, index) => {
+      if (user && user.id && user.email) {
       activities.push({
         id: `user-${user.id}`,
         type: 'user',
@@ -96,10 +131,12 @@ const AdminDashboard = () => {
         time: formatTimeAgo(user.created_at),
         status: 'success',
       });
+      }
     });
 
     // Add recent campaigns
-    campaigns.slice(0, 2).forEach((campaign, index) => {
+    safeCampaigns.slice(0, 2).forEach((campaign, index) => {
+      if (campaign && campaign.id) {
       activities.push({
         id: `campaign-${campaign.id}`,
         type: 'campaign',
@@ -108,13 +145,19 @@ const AdminDashboard = () => {
         time: formatTimeAgo(campaign.created_at),
         status: campaign.status === 'active' ? 'success' : campaign.status === 'failed' ? 'error' : 'warning',
       });
+      }
     });
 
     return activities.sort((a, b) => new Date(b.time) - new Date(a.time));
   };
 
   const formatTimeAgo = (dateString) => {
+    if (!dateString) return 'Unknown';
+    
     const date = new Date(dateString);
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
     
@@ -127,110 +170,6 @@ const AdminDashboard = () => {
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
-
-  const systemStats = [
-    {
-      name: 'Total Users',
-      value: dashboardData.stats.total_users || 0,
-      change: '+12%',
-      changeType: 'increase',
-      icon: HiUsers,
-      color: 'blue',
-      href: '/admin/users',
-    },
-    {
-      name: 'Total Campaigns',
-      value: dashboardData.stats.total_campaigns || 0,
-      change: '+5%',
-      changeType: 'increase',
-      icon: HiMail,
-      color: 'green',
-      href: '/admin/campaigns',
-    },
-    {
-      name: 'Active Campaigns',
-      value: dashboardData.stats.active_campaigns || 0,
-      change: '+8%',
-      changeType: 'increase',
-      icon: HiPlay,
-      color: 'yellow',
-      href: '/admin/campaigns',
-    },
-    {
-      name: 'Emails Sent',
-      value: dashboardData.stats.total_emails_sent || 0,
-      change: '+23%',
-      changeType: 'increase',
-      icon: HiMail,
-      color: 'purple',
-      href: '/admin/analytics',
-    },
-    {
-      name: 'Avg Open Rate',
-      value: `${Math.round(dashboardData.stats.avg_open_rate || 0)}%`,
-      change: '+2%',
-      changeType: 'increase',
-      icon: HiEye,
-      color: 'green',
-      href: '/admin/analytics',
-    },
-    {
-      name: 'Avg Click Rate',
-      value: `${Math.round(dashboardData.stats.avg_click_rate || 0)}%`,
-      change: '+1%',
-      changeType: 'increase',
-      icon: HiTrendingUp,
-      color: 'indigo',
-      href: '/admin/analytics',
-    },
-  ];
-
-  const quickActions = [
-    {
-      name: 'Add User',
-      description: 'Create a new user account',
-      icon: HiUsers,
-      href: '/admin/users/new',
-      color: 'blue',
-    },
-    {
-      name: 'Create Campaign',
-      description: 'Start a new email campaign',
-      icon: HiMail,
-      href: '/campaigns/new',
-      color: 'green',
-    },
-    {
-      name: 'System Settings',
-      description: 'Configure system parameters',
-      icon: HiCog,
-      href: '/admin/settings',
-      color: 'gray',
-    },
-    {
-      name: 'View Logs',
-      description: 'Check system activity logs',
-      icon: HiDocumentText,
-      href: '/admin/logs',
-      color: 'orange',
-    },
-    {
-      name: 'Billing Overview',
-      description: 'Manage subscriptions and payments',
-      icon: HiCurrencyDollar,
-      href: '/admin/billing',
-      color: 'yellow',
-    },
-    {
-      name: 'Security Audit',
-      description: 'Review security settings and access',
-      icon: HiShieldCheck,
-      href: '/admin/security',
-      color: 'red',
-    },
-  ];
-
-  // recentActivities is now populated from live data in fetchDashboardData
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -262,17 +201,207 @@ const AdminDashboard = () => {
     }
   };
 
+  // Calculate percentage changes based on analytics data
+  const calculatePercentageChange = (current, previous) => {
+    if (!previous || previous === 0) return { change: 'N/A', changeType: 'neutral' };
+    const change = ((current - previous) / previous) * 100;
+    return {
+      change: `${change >= 0 ? '+' : ''}${Math.round(change)}%`,
+      changeType: change >= 0 ? 'increase' : 'decrease'
+    };
+  };
+
+  // Calculate period-over-period change
+  const calculatePeriodChange = (data, field = 'users') => {
+    if (!Array.isArray(data) || data.length < 2) {
+      return { change: 'N/A', changeType: 'neutral' };
+    }
+    
+    // Get the most recent period and the previous period
+    const currentPeriod = data[data.length - 1];
+    const previousPeriod = data[data.length - 2];
+    
+    if (!currentPeriod || !previousPeriod) {
+      return { change: 'N/A', changeType: 'neutral' };
+    }
+    
+    return calculatePercentageChange(
+      currentPeriod[field] || 0,
+      previousPeriod[field] || 0
+    );
+  };
+
+
+
+  const quickActions = [
+    {
+      name: 'Add User',
+      description: 'Create a new user account',
+      icon: HiUsers,
+      href: '/admin/users/new',
+      color: 'blue',
+    },
+    {
+      name: 'Create Campaign',
+      description: 'Start a new email campaign',
+      icon: HiMail,
+      href: '/campaigns/new',
+      color: 'green',
+    },
+    {
+      name: 'System Settings',
+      description: 'Configure system settings',
+      icon: HiCog,
+      href: '/admin/system',
+      color: 'gray',
+    },
+    {
+      name: 'View Logs',
+      description: 'Check system logs',
+      icon: HiDocumentText,
+      href: '/admin/logs',
+      color: 'yellow',
+    },
+  ];
+
+  // Chart data generation functions
+  const getUserGrowthData = () => {
+    const growth = analyticsData.user_growth || [];
+    // Ensure growth is an array before calling map
+    if (!Array.isArray(growth)) {
+      return [];
+    }
+    return growth.map(item => ({
+      name: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      users: item.count || 0,
+    }));
+  };
+
+  const getCampaignPerformanceData = () => {
+    const performance = analyticsData.campaign_performance || [];
+    // Ensure performance is an array before calling map
+    if (!Array.isArray(performance)) {
+      return [];
+    }
+    return performance.map(item => ({
+      name: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      campaigns: item.count || 0,
+      emails_sent: item.emails_sent || 0,
+      opens: item.opens || 0,
+      clicks: item.clicks || 0,
+    }));
+  };
+
+  const getDeliverabilityData = () => {
+    const stats = analyticsData.deliverability_stats || {};
+    // Ensure stats is an object
+    if (typeof stats !== 'object' || stats === null) {
+      return [];
+    }
+    return [
+      { name: 'Delivered', value: stats.delivery_rate || 0, color: '#10b981' },
+      { name: 'Bounced', value: stats.bounce_rate || 0, color: '#ef4444' },
+      { name: 'Complaints', value: stats.complaint_rate || 0, color: '#f59e0b' },
+    ];
+  };
+
+  const getRevenueData = () => {
+    const revenue = analyticsData.revenue_metrics || {};
+    // Ensure revenue is an object
+    if (typeof revenue !== 'object' || revenue === null) {
+      return [];
+    }
+    return [
+      { name: 'Total Revenue', value: revenue.total || 0, color: '#10b981' },
+      { name: 'Monthly Revenue', value: revenue.monthly || 0, color: '#3b82f6' },
+      { name: 'Weekly Revenue', value: revenue.weekly || 0, color: '#8b5cf6' },
+    ];
+  };
+
+  // Get growth data for calculations
+  const userGrowthData = getUserGrowthData();
+  const campaignPerformanceData = getCampaignPerformanceData();
+
+  // Calculate user growth percentage
+  const userGrowthChange = calculatePeriodChange(userGrowthData, 'users');
+
+  // Calculate campaign performance percentage
+  const campaignPerformanceChange = calculatePeriodChange(campaignPerformanceData, 'emails_sent');
+
+  // Calculate open rate change
+  const openRateChange = calculatePeriodChange(campaignPerformanceData, 'opens');
+
+  // Calculate click rate change
+  const clickRateChange = calculatePeriodChange(campaignPerformanceData, 'clicks');
+
+  const systemStats = [
+    {
+      name: 'Total Users',
+      value: dashboardData.stats?.total_users || 0,
+      change: userGrowthChange.change,
+      changeType: userGrowthChange.changeType,
+      icon: HiUsers,
+      color: 'blue',
+      href: '/admin/users',
+    },
+    {
+      name: 'Total Campaigns',
+      value: dashboardData.stats?.total_campaigns || 0,
+      change: campaignPerformanceChange.change,
+      changeType: campaignPerformanceChange.changeType,
+      icon: HiMail,
+      color: 'green',
+      href: '/admin/campaigns',
+    },
+    {
+      name: 'Active Campaigns',
+      value: dashboardData.stats?.active_campaigns || 0,
+      change: campaignPerformanceChange.change,
+      changeType: campaignPerformanceChange.changeType,
+      icon: HiPlay,
+      color: 'yellow',
+      href: '/admin/campaigns',
+    },
+    {
+      name: 'Emails Sent',
+      value: dashboardData.stats?.total_emails_sent || 0,
+      change: campaignPerformanceChange.change,
+      changeType: campaignPerformanceChange.changeType,
+      icon: HiMail,
+      color: 'purple',
+      href: '/admin/analytics',
+    },
+    {
+      name: 'Avg Open Rate',
+      value: `${Math.round(dashboardData.stats?.avg_open_rate || 0)}%`,
+      change: openRateChange.change,
+      changeType: openRateChange.changeType,
+      icon: HiEye,
+      color: 'green',
+      href: '/admin/analytics',
+    },
+    {
+      name: 'Avg Click Rate',
+      value: `${Math.round(dashboardData.stats?.avg_click_rate || 0)}%`,
+      change: clickRateChange.change,
+      changeType: clickRateChange.changeType,
+      icon: HiTrendingUp,
+      color: 'indigo',
+      href: '/admin/analytics',
+    },
+  ];
+
   // Check if user has admin access
   if (user?.role !== 'admin') {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
-            <HiExclamationTriangle className="h-5 w-5 text-red-400" />
+            <HiExclamation className="h-5 w-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>You need admin privileges to access the admin dashboard.</p>
+                <p>You need admin privileges to access the dashboard.</p>
               </div>
             </div>
           </div>
@@ -283,17 +412,19 @@ const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <div className="bg-gradient-to-r from-gray-300 to-gray-400 rounded-lg h-32 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-gray-200 rounded-lg h-24"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-24 bg-gray-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-200 rounded-lg h-64"></div>
-            <div className="bg-gray-200 rounded-lg h-64"></div>
+          <div className="h-16 bg-gray-200 rounded-lg"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
+            ))}
           </div>
         </div>
       </div>
@@ -345,7 +476,9 @@ const AdminDashboard = () => {
                       {stat.value}
                     </div>
                     <div className={`ml-2 flex items-baseline text-sm font-semibold ${
-                      stat.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
+                      stat.changeType === 'increase' ? 'text-green-600' : 
+                      stat.changeType === 'decrease' ? 'text-red-600' : 
+                      'text-gray-500'
                     }`}>
                       {stat.change}
                     </div>
@@ -459,6 +592,220 @@ const AdminDashboard = () => {
             <div className="text-sm text-gray-500">Disk Usage</div>
             <div className="text-xs text-gray-400 mt-1">{systemStatus.storage?.free_space || 'N/A'} free</div>
           </div>
+        </div>
+      </div>
+
+      {/* Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* User Growth Chart */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">User Growth</h3>
+              <p className="text-sm text-gray-500">New user registrations over time</p>
+            </div>
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <HiUsers className="h-5 w-5 text-blue-600" />
+            </div>
+          </div>
+          {getUserGrowthData().length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={getUserGrowthData()}>
+                <defs>
+                  <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="users" 
+                  stroke="#3b82f6" 
+                  fillOpacity={1} 
+                  fill="url(#colorUsers)" 
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiUsers className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No user growth data available</p>
+                <p className="text-sm">User registration data will appear here</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Campaign Performance Chart */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Campaign Performance</h3>
+              <p className="text-sm text-gray-500">Email metrics over time</p>
+            </div>
+            <div className="p-2 bg-green-100 rounded-lg">
+              <HiMail className="h-5 w-5 text-green-600" />
+            </div>
+          </div>
+          {getCampaignPerformanceData().length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={getCampaignPerformanceData()}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="emails_sent" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3}
+                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#3b82f6', strokeWidth: 2 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="opens" 
+                  stroke="#10b981" 
+                  strokeWidth={3}
+                  dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 2 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="clicks" 
+                  stroke="#f59e0b" 
+                  strokeWidth={3}
+                  dot={{ fill: '#f59e0b', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#f59e0b', strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiMail className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No campaign performance data available</p>
+                <p className="text-sm">Campaign metrics will appear here</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Additional Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Deliverability Stats */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Deliverability Stats</h3>
+              <p className="text-sm text-gray-500">Email delivery performance</p>
+            </div>
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <HiChartBar className="h-5 w-5 text-purple-600" />
+            </div>
+          </div>
+          {getDeliverabilityData().length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={getDeliverabilityData()}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value) => [`${value.toFixed(2)}%`, 'Rate']}
+                />
+                <Bar dataKey="value" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiChartBar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No deliverability data available</p>
+                <p className="text-sm">Delivery metrics will appear here</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Revenue Metrics */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Revenue Overview</h3>
+              <p className="text-sm text-gray-500">Revenue metrics breakdown</p>
+            </div>
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <HiCurrencyDollar className="h-5 w-5 text-yellow-600" />
+            </div>
+          </div>
+          {getRevenueData().length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={getRevenueData()}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {getRevenueData().map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value) => [`$${value.toFixed(2)}`, 'Revenue']}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36}
+                  iconType="circle"
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiCurrencyDollar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No revenue data available</p>
+                <p className="text-sm">Revenue metrics will appear here</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Auth\AuthenticationException;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\JWTFromCookie;
+use App\Http\Middleware\CheckActiveSubscription;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Register aliases for route-specific middleware
         $middleware->alias([
             'role' => CheckRole::class,
+            'subscription' => CheckActiveSubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

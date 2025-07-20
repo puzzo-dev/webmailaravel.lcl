@@ -6,7 +6,7 @@ import {
   HiMail,
   HiGlobe,
   HiBell,
-  HiExclamationTriangle,
+  HiExclamation,
   HiCheckCircle,
   HiRefresh,
 } from 'react-icons/hi';
@@ -159,7 +159,7 @@ const SystemSettings = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
-            <HiExclamationTriangle className="h-5 w-5 text-red-400" />
+            <HiExclamation className="h-5 w-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
               <div className="mt-2 text-sm text-red-700">
@@ -194,7 +194,7 @@ const SystemSettings = () => {
             {message.type === 'success' ? (
               <HiCheckCircle className="h-5 w-5 text-green-400" />
             ) : (
-              <HiExclamationTriangle className="h-5 w-5 text-red-400" />
+              <HiExclamation className="h-5 w-5 text-red-400" />
             )}
             <div className="ml-3">
               <p className="text-sm font-medium">{message.text}</p>

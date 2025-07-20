@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   HiServer,
   HiChartBar,
@@ -17,115 +17,110 @@ import {
   HiClock,
   HiGlobe,
 } from 'react-icons/hi';
+import { adminService } from '../../services/api';
+import toast from 'react-hot-toast';
 import { formatDate, formatNumber } from '../../utils/helpers';
 
 const AdminPowerMTA = () => {
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [activeTab, setActiveTab] = useState('status');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedDomain, setSelectedDomain] = useState('');
+  const [powerMTAStatus, setPowerMTAStatus] = useState({});
+  const [fblAccounts, setFblAccounts] = useState([]);
+  const [diagnosticFiles, setDiagnosticFiles] = useState([]);
+  const [reputationSummary, setReputationSummary] = useState({});
 
-  // Mock data - replace with actual API calls
-  const powerMTAStatus = {
-    status: 'running',
-    version: '4.5r11',
-    uptime: '15 days, 3 hours, 45 minutes',
-    total_connections: 1250,
-    active_connections: 89,
-    messages_sent_today: 45000,
-    messages_failed_today: 125,
-    average_delivery_rate: 98.5,
-    last_restart: '2024-01-01T00:00:00Z',
-  };
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadPowerMTAData();
+    }
+  }, [user]);
 
-  const fblAccounts = [
-    {
-      id: 1,
-      domain: 'example.com',
-      email: 'fbl@example.com',
-      status: 'active',
-      last_processed: '2024-01-15T10:30:45Z',
-      complaints_today: 5,
-      total_complaints: 125,
-    },
-    {
-      id: 2,
-      domain: 'newsletter.com',
-      email: 'fbl@newsletter.com',
-      status: 'active',
-      last_processed: '2024-01-15T09:15:30Z',
-      complaints_today: 2,
-      total_complaints: 89,
-    },
-  ];
-
-  const diagnosticFiles = [
-    {
-      filename: 'diagnostic_2024-01-15.csv',
-      size: 2048576, // 2MB
-      date: '2024-01-15',
-      records: 15000,
-      status: 'processed',
-    },
-    {
-      filename: 'diagnostic_2024-01-14.csv',
-      size: 1892352, // 1.8MB
-      date: '2024-01-14',
-      records: 14200,
-      status: 'processed',
-    },
-  ];
-
-  const reputationSummary = {
-    total_domains: 25,
-    average_reputation: 92.5,
-    high_reputation_domains: 18,
-    medium_reputation_domains: 5,
-    low_reputation_domains: 2,
-    reputation_trend: 'up',
-    top_domains: [
-      { domain: 'example.com', reputation: 98.5, trend: 'up' },
-      { domain: 'newsletter.com', reputation: 95.2, trend: 'up' },
-      { domain: 'marketing.com', reputation: 89.1, trend: 'down' },
-    ],
+  const loadPowerMTAData = async () => {
+    try {
+      setLoading(true);
+      const [statusResponse, fblResponse, diagnosticResponse, reputationResponse] = await Promise.all([
+        adminService.getPowerMTAStatus(),
+        adminService.getPowerMTAFBLAccounts(),
+        adminService.getPowerMTADiagnosticFiles(),
+        adminService.getPowerMTAReputationSummary()
+      ]);
+      
+      setPowerMTAStatus(statusResponse.data);
+      setFblAccounts(fblResponse.data.accounts || []);
+      setDiagnosticFiles(diagnosticResponse.data.files || []);
+      setReputationSummary(reputationResponse.data);
+    } catch (error) {
+      toast.error('Failed to load PowerMTA data');
+      console.error('PowerMTA data error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRefreshStatus = async () => {
-    setIsLoading(true);
     try {
-      // Implement refresh status API call
-      console.log('Refreshing PowerMTA status');
+      setLoading(true);
+      await loadPowerMTAData();
+      toast.success('PowerMTA status refreshed');
     } catch (error) {
-      console.error('Failed to refresh status:', error);
+      toast.error('Failed to refresh PowerMTA status');
+      console.error('Refresh status error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleAnalyzeReputation = async () => {
     if (!selectedDomain) return;
     
-    setIsLoading(true);
     try {
-      // Implement reputation analysis API call
-      console.log('Analyzing reputation for domain:', selectedDomain);
+      setLoading(true);
+      const response = await adminService.analyzePowerMTAReputation(selectedDomain);
+      toast.success('Reputation analysis completed');
+      // Update reputation summary with new data
+      await loadPowerMTAData();
     } catch (error) {
-      console.error('Failed to analyze reputation:', error);
+      toast.error('Failed to analyze reputation');
+      console.error('Reputation analysis error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleParseDiagnosticFile = async (filename) => {
-    setIsLoading(true);
     try {
-      // Implement parse diagnostic file API call
-      console.log('Parsing diagnostic file:', filename);
+      setLoading(true);
+      await adminService.parsePowerMTADiagnosticFile(filename);
+      toast.success('Diagnostic file parsed successfully');
+      await loadPowerMTAData();
     } catch (error) {
-      console.error('Failed to parse diagnostic file:', error);
+      toast.error('Failed to parse diagnostic file');
+      console.error('Parse diagnostic file error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadDiagnosticFile = async (filename) => {
+    try {
+      const response = await adminService.downloadPowerMTADiagnosticFile(filename);
+      // Create a download link
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Diagnostic file downloaded successfully');
+    } catch (error) {
+      toast.error('Failed to download diagnostic file');
+      console.error('Download diagnostic file error:', error);
     }
   };
 
@@ -158,6 +153,46 @@ const AdminPowerMTA = () => {
     }
   };
 
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamation className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to manage PowerMTA.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-24 bg-gray-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+          <div className="h-16 bg-gray-200 rounded-lg"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -169,10 +204,10 @@ const AdminPowerMTA = () => {
           </div>
           <button
             onClick={handleRefreshStatus}
-            disabled={isLoading}
+            disabled={loading}
             className="btn btn-secondary flex items-center"
           >
-            <HiRefresh className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <HiRefresh className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh Status
           </button>
         </div>
@@ -385,10 +420,10 @@ const AdminPowerMTA = () => {
                 </div>
                 <button
                   onClick={() => handleParseDiagnosticFile('diagnostic_' + selectedDate + '.csv')}
-                  disabled={isLoading}
+                  disabled={loading}
                   className="btn btn-primary"
                 >
-                  {isLoading ? 'Processing...' : 'Process Files'}
+                  {loading ? 'Processing...' : 'Process Files'}
                 </button>
               </div>
 
@@ -430,7 +465,7 @@ const AdminPowerMTA = () => {
                             {formatDate(file.date)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatFileSize(file.size)}
+                            {formatNumber(file.size)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {formatNumber(file.records)}
@@ -454,7 +489,7 @@ const AdminPowerMTA = () => {
                                 <HiEye className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => console.log('Download:', file.filename)}
+                                onClick={() => handleDownloadDiagnosticFile(file.filename)}
                                 className="text-primary-600 hover:text-primary-900"
                                 title="Download"
                               >
@@ -570,10 +605,10 @@ const AdminPowerMTA = () => {
                   />
                   <button
                     onClick={handleAnalyzeReputation}
-                    disabled={!selectedDomain || isLoading}
+                    disabled={!selectedDomain || loading}
                     className="btn btn-primary"
                   >
-                    {isLoading ? 'Analyzing...' : 'Analyze Reputation'}
+                    {loading ? 'Analyzing...' : 'Analyze Reputation'}
                   </button>
                 </div>
               </div>

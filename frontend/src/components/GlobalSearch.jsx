@@ -141,7 +141,7 @@ const GlobalSearch = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-start justify-center pt-20">
+            <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-start justify-center pt-20">
       <div ref={searchRef} className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
         <div className="flex items-center border-b border-gray-200 p-4">
           <HiSearch className="h-5 w-5 text-gray-400 mr-3" />

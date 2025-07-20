@@ -86,12 +86,100 @@ export const createManualPayment = createAsyncThunk(
   }
 );
 
+// Admin billing thunks
+export const fetchPlans = createAsyncThunk(
+  'billing/fetchPlans',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await billingService.getPlans();
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch plans');
+    }
+  }
+);
+
+export const createPlan = createAsyncThunk(
+  'billing/createPlan',
+  async (planData, { rejectWithValue }) => {
+    try {
+      const response = await billingService.createPlan(planData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to create plan');
+    }
+  }
+);
+
+export const updatePlan = createAsyncThunk(
+  'billing/updatePlan',
+  async ({ id, planData }, { rejectWithValue }) => {
+    try {
+      const response = await billingService.updatePlan(id, planData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to update plan');
+    }
+  }
+);
+
+export const deletePlan = createAsyncThunk(
+  'billing/deletePlan',
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await billingService.deletePlan(id);
+      return { id, ...response };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to delete plan');
+    }
+  }
+);
+
+export const fetchBillingStats = createAsyncThunk(
+  'billing/fetchBillingStats',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await billingService.getBillingStats();
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch billing stats');
+    }
+  }
+);
+
+export const fetchAllSubscriptions = createAsyncThunk(
+  'billing/fetchAllSubscriptions',
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const response = await billingService.getAllSubscriptions(params);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch all subscriptions');
+    }
+  }
+);
+
+export const processManualPayment = createAsyncThunk(
+  'billing/processManualPayment',
+  async ({ subscriptionId, paymentData }, { rejectWithValue }) => {
+    try {
+      const response = await billingService.processManualPayment(subscriptionId, paymentData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to process manual payment');
+    }
+  }
+);
+
 const initialState = {
   subscriptions: [],
   currentSubscription: null,
   paymentHistory: [],
   paymentRates: {},
   invoices: [],
+  plans: [],
+  billingStats: {},
+  allSubscriptions: [],
   isLoading: false,
   error: null,
   pagination: {
@@ -122,7 +210,8 @@ const billingSlice = createSlice({
       })
       .addCase(fetchSubscriptions.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.subscriptions = action.payload.data || action.payload;
+        // Handle nested data structure: action.payload.data
+        state.subscriptions = action.payload.data || action.payload || [];
         state.pagination = action.payload.pagination || state.pagination;
       })
       .addCase(fetchSubscriptions.rejected, (state, action) => {
@@ -186,7 +275,8 @@ const billingSlice = createSlice({
       })
       .addCase(fetchPaymentHistory.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.paymentHistory = action.payload.data || action.payload;
+        // Handle nested data structure: action.payload.data
+        state.paymentHistory = action.payload.data || action.payload || [];
       })
       .addCase(fetchPaymentHistory.rejected, (state, action) => {
         state.isLoading = false;
@@ -201,7 +291,7 @@ const billingSlice = createSlice({
       })
       .addCase(fetchPaymentRates.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.paymentRates = action.payload;
+        state.paymentRates = action.payload || {};
       })
       .addCase(fetchPaymentRates.rejected, (state, action) => {
         state.isLoading = false;
@@ -219,6 +309,117 @@ const billingSlice = createSlice({
         state.paymentHistory.unshift(action.payload);
       })
       .addCase(createManualPayment.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Fetch plans
+    builder
+      .addCase(fetchPlans.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchPlans.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.plans = action.payload || [];
+      })
+      .addCase(fetchPlans.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Create plan
+    builder
+      .addCase(createPlan.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(createPlan.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.plans.push(action.payload);
+      })
+      .addCase(createPlan.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Update plan
+    builder
+      .addCase(updatePlan.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updatePlan.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const index = state.plans.findIndex(p => p.id === action.payload.id);
+        if (index !== -1) {
+          state.plans[index] = action.payload;
+        }
+      })
+      .addCase(updatePlan.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Delete plan
+    builder
+      .addCase(deletePlan.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(deletePlan.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.plans = state.plans.filter(p => p.id !== action.payload.id);
+      })
+      .addCase(deletePlan.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Fetch billing stats
+    builder
+      .addCase(fetchBillingStats.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchBillingStats.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.billingStats = action.payload || {};
+      })
+      .addCase(fetchBillingStats.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Fetch all subscriptions
+    builder
+      .addCase(fetchAllSubscriptions.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllSubscriptions.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.allSubscriptions = action.payload || [];
+      })
+      .addCase(fetchAllSubscriptions.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // Process manual payment
+    builder
+      .addCase(processManualPayment.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(processManualPayment.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const index = state.allSubscriptions.findIndex(s => s.id === action.payload.id);
+        if (index !== -1) {
+          state.allSubscriptions[index] = action.payload;
+        }
+      })
+      .addCase(processManualPayment.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

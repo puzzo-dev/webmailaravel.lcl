@@ -52,6 +52,52 @@ class SecurityController extends Controller
     }
 
     /**
+     * Update security settings (admin functionality)
+     */
+    public function updateSecuritySettings(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            // Check if user has admin role
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            $request->validate([
+                'two_factor_required' => 'sometimes|boolean',
+                'password_expiry_days' => 'sometimes|integer|min:1|max:365',
+                'session_timeout_minutes' => 'sometimes|integer|min:5|max:1440',
+                'max_login_attempts' => 'sometimes|integer|min:1|max:10',
+                'lockout_duration_minutes' => 'sometimes|integer|min:1|max:1440',
+                'require_strong_passwords' => 'sometimes|boolean',
+                'enable_audit_logging' => 'sometimes|boolean',
+                'enable_suspicious_activity_detection' => 'sometimes|boolean',
+            ]);
+
+            // Update system security settings
+            $updatedSettings = [];
+            
+            foreach ($request->all() as $key => $value) {
+                if (in_array($key, [
+                    'two_factor_required',
+                    'password_expiry_days', 
+                    'session_timeout_minutes',
+                    'max_login_attempts',
+                    'lockout_duration_minutes',
+                    'require_strong_passwords',
+                    'enable_audit_logging',
+                    'enable_suspicious_activity_detection'
+                ])) {
+                    // Store in system config
+                    \App\Models\SystemConfig::set('SECURITY_' . strtoupper($key), $value);
+                    $updatedSettings[$key] = $value;
+                }
+            }
+
+            return $this->successResponse($updatedSettings, 'Security settings updated successfully');
+        }, 'update_security_settings');
+    }
+
+    /**
      * Setup 2FA
      */
     public function setup2FA(Request $request): JsonResponse

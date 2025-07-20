@@ -481,37 +481,39 @@ class AutomaticTrainingService
     public function trainSenderFromCampaign(Campaign $campaign): void
     {
         try {
-            $sender = $campaign->sender;
+            // Get all senders for this campaign
+            $senders = $campaign->getSenders();
             
-            if (!$sender) {
+            if ($senders->isEmpty()) {
                 return;
             }
 
             $trainingData = [
                 'campaign_id' => $campaign->id,
-                'emails_sent' => $campaign->emails_sent,
-                'bounces' => $campaign->bounces,
-                'fbl_complaints' => $campaign->fbl_complaints,
-                'opens' => $campaign->opens,
-                'clicks' => $campaign->clicks,
+                'emails_sent' => $campaign->total_sent ?? 0,
+                'bounces' => $campaign->bounces ?? 0,
+                'fbl_complaints' => $campaign->complaints ?? 0,
+                'opens' => $campaign->opens ?? 0,
+                'clicks' => $campaign->clicks ?? 0,
             ];
 
-            // Update sender training data
-            $this->updateSenderTrainingData($sender, $trainingData);
-            
-            // Analyze and adjust if needed
-            $this->analyzeSenderReputation($sender);
-            
-            $this->logInfo('Sender trained from campaign', [
-                'sender_id' => $sender->id,
-                'campaign_id' => $campaign->id,
-                'training_data' => $trainingData
-            ]);
+            // Update training data for each sender
+            foreach ($senders as $sender) {
+                $this->updateSenderTrainingData($sender, $trainingData);
+                
+                // Analyze and adjust if needed
+                $this->analyzeSenderReputation($sender);
+                
+                $this->logInfo('Sender trained from campaign', [
+                    'sender_id' => $sender->id,
+                    'campaign_id' => $campaign->id,
+                    'training_data' => $trainingData
+                ]);
+            }
 
         } catch (\Exception $e) {
             $this->logError('Sender training from campaign failed', [
                 'campaign_id' => $campaign->id,
-                'sender_id' => $campaign->sender_id,
                 'error' => $e->getMessage()
             ]);
         }
@@ -556,7 +558,7 @@ class AutomaticTrainingService
                 
                 $summary[] = [
                     'sender_id' => $sender->id,
-                    'domain' => $sender->domain->domain,
+                    'domain' => $sender->domain->name,
                     'reputation' => $reputation,
                     'daily_limit' => $sender->daily_limit,
                     'training_data' => $trainingData,
@@ -621,7 +623,7 @@ class AutomaticTrainingService
             
             $analysis = [
                 'sender_id' => $sender->id,
-                'domain' => $domain->domain,
+                'domain' => $domain->name,
                 'current_reputation' => $currentReputation,
                 'training_data' => $trainingData,
                 'recommendations' => []
@@ -652,7 +654,7 @@ class AutomaticTrainingService
 
             $this->logInfo('Sender reputation analyzed', [
                 'sender_id' => $sender->id,
-                'domain' => $domain->domain,
+                'domain' => $domain->name,
                 'bounce_rate' => $bounceRate,
                 'fbl_rate' => $fblRate,
                 'open_rate' => $openRate,

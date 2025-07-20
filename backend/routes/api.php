@@ -51,6 +51,8 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/refresh', [AuthController::class, 'refresh']);
 });
 
 // Public tracking routes (no authentication required)
@@ -91,14 +93,10 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/settings/telegram/test', [UserController::class, 'testTelegram']);
     });
 
-    // Auth routes (require authentication)
-    Route::prefix('auth')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::post('/refresh', [AuthController::class, 'refresh']);
-    });
 
-    // Campaign routes
-    Route::prefix('campaigns')->group(function () {
+
+    // Campaign routes (require active subscription)
+    Route::prefix('campaigns')->middleware(['subscription'])->group(function () {
         Route::get('/', [CampaignController::class, 'index']);
         Route::post('/', [CampaignController::class, 'store']);
         Route::get('/{campaign}', [CampaignController::class, 'show']);
@@ -115,6 +113,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}/unsubscribe-list', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
+        
+        // Admin campaign management routes (admin only)
+        Route::middleware(['role:admin'])->group(function () {
+            Route::put('/{campaign}/admin-update', [CampaignController::class, 'updateCampaign']);
+            Route::put('/bulk-update', [CampaignController::class, 'updateCampaigns']);
+        });
     });
 
     // User management routes (admin only)
@@ -130,34 +134,30 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/{user}/sessions/{session}', [UserController::class, 'terminateSession']);
     });
 
-    // Sender routes
-    Route::prefix('senders')->group(function () {
-        Route::get('/', [SenderController::class, 'index']);
-        Route::post('/', [SenderController::class, 'store']);
-        Route::get('/{sender}', [SenderController::class, 'show']);
-        Route::put('/{sender}', [SenderController::class, 'update']);
-        Route::delete('/{sender}', [SenderController::class, 'destroy']);
-        Route::post('/{sender}/test', [SenderController::class, 'testConnection']);
-    });
-
-    // Domain routes
+    // Domain routes (no subscription required)
     Route::prefix('domains')->group(function () {
         Route::get('/', [DomainController::class, 'index']);
         Route::post('/', [DomainController::class, 'store']);
         Route::get('/{domain}', [DomainController::class, 'show']);
         Route::put('/{domain}', [DomainController::class, 'update']);
         Route::delete('/{domain}', [DomainController::class, 'destroy']);
-        Route::post('/{domain}/smtp', [DomainController::class, 'updateSmtpConfig']);
+        Route::post('/{domain}/smtp', [DomainController::class, 'addSmtpConfig']);
         Route::get('/{domain}/smtp', [DomainController::class, 'getSmtpConfig']);
         Route::delete('/{domain}/smtp', [DomainController::class, 'deleteSmtpConfig']);
         Route::put('/{domain}/bounce-processing', [DomainController::class, 'updateBounceProcessing']);
         Route::post('/{domain}/bounce-processing/test', [DomainController::class, 'testBounceConnection']);
         Route::get('/{domain}/bounce-processing/stats', [DomainController::class, 'getBounceStatistics']);
         Route::post('/{domain}/bounce-processing/process', [DomainController::class, 'processBounces']);
+        
+        // Admin domain management routes (admin only)
+        Route::middleware(['role:admin'])->group(function () {
+            Route::put('/{domain}/admin-update', [DomainController::class, 'updateDomain']);
+            Route::put('/bulk-update', [DomainController::class, 'updateDomains']);
+        });
     });
 
-    // Content routes
-    Route::prefix('contents')->group(function () {
+    // Content routes (require active subscription)
+    Route::prefix('contents')->middleware(['subscription'])->group(function () {
         Route::get('/', [ContentController::class, 'index']);
         Route::post('/', [ContentController::class, 'store']);
         Route::get('/{content}', [ContentController::class, 'show']);
@@ -165,6 +165,8 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/{content}', [ContentController::class, 'destroy']);
         Route::post('/{content}/preview', [ContentController::class, 'preview']);
     });
+
+
 
     // Billing & Subscription routes (consolidated)
     Route::prefix('billing')->group(function () {
@@ -187,8 +189,8 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/webhook', [BillingController::class, 'webhook']);
     });
 
-    // Suppression List routes
-    Route::prefix('suppression-list')->group(function () {
+    // Suppression List routes (require active subscription)
+    Route::prefix('suppression-list')->middleware(['subscription'])->group(function () {
         Route::get('/statistics', [SuppressionListController::class, 'getStatistics']);
         Route::post('/export', [SuppressionListController::class, 'export']);
         Route::get('/download/{filename}', [SuppressionListController::class, 'download']);
@@ -198,33 +200,108 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/cleanup', [SuppressionListController::class, 'cleanup']);
     });
 
+    // Sender routes (require active subscription)
+    Route::prefix('senders')->middleware(['subscription'])->group(function () {
+        Route::get('/', [SenderController::class, 'index']);
+        Route::post('/', [SenderController::class, 'store']);
+        Route::get('/{sender}', [SenderController::class, 'show']);
+        Route::put('/{sender}', [SenderController::class, 'update']);
+        Route::delete('/{sender}', [SenderController::class, 'destroy']);
+        Route::post('/{sender}/test', [SenderController::class, 'testConnection']);
+    });
+
     // Admin routes
     Route::prefix('admin')->middleware(['role:admin'])->group(function () {
         Route::get('/dashboard', [AdminController::class, 'dashboard']);
-        Route::get('/users', [AdminController::class, 'users']);
-        Route::get('/campaigns', [AdminController::class, 'campaigns']);
+        Route::get('/users', [UserController::class, 'index']);
+        Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        Route::get('/campaigns', [CampaignController::class, 'index']);
+        Route::put('/campaigns/{campaign}/status', [CampaignController::class, 'updateCampaign']);
         Route::get('/analytics', [AdminController::class, 'analytics']);
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
-        Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
-        Route::get('/system-config', [AdminController::class, 'getSystemConfig']);
+        Route::post('/system-config', [SystemSettingsController::class, 'updateSystemConfig']);
+        Route::get('/system-config', [SystemSettingsController::class, 'index']);
 
         // Granular config endpoints for BTCPay, Telegram, PowerMTA
-        Route::get('/system-config/btcpay', [AdminController::class, 'getBTCPayConfig']);
-        Route::post('/system-config/btcpay', [AdminController::class, 'updateBTCPayConfig']);
-        Route::get('/system-config/telegram', [AdminController::class, 'getTelegramConfig']);
-        Route::post('/system-config/telegram', [AdminController::class, 'updateTelegramConfig']);
-        Route::get('/system-config/powermta', [AdminController::class, 'getPowerMTAConfig']);
-        Route::post('/system-config/powermta', [AdminController::class, 'updatePowerMTAConfig']);
-    });
+        Route::get('/system-config/btcpay', [SystemSettingsController::class, 'getBTCPayConfig']);
+        Route::post('/system-config/btcpay', [SystemSettingsController::class, 'updateBTCPayConfig']);
+        Route::get('/system-config/telegram', [SystemSettingsController::class, 'getTelegramConfig']);
+        Route::post('/system-config/telegram', [SystemSettingsController::class, 'updateTelegramConfig']);
+        Route::get('/system-config/powermta', [SystemSettingsController::class, 'getPowerMTAConfig']);
+        Route::post('/system-config/powermta', [SystemSettingsController::class, 'updatePowerMTAConfig']);
 
-    // Backup routes
-    Route::prefix('backups')->group(function () {
-        Route::get('/', [BackupController::class, 'index']);
-        Route::post('/', [BackupController::class, 'create']);
-        Route::get('/{backup}', [BackupController::class, 'show']);
-        Route::delete('/{backup}', [BackupController::class, 'destroy']);
-        Route::post('/{backup}/download', [BackupController::class, 'download']);
-        Route::post('/{backup}/restore', [BackupController::class, 'restore']);
+        // Backup routes (admin only)
+        Route::prefix('backups')->group(function () {
+            Route::get('/', [BackupController::class, 'index']);
+            Route::post('/', [BackupController::class, 'create']);
+            Route::get('/statistics', [BackupController::class, 'getStatistics']);
+            Route::get('/{backup}', [BackupController::class, 'show']);
+            Route::delete('/{backup}', [BackupController::class, 'destroy']);
+            Route::post('/{backup}/download', [BackupController::class, 'download']);
+            Route::post('/{backup}/restore', [BackupController::class, 'restore']);
+        });
+
+        // Admin sender management routes (admin only)
+        Route::prefix('senders')->group(function () {
+            Route::get('/', [SenderController::class, 'index']);
+            Route::put('/{sender}/admin-update', [SenderController::class, 'updateSender']);
+            Route::put('/bulk-update', [SenderController::class, 'updateSenders']);
+        });
+
+        // Admin domains management routes (admin only)
+        Route::prefix('domains')->group(function () {
+            Route::get('/', [DomainController::class, 'index']);
+        });
+
+        // Admin SMTP configs management routes (admin only)
+        Route::prefix('smtp-configs')->group(function () {
+            Route::get('/', [DomainController::class, 'getAllSmtpConfigs']);
+            Route::get('/{config}', [DomainController::class, 'getSmtpConfigById']);
+            Route::post('/', [DomainController::class, 'createSmtpConfig']);
+            Route::put('/{config}', [DomainController::class, 'updateSmtpConfigById']);
+            Route::delete('/{config}', [DomainController::class, 'deleteSmtpConfig']);
+            Route::post('/{config}/test', [DomainController::class, 'testSmtpConfig']);
+        });
+
+        // Admin notifications management routes (admin only)
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('/', [NotificationController::class, 'store']);
+            Route::get('/{notification}', [NotificationController::class, 'show']);
+            Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+            Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+        });
+
+        // Admin logs management routes (admin only)
+        Route::prefix('logs')->group(function () {
+            Route::get('/files', [LogController::class, 'getLogFiles']);
+            Route::get('/', [LogController::class, 'index']);
+            Route::get('/{log}', [LogController::class, 'show']);
+            Route::delete('/{log}', [LogController::class, 'destroy']);
+            Route::get('/{filename}/download', [LogController::class, 'download']);
+        });
+
+        // Admin PowerMTA management routes (admin only)
+        Route::prefix('powermta')->group(function () {
+            Route::get('/status', [PowerMTAController::class, 'getStatus']);
+            Route::get('/fbl-accounts', [PowerMTAController::class, 'getFBLAccounts']);
+            Route::get('/diagnostic-files', [PowerMTAController::class, 'getDiagnosticFiles']);
+            Route::post('/parse-diagnostic', [PowerMTAController::class, 'parseDiagnosticFile']);
+            Route::post('/analyze-reputation', [PowerMTAController::class, 'analyzeSenderReputation']);
+            Route::get('/reputation-summary', [PowerMTAController::class, 'getReputationSummary']);
+            Route::get('/diagnostic-files/{filename}/download', [PowerMTAController::class, 'downloadDiagnosticFile']);
+        });
+
+        // Admin billing management routes (admin only)
+        Route::prefix('billing')->group(function () {
+            Route::get('/stats', [BillingController::class, 'getBillingStats']);
+            Route::get('/subscriptions', [BillingController::class, 'getAllSubscriptions']);
+            Route::post('/plans', [BillingController::class, 'createPlan']);
+            Route::put('/plans/{plan}', [BillingController::class, 'updatePlan']);
+            Route::delete('/plans/{plan}', [BillingController::class, 'deletePlan']);
+            Route::post('/subscriptions/{subscription}/manual-payment', [BillingController::class, 'processManualPayment']);
+        });
     });
 
     // Log routes
@@ -275,8 +352,8 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/{subscription}/renew', [BillingController::class, 'renew']);
     });
 
-    // Analytics routes
-    Route::prefix('analytics')->group(function () {
+    // Analytics routes (require active subscription)
+    Route::prefix('analytics')->middleware(['subscription'])->group(function () {
         Route::get('/', [AnalyticsController::class, 'index']);
         Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']);
         Route::get('/campaigns', [AnalyticsController::class, 'getCampaignAnalytics']);
@@ -313,6 +390,12 @@ Route::middleware(['auth:api'])->group(function () {
             Route::put('/', [SystemSettingsController::class, 'update']);
             Route::post('/test-smtp', [SystemSettingsController::class, 'testSmtp']);
             Route::get('/env-variables', [SystemSettingsController::class, 'getEnvVariables']);
+        });
+
+        // Admin Security Settings routes (admin only)
+        Route::prefix('security-settings')->group(function () {
+            Route::get('/', [SecurityController::class, 'getSecuritySettings']);
+            Route::put('/', [SecurityController::class, 'updateSecuritySettings']);
         });
     });
 }); 

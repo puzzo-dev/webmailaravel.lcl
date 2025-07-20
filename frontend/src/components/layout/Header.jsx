@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   HiBell,
   HiCog,
@@ -16,18 +17,26 @@ import {
   HiBan,
   HiExclamation,
   HiInformationCircle,
+  HiHome,
+  HiUsers,
+  HiClipboardList,
+  HiViewBoards,
+  HiViewList,
 } from 'react-icons/hi';
 import GlobalSearch from '../GlobalSearch';
 import { fetchNotifications, markNotificationAsRead } from '../../store/slices/notificationsSlice';
+import { switchToAdminView, switchToUserView } from '../../store/slices/authSlice';
 
 const Header = ({ onMenuToggle, user, onLogout }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
   // Get notifications from Redux store
   const { notifications, unreadCount, isLoading } = useSelector((state) => state.notifications);
+  const { currentView } = useSelector((state) => state.auth);
 
   // Fetch notifications on component mount
   useEffect(() => {
@@ -98,8 +107,32 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     { name: 'Domains', href: '/domains', icon: HiGlobe },
     { name: 'Suppression List', href: '/suppression-list', icon: HiBan },
     { name: 'Settings', href: '/account', icon: HiCog },
-    { name: 'Mail', href: '/admin/system-settings', icon: HiMail },
   ];
+
+  const adminQuickActions = [
+    { name: 'Admin Dashboard', href: '/admin', icon: HiHome },
+    { name: 'Users', href: '/admin/users', icon: HiUsers },
+    { name: 'Campaigns', href: '/admin/campaigns', icon: HiInbox },
+    { name: 'System', href: '/admin/system', icon: HiCog },
+    { name: 'Logs', href: '/admin/logs', icon: HiClipboardList },
+  ];
+
+  const isAdmin = user?.role === 'admin';
+  const isAdminView = currentView === 'admin';
+  const currentQuickActions = isAdmin && isAdminView ? adminQuickActions : quickActions;
+
+  // View switching functions for admin users
+  const handleSwitchToAdminView = () => {
+    dispatch(switchToAdminView());
+    navigate('/admin');
+    setShowUserMenu(false);
+  };
+
+  const handleSwitchToUserView = () => {
+    dispatch(switchToUserView());
+    navigate('/dashboard');
+    setShowUserMenu(false);
+  };
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -131,7 +164,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
           <div className="flex items-center space-x-4">
             {/* Quick Actions */}
             <div className="hidden lg:flex items-center space-x-2">
-              {quickActions.map((action) => (
+              {currentQuickActions.map((action) => (
                 <a
                   key={`quick-${action.name}`}
                   href={action.href}
@@ -159,7 +192,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
 
               {/* Notifications Dropdown */}
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]">
                   <div className="p-4 border-b border-gray-200">
                     <h3 className="text-lg font-medium text-gray-900">Notifications</h3>
                   </div>
@@ -230,14 +263,19 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase()}
                   </span>
                 </div>
-                <span className="hidden md:block text-sm font-medium text-gray-700">
-                  {user?.name || 'User'}
-                </span>
+                                    <span className="hidden md:block text-sm font-medium text-gray-700">
+                      {user?.name || 'User'}
+                      {isAdmin && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                          {currentView === 'admin' ? 'Admin View' : 'User View'}
+                        </span>
+                      )}
+                    </span>
               </button>
 
               {/* User Dropdown */}
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]">
                   <div className="py-1">
                     <a
                       href="/account"
@@ -246,6 +284,28 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                       <HiUser className="h-4 w-4 mr-3" />
                       Account
                     </a>
+                    {isAdmin && (
+                      <>
+                        <hr className="my-1" />
+                        {currentView === 'user' ? (
+                          <button
+                            onClick={handleSwitchToAdminView}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <HiViewBoards className="h-4 w-4 mr-3" />
+                            Switch to Admin View
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleSwitchToUserView}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <HiViewList className="h-4 w-4 mr-3" />
+                            Switch to User View
+                          </button>
+                        )}
+                      </>
+                    )}
                     <hr className="my-1" />
                     <button
                       onClick={onLogout}

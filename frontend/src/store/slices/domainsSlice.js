@@ -54,27 +54,43 @@ export const deleteDomain = createAsyncThunk(
   }
 );
 
-export const verifyDomain = createAsyncThunk(
-  'domains/verifyDomain',
-  async (id, { rejectWithValue }) => {
+
+
+// Admin functions
+export const fetchAdminDomains = createAsyncThunk(
+  'domains/fetchAdminDomains',
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await domainService.verifyDomain(id);
+      const response = await domainService.getDomains();
       return response.data;
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to verify domain';
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch admin domains';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
-export const updateDomainConfig = createAsyncThunk(
-  'domains/updateDomainConfig',
-  async ({ id, configData }, { rejectWithValue }) => {
+export const updateDomainStatus = createAsyncThunk(
+  'domains/updateDomainStatus',
+  async ({ domainId, status }, { rejectWithValue }) => {
     try {
-      const response = await domainService.updateDomainConfig(id, configData);
+      const response = await domainService.updateDomain(domainId, { status });
       return response.data;
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to update domain configuration';
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update domain status';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const testDomainConnection = createAsyncThunk(
+  'domains/testDomainConnection',
+  async (domainId, { rejectWithValue }) => {
+    try {
+      const response = await domainService.testBounceConnection(domainId);
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to test domain connection';
       return rejectWithValue(errorMessage);
     }
   }
@@ -110,7 +126,11 @@ const domainsSlice = createSlice({
       })
       .addCase(fetchDomains.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.domains = action.payload.data || action.payload;
+        // Handle nested response structure from backend
+        const responseData = action.payload.data || action.payload;
+        const domainsData = responseData.domains || responseData;
+        state.domains = Array.isArray(domainsData) ? domainsData : [];
+        state.pagination = responseData.pagination || {};
       })
       .addCase(fetchDomains.rejected, (state, action) => {
         state.isLoading = false;
@@ -159,29 +179,29 @@ const domainsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      // Verify domain
-      .addCase(verifyDomain.pending, (state) => {
+
+      // Admin functions
+      .addCase(fetchAdminDomains.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(verifyDomain.fulfilled, (state, action) => {
+      .addCase(fetchAdminDomains.fulfilled, (state, action) => {
         state.isLoading = false;
-        const verifiedDomain = action.payload.data || action.payload;
-        const index = state.domains.findIndex(domain => domain.id === verifiedDomain.id);
-        if (index !== -1) {
-          state.domains[index] = verifiedDomain;
-        }
+        // Handle nested response structure from backend
+        const responseData = action.payload.data || action.payload;
+        const domainsData = responseData.domains || responseData;
+        state.domains = Array.isArray(domainsData) ? domainsData : [];
+        state.pagination = responseData.pagination || {};
       })
-      .addCase(verifyDomain.rejected, (state, action) => {
+      .addCase(fetchAdminDomains.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      // Update domain config
-      .addCase(updateDomainConfig.pending, (state) => {
+      .addCase(updateDomainStatus.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(updateDomainConfig.fulfilled, (state, action) => {
+      .addCase(updateDomainStatus.fulfilled, (state, action) => {
         state.isLoading = false;
         const updatedDomain = action.payload.data || action.payload;
         const index = state.domains.findIndex(domain => domain.id === updatedDomain.id);
@@ -189,7 +209,18 @@ const domainsSlice = createSlice({
           state.domains[index] = updatedDomain;
         }
       })
-      .addCase(updateDomainConfig.rejected, (state, action) => {
+      .addCase(updateDomainStatus.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(testDomainConnection.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(testDomainConnection.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(testDomainConnection.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

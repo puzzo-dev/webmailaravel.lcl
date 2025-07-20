@@ -20,7 +20,7 @@ import toast from 'react-hot-toast';
 
 const AdminUsers = () => {
   const { user } = useSelector((state) => state.auth);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState([]); // Ensure this is always an array
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
@@ -38,6 +38,7 @@ const AdminUsers = () => {
   const [viewMode, setViewMode] = useState('list');
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -48,6 +49,7 @@ const AdminUsers = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = {
         page: pagination.current_page,
         limit: pagination.per_page,
@@ -55,18 +57,25 @@ const AdminUsers = () => {
       };
       
       const response = await adminService.getUsers(params);
-      setUsers(response.data.data || []);
+      const usersData = response.data || response || [];
+      setUsers(Array.isArray(usersData) ? usersData : []);
       setPagination({
-        current_page: response.data.current_page || 1,
-        last_page: response.data.last_page || 1,
-        per_page: response.data.per_page || 20,
-        total: response.data.total || 0,
+        current_page: response.pagination?.current_page || 1,
+        last_page: response.pagination?.last_page || 1,
+        per_page: response.pagination?.per_page || 20,
+        total: response.pagination?.total || 0,
       });
-      setError(null);
     } catch (error) {
       setError('Failed to load users');
       toast.error('Failed to load users');
       console.error('Users fetch error:', error);
+      setUsers([]); // Ensure users is always an array even on error
+      setPagination({
+        current_page: 1,
+        last_page: 1,
+        per_page: 20,
+        total: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -74,13 +83,15 @@ const AdminUsers = () => {
 
   const handleStatusChange = async (userId, status) => {
     try {
-      // Note: This would require a backend endpoint for user status updates
-      toast.success(`User status would be updated to ${status}`);
-      // For now, just refresh the data
+      setActionLoading(true);
+      await adminService.updateUserStatus(userId, status);
+      toast.success(`User status updated to ${status}`);
       await fetchUsers();
     } catch (error) {
       toast.error('Error updating user status');
       console.error('Error updating user status:', error);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -88,26 +99,62 @@ const AdminUsers = () => {
     if (selectedUsers.length === 0) return;
     
     try {
-      // Note: This would require backend endpoints for bulk user actions
-      toast.success(`Bulk ${action} would be performed on ${selectedUsers.length} users`);
+      setActionLoading(true);
+      
+      // Perform bulk actions based on the action type
+      switch (action) {
+        case 'activate':
+          await Promise.all(selectedUsers.map(userId => 
+            adminService.updateUserStatus(userId, 'active')
+          ));
+          toast.success(`${selectedUsers.length} users activated`);
+          break;
+        case 'deactivate':
+          await Promise.all(selectedUsers.map(userId => 
+            adminService.updateUserStatus(userId, 'inactive')
+          ));
+          toast.success(`${selectedUsers.length} users deactivated`);
+          break;
+        case 'delete':
+          await Promise.all(selectedUsers.map(userId => 
+            adminService.deleteUser(userId)
+          ));
+          toast.success(`${selectedUsers.length} users deleted`);
+          break;
+        default:
+          toast.error('Invalid action');
+          return;
+      }
+      
       setSelectedUsers([]);
       await fetchUsers();
     } catch (error) {
       toast.error(`Error performing bulk ${action}`);
       console.error('Error performing bulk action:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId, userName) => {
+    if (!confirm(`Are you sure you want to delete user ${userName}?`)) return;
+    
+    try {
+      setActionLoading(true);
+      await adminService.deleteUser(userId);
+      toast.success(`User ${userName} deleted successfully`);
+      await fetchUsers();
+    } catch (error) {
+      toast.error('Error deleting user');
+      console.error('Error deleting user:', error);
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString();
   };
-
-  const filteredUsers = users.filter(user => {
-    if (filters.status && user.status !== filters.status) return false;
-    if (filters.search && !user.name.toLowerCase().includes(filters.search.toLowerCase()) && 
-        !user.email.toLowerCase().includes(filters.search.toLowerCase())) return false;
-    return true;
-  });
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -181,6 +228,21 @@ const AdminUsers = () => {
         </div>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <FaTimesCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{error}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -231,21 +293,24 @@ const AdminUsers = () => {
             <div className="flex space-x-2">
               <button
                 onClick={() => handleBulkAction('activate')}
-                className="px-3 py-1 text-sm font-medium text-green-700 bg-green-100 border border-green-300 rounded-md hover:bg-green-200"
+                disabled={actionLoading}
+                className="px-3 py-1 text-sm font-medium text-green-700 bg-green-100 border border-green-300 rounded-md hover:bg-green-200 disabled:opacity-50"
               >
-                Activate
+                {actionLoading ? 'Processing...' : 'Activate'}
               </button>
               <button
                 onClick={() => handleBulkAction('deactivate')}
-                className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                disabled={actionLoading}
+                className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 disabled:opacity-50"
               >
-                Deactivate
+                {actionLoading ? 'Processing...' : 'Deactivate'}
               </button>
               <button
                 onClick={() => handleBulkAction('delete')}
-                className="px-3 py-1 text-sm font-medium text-red-700 bg-red-100 border border-red-300 rounded-md hover:bg-red-200"
+                disabled={actionLoading}
+                className="px-3 py-1 text-sm font-medium text-red-700 bg-red-100 border border-red-300 rounded-md hover:bg-red-200 disabled:opacity-50"
               >
-                Delete
+                {actionLoading ? 'Processing...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -263,7 +328,7 @@ const AdminUsers = () => {
                     type="checkbox"
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedUsers(filteredUsers.map(user => user.id));
+                        setSelectedUsers(Array.isArray(users) ? users.map(user => user.id) : []);
                       } else {
                         setSelectedUsers([]);
                       }
@@ -286,7 +351,14 @@ const AdminUsers = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
+              {!Array.isArray(users) || users.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                    No users found
+                  </td>
+                </tr>
+              ) : (
+                users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <input
@@ -324,57 +396,61 @@ const AdminUsers = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => setSelectedUser(user)}
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setShowUserModal(true);
+                          }}
                         className="text-blue-600 hover:text-blue-900"
+                          title="View Details"
                       >
                         <FaEye className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleStatusChange(user.id, user.status === 'active' ? 'inactive' : 'active')}
-                        className="text-green-600 hover:text-green-900"
+                          disabled={actionLoading}
+                          className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                          title={user.status === 'active' ? 'Deactivate' : 'Activate'}
                       >
                         {user.status === 'active' ? <FaTimesCircle className="h-4 w-4" /> : <FaCheckCircle className="h-4 w-4" />}
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Are you sure you want to delete user ${user.name}?`)) {
-                            toast.success(`User ${user.name} would be deleted`);
-                            // Note: This would require a backend endpoint for user deletion
-                          }
-                        }}
-                        className="text-red-600 hover:text-red-900"
+                          onClick={() => handleDeleteUser(user.id, user.name)}
+                          disabled={actionLoading}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          title="Delete User"
                       >
                         <FaTrash className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        {pagination.last_page > 1 && (
+        {pagination && pagination.last_page > 1 && (
           <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} users
+                Showing {((pagination?.current_page || 1) - 1) * (pagination?.per_page || 20) + 1} to {Math.min((pagination?.current_page || 1) * (pagination?.per_page || 20), pagination?.total || 0)} of {pagination?.total || 0} users
               </div>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page - 1 }))}
-                  disabled={pagination.current_page <= 1}
+                  disabled={!pagination || pagination.current_page <= 1}
                   className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
                 <span className="text-sm text-gray-700">
-                  Page {pagination.current_page} of {pagination.last_page}
+                  Page {pagination?.current_page || 1} of {pagination?.last_page || 1}
                 </span>
                 <button
                   onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page + 1 }))}
-                  disabled={pagination.current_page >= pagination.last_page}
+                  disabled={!pagination || pagination.current_page >= pagination.last_page}
                   className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
@@ -418,6 +494,12 @@ const AdminUsers = () => {
                   <label className="block text-sm font-medium text-gray-700">Joined</label>
                   <p className="text-sm text-gray-900">{formatDate(selectedUser.created_at)}</p>
                 </div>
+                {selectedUser.role && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                    <p className="text-sm text-gray-900 capitalize">{selectedUser.role}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

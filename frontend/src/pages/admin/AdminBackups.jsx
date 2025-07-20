@@ -17,73 +17,92 @@ import {
   HiRefresh,
 } from 'react-icons/hi';
 import { formatDate, formatFileSize } from '../../utils/helpers';
+import { adminService } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const AdminBackups = () => {
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState(null);
   const [newBackupDescription, setNewBackupDescription] = useState('');
 
-  // Mock data - replace with actual API calls
-  const backups = [
-    {
-      id: 1,
-      filename: 'backup_2024-01-15_10-30-45.sql',
-      path: '/storage/backups/backup_2024-01-15_10-30-45.sql',
-      size: 52428800, // 50MB
-      description: 'Daily backup before system update',
-      created_by: 1,
-      created_at: '2024-01-15T10:30:45Z',
-      restored_at: null,
-      restored_by: null,
-      status: 'completed',
-    },
-    {
-      id: 2,
-      filename: 'backup_2024-01-14_10-30-45.sql',
-      path: '/storage/backups/backup_2024-01-14_10-30-45.sql',
-      size: 51200000, // 49MB
-      description: 'Daily backup',
-      created_by: 1,
-      created_at: '2024-01-14T10:30:45Z',
-      restored_at: '2024-01-15T09:15:30Z',
-      restored_by: 1,
-      status: 'restored',
-    },
-    {
-      id: 3,
-      filename: 'backup_2024-01-13_10-30-45.sql',
-      path: '/storage/backups/backup_2024-01-13_10-30-45.sql',
-      size: 49800000, // 47MB
-      description: 'Daily backup',
-      created_by: 1,
-      created_at: '2024-01-13T10:30:45Z',
-      restored_at: null,
-      restored_by: null,
-      status: 'completed',
-    },
-  ];
-
-  const statistics = {
-    total_backups: 15,
-    total_size: 750000000, // 715MB
-    last_backup: '2024-01-15T10:30:45Z',
+  // Real data from API
+  const [backups, setBackups] = useState([]);
+  const [statistics, setStatistics] = useState({
+    total_backups: 0,
+    total_size: 0,
+    last_backup: null,
     backup_frequency: 'daily',
     retention_days: 30,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Check if user has admin access
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchBackups();
+      fetchStatistics();
+    }
+  }, [user]);
+
+  const fetchBackups = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await adminService.getBackups();
+      // Handle both possible response structures
+      const backupsData = response.data || response || [];
+      setBackups(backupsData);
+      console.log('Backups data:', backupsData);
+    } catch (error) {
+      setError('Failed to load backups');
+      toast.error('Failed to load backups');
+      console.error('Backups fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStatistics = async () => {
+    try {
+      const response = await adminService.getBackupStatistics();
+      // Handle both possible response structures
+      const statsData = response.data || response || {
+        total_backups: 0,
+        total_size: 0,
+        last_backup: null,
+        backup_frequency: 'daily',
+        retention_days: 30,
+      };
+      setStatistics(statsData);
+      console.log('Statistics data:', statsData);
+    } catch (error) {
+      console.error('Statistics fetch error:', error);
+      // Use default statistics if API fails
+    }
   };
 
   const handleCreateBackup = async () => {
-    if (!newBackupDescription.trim()) return;
-    
     setIsLoading(true);
     try {
-      // Implement create backup API call
-      console.log('Creating backup:', newBackupDescription);
+      const backupData = {};
+      if (newBackupDescription.trim()) {
+        backupData.description = newBackupDescription.trim();
+      }
+      
+      await adminService.createBackup(backupData);
+      toast.success('Backup created successfully');
       setShowCreateModal(false);
       setNewBackupDescription('');
+      // Refresh data
+      await fetchBackups();
+      await fetchStatistics();
     } catch (error) {
+      toast.error('Failed to create backup');
       console.error('Failed to create backup:', error);
     } finally {
       setIsLoading(false);
@@ -93,9 +112,30 @@ const AdminBackups = () => {
   const handleDownloadBackup = async (backupId) => {
     setIsLoading(true);
     try {
-      // Implement download backup API call
-      console.log('Downloading backup:', backupId);
+      const response = await adminService.downloadBackup(backupId);
+      
+      // Handle different response types
+      let blob;
+      if (response instanceof Blob) {
+        blob = response;
+      } else if (response.data instanceof Blob) {
+        blob = response.data;
+      } else {
+        blob = new Blob([response.data || response]);
+      }
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `backup_${backupId}.sqlite`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Backup downloaded successfully');
     } catch (error) {
+      toast.error('Failed to download backup');
       console.error('Failed to download backup:', error);
     } finally {
       setIsLoading(false);
@@ -109,11 +149,15 @@ const AdminBackups = () => {
     
     setIsLoading(true);
     try {
-      // Implement restore backup API call
-      console.log('Restoring backup:', selectedBackup.id);
+      await adminService.restoreBackup(selectedBackup.id);
+      toast.success('Backup restored successfully');
       setShowRestoreModal(false);
       setSelectedBackup(null);
+      // Refresh data
+      await fetchBackups();
+      await fetchStatistics();
     } catch (error) {
+      toast.error('Failed to restore backup');
       console.error('Failed to restore backup:', error);
     } finally {
       setIsLoading(false);
@@ -125,9 +169,13 @@ const AdminBackups = () => {
     
     setIsLoading(true);
     try {
-      // Implement delete backup API call
-      console.log('Deleting backup:', backupId);
+      await adminService.deleteBackup(backupId);
+      toast.success('Backup deleted successfully');
+      // Refresh data
+      await fetchBackups();
+      await fetchStatistics();
     } catch (error) {
+      toast.error('Failed to delete backup');
       console.error('Failed to delete backup:', error);
     } finally {
       setIsLoading(false);
@@ -164,6 +212,41 @@ const AdminBackups = () => {
     }
   };
 
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamation className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to manage backups.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="h-12 bg-gray-200 rounded w-full mb-4"></div>
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-200 rounded w-full"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -195,7 +278,7 @@ const AdminBackups = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Backups</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.total_backups}</p>
+              <p className="text-2xl font-bold text-gray-900">{statistics.total_backups || 0}</p>
             </div>
           </div>
         </div>
@@ -209,7 +292,7 @@ const AdminBackups = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Size</p>
-              <p className="text-2xl font-bold text-gray-900">{formatFileSize(statistics.total_size)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatFileSize(statistics.total_size || 0)}</p>
             </div>
           </div>
         </div>
@@ -223,7 +306,9 @@ const AdminBackups = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Last Backup</p>
-              <p className="text-2xl font-bold text-gray-900">{formatDate(statistics.last_backup)}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {statistics.last_backup ? formatDate(statistics.last_backup) : 'Never'}
+              </p>
             </div>
           </div>
         </div>
@@ -237,11 +322,26 @@ const AdminBackups = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Retention</p>
-              <p className="text-2xl font-bold text-gray-900">{statistics.retention_days} days</p>
+              <p className="text-2xl font-bold text-gray-900">{statistics.retention_days || 30} days</p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiXCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{error}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Backups Table */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -249,7 +349,7 @@ const AdminBackups = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium text-gray-900">System Backups</h3>
             <button
-              onClick={() => window.location.reload()}
+              onClick={fetchBackups}
               disabled={isLoading}
               className="btn btn-secondary btn-sm flex items-center"
             >
@@ -283,7 +383,16 @@ const AdminBackups = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {backups.map((backup) => (
+              {backups.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                    No backups found
+                  </td>
+                </tr>
+              ) : (
+                backups.map((backup) => {
+                  console.log('Rendering backup:', backup);
+                  return (
                 <tr key={backup.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
@@ -300,9 +409,9 @@ const AdminBackups = () => {
                     {formatDate(backup.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(backup.status)}-100 text-${getStatusColor(backup.status)}-800`}>
-                      {getStatusIcon(backup.status)}
-                      <span className="ml-1">{backup.status}</span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(backup.status || 'completed')}-100 text-${getStatusColor(backup.status || 'completed')}-800`}>
+                      {getStatusIcon(backup.status || 'completed')}
+                      <span className="ml-1">{backup.status || 'completed'}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -324,7 +433,7 @@ const AdminBackups = () => {
                       >
                         <HiDownload className="h-4 w-4" />
                       </button>
-                      {backup.status === 'completed' && (
+                      {(backup.status === 'completed' || !backup.status) && (
                         <button
                           onClick={() => {
                             setSelectedBackup(backup);
@@ -346,7 +455,9 @@ const AdminBackups = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+                })
+              )}
             </tbody>
           </table>
         </div>

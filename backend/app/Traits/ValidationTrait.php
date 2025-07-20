@@ -285,18 +285,6 @@ trait ValidationTrait
     }
 
     /**
-     * Validate IP address using Laravel's validation
-     */
-    protected function validateIpAddress(string $ip): bool
-    {
-        $validator = Validator::make(['ip' => $ip], [
-            'ip' => 'required|ip'
-        ]);
-
-        return !$validator->fails();
-    }
-
-    /**
      * Validate date format using Laravel's validation
      */
     protected function validateDateFormat(string $date, string $format = 'Y-m-d'): bool

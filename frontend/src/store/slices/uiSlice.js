@@ -5,6 +5,10 @@ const initialState = {
   theme: localStorage.getItem('theme') || 'light',
   sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
   notificationsOpen: false,
+  subscriptionOverlay: {
+    isVisible: false,
+    message: '',
+  },
   modals: {
     confirmDelete: {
       isOpen: false,
@@ -98,6 +102,18 @@ const uiSlice = createSlice({
     clearAllToasts: (state) => {
       state.toasts = [];
     },
+    showSubscriptionOverlay: (state, action) => {
+      state.subscriptionOverlay = {
+        isVisible: true,
+        message: action.payload?.message || '',
+      };
+    },
+    hideSubscriptionOverlay: (state) => {
+      state.subscriptionOverlay = {
+        isVisible: false,
+        message: '',
+      };
+    },
   },
 });
 
@@ -117,6 +133,8 @@ export const {
   removeToast,
   setLoadingState,
   clearAllToasts,
+  showSubscriptionOverlay,
+  hideSubscriptionOverlay,
 } = uiSlice.actions;
 
 export default uiSlice.reducer; 

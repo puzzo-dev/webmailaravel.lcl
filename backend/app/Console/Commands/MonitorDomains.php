@@ -57,21 +57,21 @@ class MonitorDomains extends Command
         $results = [];
 
         foreach ($domains as $domain) {
-            $this->info("Monitoring domain: {$domain->domain}");
+            $this->info("Monitoring domain: {$domain->name}");
             
             try {
-                $analytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->domain, 24);
+                $analytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->name, 24);
                 $this->updateDomainMetrics($domain, $analytics);
                 
                 $results[] = [
-                    'domain' => $domain->domain,
+                    'domain' => $domain->name,
                     'health_score' => $analytics['overall_health']['score'] ?? 0,
                     'status' => 'success'
                 ];
             } catch (\Exception $e) {
-                $this->error("Failed to monitor {$domain->domain}: " . $e->getMessage());
+                $this->error("Failed to monitor {$domain->name}: " . $e->getMessage());
                 $results[] = [
-                    'domain' => $domain->domain,
+                    'domain' => $domain->name,
                     'status' => 'error',
                     'error' => $e->getMessage()
                 ];

@@ -12,6 +12,7 @@ class Backup extends Model
 
     protected $fillable = [
         'name',
+        'filename',
         'path',
         'size',
         'type',
@@ -20,6 +21,7 @@ class Backup extends Model
         'encryption',
         'checksum',
         'created_by',
+        'description',
         'notes',
         'expires_at'
     ];

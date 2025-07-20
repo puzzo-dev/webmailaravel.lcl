@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   HiCog,
   HiServer,
@@ -22,166 +22,87 @@ import {
   HiLockClosed,
   HiUser,
   HiChartBar,
+  HiX,
 } from 'react-icons/hi';
+import { adminService } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const AdminSystem = () => {
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [activeTab, setActiveTab] = useState('overview');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState(null);
+  const [systemStatus, setSystemStatus] = useState({});
+  const [systemConfig, setSystemConfig] = useState({});
+  const [securitySettings, setSecuritySettings] = useState({});
 
-  // Mock data - replace with actual API calls
-  const systemStatus = {
-    status: 'healthy',
-    uptime: '15 days, 3 hours, 45 minutes',
-    version: '1.0.0',
-    last_backup: '2024-01-15T10:30:45Z',
-    database_status: 'connected',
-    cache_status: 'running',
-    queue_status: 'running',
-    storage_usage: 75.5,
-    memory_usage: 45.2,
-    cpu_usage: 23.1,
-  };
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadSystemData();
+    }
+  }, [user]);
 
-  const systemConfig = {
-    app: {
-      name: 'Email Campaign Manager',
-      environment: 'production',
-      debug: false,
-      maintenance_mode: false,
-      timezone: 'UTC',
-      locale: 'en',
-    },
-    database: {
-      connection: 'sqlite',
-      host: 'localhost',
-      port: 3306,
-      database: 'webmailaravel',
-      charset: 'utf8mb4',
-      collation: 'utf8mb4_unicode_ci',
-    },
-    mail: {
-      driver: 'smtp',
-      host: 'smtp.mailtrap.io',
-      port: 2525,
-      username: 'user@example.com',
-      encryption: 'tls',
-      from_address: 'noreply@example.com',
-      from_name: 'Email Campaign Manager',
-    },
-    queue: {
-      default: 'database',
-      connections: {
-        database: {
-          driver: 'database',
-          table: 'jobs',
-          queue: 'default',
-          retry_after: 90,
-        },
-      },
-    },
-    cache: {
-      default: 'file',
-      stores: {
-        file: {
-          driver: 'file',
-          path: '/storage/framework/cache/data',
-        },
-      },
-    },
-    session: {
-      driver: 'file',
-      lifetime: 120,
-      expire_on_close: false,
-      encrypt: false,
-      files: '/storage/framework/sessions',
-      connection: null,
-      table: 'sessions',
-      store: null,
-      lottery: [2, 100],
-      cookie: 'laravel_session',
-      path: '/',
-      domain: null,
-      secure: false,
-      http_only: true,
-      same_site: 'lax',
-    },
-    logging: {
-      default: 'stack',
-      channels: {
-        stack: {
-          driver: 'stack',
-          channels: ['single'],
-          ignore_exceptions: false,
-        },
-        single: {
-          driver: 'single',
-          path: '/storage/logs/laravel.log',
-          level: 'debug',
-        },
-      },
-    },
-    btcpay: {
-      base_url: 'https://btcpay.example.com',
-      api_key: 'your-btcpay-api-key',
-      store_id: 'your-store-id',
-      webhook_secret: 'your-webhook-secret',
-      currency: 'USD',
-    },
-    telegram: {
-      bot_token: 'your-telegram-bot-token',
-      chat_id: 'your-chat-id',
-      enabled: true,
-    },
-    powermta: {
-      base_url: 'http://localhost:8080',
-      api_key: 'your-powermta-api-key',
-      config_path: '/etc/pmta/config',
-      accounting_path: '/var/log/pmta/acct-*.csv',
-      fbl_path: '/var/log/pmta/fbl-*.csv',
-      diag_path: '/var/log/pmta/diag-*.csv',
-    },
-  };
-
-  const securitySettings = {
-    password_min_length: 8,
-    password_require_uppercase: true,
-    password_require_lowercase: true,
-    password_require_numbers: true,
-    password_require_symbols: true,
-    session_timeout: 120,
-    max_login_attempts: 5,
-    lockout_duration: 15,
-    require_2fa: false,
-    api_rate_limit: 1000,
-    webhook_timeout: 30,
+  const loadSystemData = async () => {
+    try {
+      setLoading(true);
+      const [statusResponse, configResponse, securityResponse] = await Promise.all([
+        adminService.getSystemStatus(),
+        adminService.getSystemConfig(),
+        adminService.getSecuritySettings()
+      ]);
+      
+      setSystemStatus(statusResponse.data);
+      setSystemConfig(configResponse.data);
+      setSecuritySettings(securityResponse.data);
+    } catch (error) {
+      toast.error('Failed to load system data');
+      console.error('System data error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveConfig = async (section, config) => {
-    setIsLoading(true);
     try {
-      // Implement save config API call
-      console.log('Saving config for section:', section, config);
+      setLoading(true);
+      await adminService.updateSystemConfig(section, config);
+      toast.success('Configuration saved successfully');
       setShowEditModal(false);
       setSelectedConfig(null);
+      await loadSystemData();
     } catch (error) {
-      console.error('Failed to save config:', error);
+      toast.error('Failed to save configuration');
+      console.error('Save config error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleRefreshStatus = async () => {
-    setIsLoading(true);
     try {
-      // Implement refresh status API call
-      console.log('Refreshing system status');
+      setLoading(true);
+      await loadSystemData();
+      toast.success('System status refreshed');
     } catch (error) {
-      console.error('Failed to refresh status:', error);
+      toast.error('Failed to refresh system status');
+      console.error('Refresh status error:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSecuritySettings = async (settings) => {
+    try {
+      setLoading(true);
+      await adminService.updateSecuritySettings(settings);
+      toast.success('Security settings updated successfully');
+      await loadSystemData();
+    } catch (error) {
+      toast.error('Failed to update security settings');
+      console.error('Security settings error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -207,17 +128,57 @@ const AdminSystem = () => {
       case 'healthy':
       case 'connected':
       case 'running':
-        return <HiCheckCircle className="h-4 w-4" />;
+        return <HiCheckCircle className="h-4 w-4 text-green-500" />;
       case 'warning':
-        return <HiExclamation className="h-4 w-4" />;
+        return <HiExclamation className="h-4 w-4 text-yellow-500" />;
       case 'error':
       case 'disconnected':
       case 'stopped':
-        return <HiXCircle className="h-4 w-4" />;
+        return <HiXCircle className="h-4 w-4 text-red-500" />;
       default:
-        return <HiInformationCircle className="h-4 w-4" />;
+        return <HiInformationCircle className="h-4 w-4 text-gray-500" />;
     }
   };
+
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamation className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to manage system settings.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-24 bg-gray-200 rounded-lg"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+          <div className="h-16 bg-gray-200 rounded-lg"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -230,10 +191,10 @@ const AdminSystem = () => {
           </div>
           <button
             onClick={handleRefreshStatus}
-            disabled={isLoading}
+            disabled={loading}
             className="btn btn-secondary flex items-center"
           >
-            <HiRefresh className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <HiRefresh className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh Status
           </button>
         </div>
@@ -332,17 +293,11 @@ const AdminSystem = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'overview', name: 'Overview', icon: HiServer },
-              { id: 'app', name: 'Application', icon: HiCog },
-              { id: 'database', name: 'Database', icon: HiDatabase },
-              { id: 'mail', name: 'Mail', icon: HiMail },
-              { id: 'queue', name: 'Queue', icon: HiClock },
-              { id: 'cache', name: 'Cache', icon: HiGlobe },
-              { id: 'session', name: 'Session', icon: HiUser },
-              { id: 'logging', name: 'Logging', icon: HiChartBar },
+              { id: 'system', name: 'System', icon: HiCog },
+              { id: 'system_smtp', name: 'System SMTP', icon: HiMail },
+              { id: 'webmail', name: 'Webmail', icon: HiGlobe },
+              { id: 'notifications', name: 'Notifications', icon: HiUser },
               { id: 'security', name: 'Security', icon: HiShieldCheck },
-              { id: 'btcpay', name: 'BTCPay', icon: HiKey },
-              { id: 'telegram', name: 'Telegram', icon: HiMail },
-              { id: 'powermta', name: 'PowerMTA', icon: HiServer },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -398,20 +353,24 @@ const AdminSystem = () => {
                   <h4 className="text-md font-medium text-gray-900 mb-4">System Information</h4>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Environment</span>
-                      <span className="text-sm font-medium">{systemConfig.app.environment}</span>
+                      <span className="text-sm text-gray-600">App Name</span>
+                      <span className="text-sm font-medium">{systemConfig.system?.app_name || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Debug Mode</span>
-                      <span className="text-sm font-medium">{systemConfig.app.debug ? 'Enabled' : 'Disabled'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Maintenance Mode</span>
-                      <span className="text-sm font-medium">{systemConfig.app.maintenance_mode ? 'Enabled' : 'Disabled'}</span>
+                      <span className="text-sm text-gray-600">App URL</span>
+                      <span className="text-sm font-medium">{systemConfig.system?.app_url || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Timezone</span>
-                      <span className="text-sm font-medium">{systemConfig.app.timezone}</span>
+                      <span className="text-sm font-medium">{systemConfig.system?.timezone || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Max Campaigns/Day</span>
+                      <span className="text-sm font-medium">{systemConfig.system?.max_campaigns_per_day || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Max Recipients/Campaign</span>
+                      <span className="text-sm font-medium">{systemConfig.system?.max_recipients_per_campaign || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -486,23 +445,23 @@ const AdminSystem = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Minimum Length</span>
-                      <span className="text-sm font-medium">{securitySettings.password_min_length} characters</span>
+                      <span className="text-sm font-medium">{securitySettings?.password_min_length || 'N/A'} characters</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Require Uppercase</span>
-                      <span className="text-sm font-medium">{securitySettings.password_require_uppercase ? 'Yes' : 'No'}</span>
+                      <span className="text-sm font-medium">{securitySettings?.password_require_uppercase ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Require Lowercase</span>
-                      <span className="text-sm font-medium">{securitySettings.password_require_lowercase ? 'Yes' : 'No'}</span>
+                      <span className="text-sm font-medium">{securitySettings?.password_require_lowercase ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Require Numbers</span>
-                      <span className="text-sm font-medium">{securitySettings.password_require_numbers ? 'Yes' : 'No'}</span>
+                      <span className="text-sm font-medium">{securitySettings?.password_require_numbers ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Require Symbols</span>
-                      <span className="text-sm font-medium">{securitySettings.password_require_symbols ? 'Yes' : 'No'}</span>
+                      <span className="text-sm font-medium">{securitySettings?.password_require_symbols ? 'Yes' : 'No'}</span>
                     </div>
                   </div>
                 </div>
@@ -511,23 +470,23 @@ const AdminSystem = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Session Timeout</span>
-                      <span className="text-sm font-medium">{securitySettings.session_timeout} minutes</span>
+                      <span className="text-sm font-medium">{securitySettings?.session_timeout || 'N/A'} minutes</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Max Login Attempts</span>
-                      <span className="text-sm font-medium">{securitySettings.max_login_attempts}</span>
+                      <span className="text-sm font-medium">{securitySettings?.max_login_attempts || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Lockout Duration</span>
-                      <span className="text-sm font-medium">{securitySettings.lockout_duration} minutes</span>
+                      <span className="text-sm font-medium">{securitySettings?.lockout_duration || 'N/A'} minutes</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Require 2FA</span>
-                      <span className="text-sm font-medium">{securitySettings.require_2fa ? 'Yes' : 'No'}</span>
+                      <span className="text-sm font-medium">{securitySettings?.require_2fa ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">API Rate Limit</span>
-                      <span className="text-sm font-medium">{securitySettings.api_rate_limit} requests/min</span>
+                      <span className="text-sm font-medium">{securitySettings?.api_rate_limit || 'N/A'} requests/min</span>
                     </div>
                   </div>
                 </div>
@@ -604,11 +563,11 @@ const AdminSystem = () => {
                   </button>
                   <button
                     onClick={() => handleSaveConfig(activeTab, selectedConfig)}
-                    disabled={isLoading}
+                    disabled={loading}
                     className="btn btn-primary flex items-center"
                   >
                     <HiSave className="h-4 w-4 mr-2" />
-                    {isLoading ? 'Saving...' : 'Save Configuration'}
+                    {loading ? 'Saving...' : 'Save Configuration'}
                   </button>
                 </div>
               </div>

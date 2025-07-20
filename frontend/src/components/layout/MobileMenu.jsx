@@ -1,9 +1,12 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { HiX, HiLogout, HiInbox } from 'react-icons/hi';
 
 const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
-  const navigation = [
+  const { currentView } = useSelector((state) => state.auth);
+  
+  const userNavigation = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Campaigns', href: '/campaigns' },
     { name: 'Domains', href: '/domains' },
@@ -13,10 +16,16 @@ const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
   ];
 
   const adminNavigation = [
+    { name: 'Admin Dashboard', href: '/admin' },
     { name: 'Users', href: '/admin/users' },
+    { name: 'Campaigns', href: '/admin/campaigns' },
+    { name: 'Domains', href: '/admin/domains' },
+    { name: 'System', href: '/admin/system' },
+    { name: 'Logs', href: '/admin/logs' },
   ];
 
   const isAdmin = user?.role === 'admin';
+  const isAdminView = currentView === 'admin';
 
   return (
     <div className={`md:hidden ${isOpen ? 'block' : 'hidden'}`}>
@@ -44,21 +53,31 @@ const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
 
         <div className="flex-1 flex flex-col overflow-y-auto">
           <nav className="flex-1 px-2 py-4 space-y-1">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                onClick={onClose}
-              >
-                {item.name}
-              </NavLink>
-            ))}
-
-            {/* Admin Navigation */}
-            {isAdmin && (
+            {/* User Navigation - Show for regular users OR admin users in user view */}
+            {(!isAdmin || (isAdmin && !isAdminView)) && (
               <>
-                <div className="pt-6 pb-2">
+                <div className="pb-2">
+                  <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    User
+                  </h3>
+                </div>
+                {userNavigation.map((item) => (
+                  <NavLink
+                    key={item.name}
+                    to={item.href}
+                    className="group flex items-center px-2 py-2 text-base font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    onClick={onClose}
+                  >
+                    {item.name}
+                  </NavLink>
+                ))}
+              </>
+            )}
+
+            {/* Admin Navigation - Show only for admin users in admin view */}
+            {isAdmin && isAdminView && (
+              <>
+                <div className="pb-2">
                   <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Admin
                   </h3>

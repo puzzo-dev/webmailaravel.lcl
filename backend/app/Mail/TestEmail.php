@@ -5,52 +5,31 @@ namespace App\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Content;
-use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use App\Models\Sender;
 
 class TestEmail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $testData;
+    public $sender;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(array $testData)
+    public function __construct(Sender $sender)
     {
-        $this->testData = $testData;
+        $this->sender = $sender;
     }
 
     /**
-     * Get the message envelope.
+     * Build the message.
      */
-    public function envelope(): Envelope
+    public function build()
     {
-        return new Envelope(
-            from: $this->testData['from'],
-            to: $this->testData['to'],
-            subject: $this->testData['subject'] ?? 'Test Email',
-        );
-    }
-
-    /**
-     * Get the message content definition.
-     */
-    public function content(): Content
-    {
-        return new Content(
-            htmlString: $this->testData['html_body'] ?? '<h1>Test Email</h1><p>This is a test email from the campaign system.</p>',
-            textString: $this->testData['text_body'] ?? 'Test Email\n\nThis is a test email from the campaign system.',
-        );
-    }
-
-    /**
-     * Get the attachments for the message.
-     */
-    public function attachments(): array
-    {
-        return [];
+        return $this->from($this->sender->email, $this->sender->name)
+                    ->subject('Test Email - SMTP Configuration Test')
+                    ->view('emails.test-email')
+                    ->text('emails.test-email-text');
     }
 } 

@@ -5,7 +5,8 @@ export const fetchCampaigns = createAsyncThunk(
   'campaigns/fetchCampaigns',
   async (params, { rejectWithValue }) => {
     try {
-      return await api.get('/campaigns', params);
+      const response = await api.get('/campaigns', params);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -38,7 +39,22 @@ export const createCampaign = createAsyncThunk(
   'campaigns/createCampaign',
   async (campaignData, { rejectWithValue }) => {
     try {
-      return await api.post('/campaigns', campaignData);
+      // Debug log FormData contents
+      if (campaignData instanceof FormData) {
+        for (let [key, value] of campaignData.entries()) {
+          console.log(`FormData entry - ${key}:`, value instanceof File ? `File: ${value.name}` : value);
+        }
+      }
+
+      // Remove Content-Type header for FormData
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      };
+
+      const response = await api.post('/campaigns', campaignData, config);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -49,7 +65,8 @@ export const updateCampaign = createAsyncThunk(
   'campaigns/updateCampaign',
   async ({ campaignId, campaignData }, { rejectWithValue }) => {
     try {
-      return await api.put(`/campaigns/${campaignId}`, campaignData);
+      const response = await api.put(`/campaigns/${campaignId}`, campaignData);
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -127,7 +144,10 @@ export const fetchSenders = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/senders');
-      return response.data || [];
+      return {
+        data: response.data?.data || [],
+        pagination: response.data?.pagination || null
+      };
     } catch (error) {
       console.error('Error fetching senders:', error);
       return rejectWithValue(handleApiError(error).message);
@@ -140,7 +160,10 @@ export const fetchDomains = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/domains');
-      return response.data || [];
+      return {
+        data: response.data?.data || [],
+        pagination: response.data?.pagination || null
+      };
     } catch (error) {
       console.error('Error fetching domains:', error);
       return rejectWithValue(handleApiError(error).message);
@@ -153,7 +176,10 @@ export const fetchContents = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await api.get('/contents');
-      return response.data || [];
+      return {
+        data: response.data?.data || [],
+        pagination: response.data?.pagination || null
+      };
     } catch (error) {
       console.error('Error fetching contents:', error);
       return rejectWithValue(handleApiError(error).message);
@@ -202,19 +228,21 @@ const campaignSlice = createSlice({
       })
       .addCase(fetchCampaigns.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.campaigns = action.payload.data || action.payload;
-        state.pagination = action.payload.meta || action.payload.pagination || {
+        // Handle API response structure: { success, message, data, pagination }
+        const campaignsData = action.payload.data || [];
+        state.campaigns = Array.isArray(campaignsData) ? campaignsData : [];
+        state.pagination = action.payload.pagination || {
           current_page: 1,
           last_page: 1,
           per_page: 10,
-          total: (action.payload.data || action.payload)?.length || 0,
+          total: Array.isArray(campaignsData) ? campaignsData.length : 0,
         };
       })
       .addCase(fetchCampaigns.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Fetch Recent Campaigns
       .addCase(fetchRecentCampaigns.pending, (state) => {
         state.isLoading = true;
@@ -222,14 +250,16 @@ const campaignSlice = createSlice({
       })
       .addCase(fetchRecentCampaigns.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.campaigns = action.payload.data;
-        state.pagination = action.payload.meta;
+        // Handle API response structure: { success, message, data, pagination }
+        const campaignsData = action.payload.data || [];
+        state.campaigns = Array.isArray(campaignsData) ? campaignsData : [];
+        state.pagination = action.payload.pagination || action.payload.meta;
       })
       .addCase(fetchRecentCampaigns.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Fetch Single Campaign
       .addCase(fetchCampaign.pending, (state) => {
         state.isLoading = true;
@@ -237,13 +267,13 @@ const campaignSlice = createSlice({
       })
       .addCase(fetchCampaign.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.currentCampaign = action.payload;
+        state.currentCampaign = action.payload.data || action.payload;
       })
       .addCase(fetchCampaign.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Create Campaign
       .addCase(createCampaign.pending, (state) => {
         state.isLoading = true;
@@ -260,7 +290,7 @@ const campaignSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Campaign
       .addCase(updateCampaign.fulfilled, (state, action) => {
         const index = state.campaigns.findIndex(c => c.id === action.payload.id);
@@ -271,7 +301,7 @@ const campaignSlice = createSlice({
           state.currentCampaign = action.payload;
         }
       })
-      
+
       // Delete Campaign
       .addCase(deleteCampaign.fulfilled, (state, action) => {
         state.campaigns = state.campaigns.filter(c => c.id !== action.payload);
@@ -279,7 +309,7 @@ const campaignSlice = createSlice({
           state.currentCampaign = null;
         }
       })
-      
+
       // Start Campaign
       .addCase(startCampaign.fulfilled, (state, action) => {
         const index = state.campaigns.findIndex(c => c.id === action.payload.id);
@@ -290,7 +320,7 @@ const campaignSlice = createSlice({
           state.currentCampaign = action.payload;
         }
       })
-      
+
       // Pause Campaign
       .addCase(pauseCampaign.fulfilled, (state, action) => {
         const index = state.campaigns.findIndex(c => c.id === action.payload.id);
@@ -301,7 +331,7 @@ const campaignSlice = createSlice({
           state.currentCampaign = action.payload;
         }
       })
-      
+
       // Stop Campaign
       .addCase(stopCampaign.fulfilled, (state, action) => {
         const index = state.campaigns.findIndex(c => c.id === action.payload.id);
@@ -312,38 +342,41 @@ const campaignSlice = createSlice({
           state.currentCampaign = action.payload;
         }
       })
-      
+
       // Fetch Campaign Stats
       .addCase(fetchCampaignStats.fulfilled, (state, action) => {
         state.campaignStats = action.payload;
       })
-      
+
       // Fetch Campaign Tracking
       .addCase(fetchCampaignTracking.fulfilled, (state, action) => {
         state.campaignTracking = action.payload;
       })
-      
+
       // Fetch Senders
       .addCase(fetchSenders.fulfilled, (state, action) => {
-        state.senders = action.payload || [];
+        const sendersData = action.payload.data || action.payload;
+        state.senders = Array.isArray(sendersData) ? sendersData : [];
       })
       .addCase(fetchSenders.rejected, (state, action) => {
         state.senders = [];
         state.error = action.payload;
       })
-      
+
       // Fetch Domains
       .addCase(fetchDomains.fulfilled, (state, action) => {
-        state.domains = action.payload || [];
+        const domainsData = action.payload.data || action.payload;
+        state.domains = Array.isArray(domainsData) ? domainsData : [];
       })
       .addCase(fetchDomains.rejected, (state, action) => {
         state.domains = [];
         state.error = action.payload;
       })
-      
+
       // Fetch Contents
       .addCase(fetchContents.fulfilled, (state, action) => {
-        state.contents = action.payload || [];
+        const contentsData = action.payload.data || action.payload;
+        state.contents = Array.isArray(contentsData) ? contentsData : [];
       })
       .addCase(fetchContents.rejected, (state, action) => {
         state.contents = [];

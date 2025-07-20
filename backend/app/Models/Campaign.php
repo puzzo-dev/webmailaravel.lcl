@@ -15,6 +15,7 @@ class Campaign extends Model
         'name',
         'subject',
         'status',
+        'job_id',
         'sender_ids',
         'content_ids',
         'recipient_list_path',
@@ -69,16 +70,21 @@ class Campaign extends Model
     ];
 
     // Relationships
-    public function user() { return $this->belongsTo(User::class); }
-    
-    public function contents() 
+    public function user() 
     { 
-        return $this->belongsToMany(Content::class, 'campaign_content', 'campaign_id', 'content_id');
+        return $this->belongsTo(User::class); 
     }
     
     public function senders() 
     { 
-        return $this->belongsToMany(Sender::class, 'campaign_sender', 'campaign_id', 'sender_id');
+        return $this->belongsToMany(Sender::class, 'campaign_sender', 'campaign_id', 'sender_id')
+            ->withTimestamps();
+    }
+    
+    public function contents() 
+    { 
+        return $this->belongsToMany(Content::class, 'campaign_content', 'campaign_id', 'content_id')
+            ->withTimestamps();
     }
 
     public function emailTracking(): HasMany

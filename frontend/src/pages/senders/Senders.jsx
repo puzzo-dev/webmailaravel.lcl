@@ -25,16 +25,35 @@ import {
   deleteSender, 
   testSenderConnection 
 } from '../../store/slices/senderSlice';
-import { fetchDomains } from '../../store/slices/domainSlice';
+import { fetchDomains } from '../../store/slices/domainsSlice';
 import SmartForm from '../../components/SmartForm';
 
 const Senders = () => {
   const dispatch = useDispatch();
   const { senders = [], isLoading = false } = useSelector((state) => state.senders || {});
   const { domains = [], isLoading: isDomainsLoading } = useSelector((state) => state.domains || {});
+  const { user, currentView } = useSelector((state) => state.auth || {});
 
   // Ensure domains is always an array
   const safeDomains = Array.isArray(domains) ? domains : [];
+
+  // Filter domains and senders based on current view
+  const isAdminView = currentView === 'admin';
+  const isAdmin = user?.role === 'admin';
+  
+  // In user view, only show domains and senders that belong to the current user
+  // In admin view, show all domains and senders
+  const filteredDomains = isAdmin && isAdminView 
+    ? safeDomains 
+    : safeDomains.filter(domain => domain.user_id === user?.id);
+    
+  const filteredSenders = isAdmin && isAdminView 
+    ? senders 
+    : senders.filter(sender => {
+        // Find the domain for this sender
+        const senderDomain = safeDomains.find(domain => domain.id === sender.domain_id);
+        return senderDomain && senderDomain.user_id === user?.id;
+      });
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -193,7 +212,7 @@ const Senders = () => {
           <option value="">
             {isDomainsLoading ? 'Loading domains...' : 'Select a domain'}
           </option>
-          {safeDomains.map((domain) => (
+          {filteredDomains.map((domain) => (
             <option key={domain.id} value={domain.id}>
               {domain.name || domain.domain} 
               {domain.status === 'active' ? ' (Active)' : ' (Inactive)'}
@@ -253,7 +272,18 @@ const Senders = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Sender Management</h1>
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">Sender Management</h1>
+              {isAdmin && (
+                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
+                  isAdminView 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {isAdminView ? 'Admin View' : 'User View'}
+                </span>
+              )}
+            </div>
             <p className="text-gray-600 mt-1">Manage your sender accounts and SMTP configurations</p>
           </div>
           <button
@@ -279,8 +309,8 @@ const Senders = () => {
       {/* Senders Grid */}
       {!isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {safeSenders.length > 0 ? (
-            safeSenders.map((sender) => (
+          {filteredSenders.length > 0 ? (
+            filteredSenders.map((sender) => (
               <div key={sender.id} className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -350,9 +380,17 @@ const Senders = () => {
             <div className="col-span-full bg-white rounded-lg shadow-sm p-6">
               <div className="text-center py-8">
                 <HiMail className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No senders found</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">
+                  {isAdmin && isAdminView 
+                    ? 'No senders found in the system' 
+                    : 'No senders found'
+                  }
+                </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Get started by adding your first sender account.
+                  {isAdmin && isAdminView 
+                    ? 'Add senders to the system for users to manage.' 
+                    : 'Get started by adding your first sender account.'
+                  }
                 </p>
                 <div className="mt-6">
                   <button

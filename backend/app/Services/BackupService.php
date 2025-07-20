@@ -37,6 +37,8 @@ class BackupService
                 'size' => $fileSize,
                 'description' => $description,
                 'created_by' => $user->id,
+                'status' => 'completed', // Set status to completed
+                'type' => 'database', // Set type to database
             ]);
 
             $this->logInfo('Database backup created', [
@@ -63,7 +65,7 @@ class BackupService
      */
     private function createSQLiteBackup(string $backupPath): void
     {
-        $databasePath = config('database.connections.sqlite.database');
+        $databasePath = database_path('database.sqlite');
         
         if (!file_exists($databasePath)) {
             throw new \Exception('SQLite database file not found: ' . $databasePath);
@@ -123,7 +125,7 @@ class BackupService
      */
     private function restoreSQLiteBackup(string $backupContent): void
     {
-        $databasePath = config('database.connections.sqlite.database');
+        $databasePath = database_path('database.sqlite');
         
         if (!$databasePath) {
             throw new \Exception('SQLite database path not configured');

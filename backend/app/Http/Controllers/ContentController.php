@@ -6,9 +6,36 @@ namespace App\Http\Controllers;
 use App\Models\Content;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class ContentController extends Controller
 {
+    /**
+     * Display a listing of the resource
+     */
+    public function index(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            // Check if user is admin
+            if (Auth::user()->hasRole('admin')) {
+                // Admin sees all contents
+                $query = Content::with(['user']);
+                $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'All contents retrieved successfully');
+            } else {
+                // Regular users see only their contents
+                $query = Content::where('user_id', Auth::id());
+                $results = $query->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'Contents retrieved successfully');
+            }
+        }, 'list_contents');
+    }
+
     /**
      * Get the model class for this controller
      */
@@ -65,6 +92,84 @@ class ContentController extends Controller
     protected function getLogContext(): array
     {
         return ['content_type' => 'email'];
+    }
+
+    /**
+     * Store a newly created resource.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        return $this->validateAndExecute(
+            $request,
+            $this->getStoreRules(),
+            function () use ($request) {
+                $data = $request->input('validated_data');
+                $data['user_id'] = Auth::id();
+
+                $content = Content::create($data);
+                
+                return $this->createdResponse($content->load($this->getRelationships()), 'Content created successfully');
+            },
+            'create_content'
+        );
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $content = Content::with($this->getRelationships())->findOrFail($id);
+            
+            if (!$this->canAccessResource($content)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            return $this->successResponse($content, 'Content retrieved successfully');
+        }, 'view_content');
+    }
+
+    /**
+     * Update the specified resource.
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        return $this->validateAndExecute(
+            $request,
+            $this->getUpdateRules(),
+            function () use ($request, $id) {
+                $content = Content::findOrFail($id);
+                
+                if (!$this->canAccessResource($content)) {
+                    return $this->forbiddenResponse('Access denied');
+                }
+                
+                $data = $request->input('validated_data');
+                $content->update($data);
+                
+                return $this->successResponse($content->load($this->getRelationships()), 'Content updated successfully');
+            },
+            'update_content'
+        );
+    }
+
+    /**
+     * Remove the specified resource.
+     */
+    public function destroy(string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $content = Content::findOrFail($id);
+            
+            if (!$this->canAccessResource($content)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $content->delete();
+            
+            return $this->successResponse(null, 'Content deleted successfully');
+        }, 'delete_content');
     }
 
     /**

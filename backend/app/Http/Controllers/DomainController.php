@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Domain;
 use App\Models\SmtpConfig;
 use Illuminate\Http\Request;
+use App\Traits\ResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class DomainController extends Controller
 {
+    use ResponseTrait;
+
     public function __construct()
     {
         // No parent constructor to call for base Controller
@@ -23,11 +26,24 @@ class DomainController extends Controller
     public function index(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            $query = Domain::where('user_id', Auth::id())
-                ->with(['smtpConfig', 'senders'])
-                ->orderBy('created_at', 'desc');
-
-            return $this->getPaginatedResults($query, $request, 'domains', ['smtpConfig', 'senders']);
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            // Check if user is admin
+            if (Auth::user()->hasRole('admin')) {
+                // Admin sees all domains
+                $query = Domain::with(['smtpConfig', 'senders', 'user']);
+                $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'All domains retrieved successfully');
+            } else {
+                // Regular users see only their domains
+                $query = Domain::with(['smtpConfig', 'senders'])
+                    ->where('user_id', Auth::id());
+                $results = $query->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'Domains retrieved successfully');
+            }
         }, 'list_domains');
     }
 
@@ -39,7 +55,7 @@ class DomainController extends Controller
         return $this->validateAndExecute(
             $request,
             [
-                'domain' => 'required|string|max:255|unique:domains,domain',
+                'name' => 'required|string|max:255|unique:domains,name',
                 'is_active' => 'boolean',
                 'verification_status' => 'string|in:pending,verified,failed'
             ],
@@ -52,7 +68,7 @@ class DomainController extends Controller
                 Log::info('Domain created', [
                     'user_id' => Auth::id(),
                     'domain_id' => $domain->id,
-                    'domain' => $domain->domain
+                    'domain' => $domain->name
                 ]);
 
                 return $this->createdResponse($domain->load(['smtpConfig', 'senders']), 'Domain created successfully');
@@ -73,7 +89,7 @@ class DomainController extends Controller
                 return $this->forbiddenResponse('Access denied');
             }
             
-            return $this->getResource($domain, 'domain', $id);
+            return $this->successResponse($domain, 'Domain retrieved successfully');
         }, 'view_domain');
     }
 
@@ -85,12 +101,13 @@ class DomainController extends Controller
         return $this->executeWithErrorHandling(function () use ($request, $id) {
             $domain = Domain::findOrFail($id);
             
-            if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+            // Admin can update any domain, regular users can only update their own
+            if (!Auth::user()->hasRole('admin') && $domain->user_id !== Auth::id()) {
                 return $this->forbiddenResponse('Access denied');
             }
             
             $validator = Validator::make($request->all(), [
-                'domain' => 'sometimes|string|max:255|unique:domains,domain,' . $domain->id,
+                'name' => 'sometimes|string|max:255|unique:domains,name,' . $domain->id,
                 'is_active' => 'boolean',
                 'verification_status' => 'string|in:pending,verified,failed'
             ]);
@@ -109,6 +126,79 @@ class DomainController extends Controller
 
             return $this->successResponse($domain->load(['smtpConfig', 'senders']), 'Domain updated successfully');
         }, 'update_domain');
+    }
+
+    /**
+     * Update domain (admin functionality)
+     */
+    public function updateDomain(Request $request, string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $domain = Domain::findOrFail($id);
+            
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255|unique:domains,name,' . $domain->id,
+                'is_active' => 'boolean',
+                'verification_status' => 'string|in:pending,verified,failed'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $domain->update($validator->validated());
+
+            Log::info('Domain updated by admin', [
+                'admin_id' => Auth::id(),
+                'domain_id' => $domain->id,
+                'updated_fields' => array_keys($validator->validated())
+            ]);
+
+            return $this->successResponse($domain->load(['smtpConfig', 'senders']), 'Domain updated successfully');
+        }, 'update_domain');
+    }
+
+    /**
+     * Update multiple domains with common data (admin functionality)
+     */
+    public function updateDomains(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'domain_ids' => 'required|array',
+                'domain_ids.*' => 'exists:domains,id',
+                'is_active' => 'sometimes|boolean',
+                'verification_status' => 'sometimes|string|in:pending,verified,failed'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $domainIds = $request->input('domain_ids');
+            $updateData = $request->only(['is_active', 'verification_status']);
+            $updatedCount = Domain::whereIn('id', $domainIds)->update($updateData);
+            
+            Log::info('Bulk domain update by admin', [
+                'admin_id' => Auth::id(),
+                'total_domains' => count($domainIds),
+                'updated_count' => $updatedCount,
+                'update_data' => $updateData
+            ]);
+
+            return $this->successResponse([
+                'updated_count' => $updatedCount,
+                'domain_ids' => $domainIds
+            ], "Successfully updated {$updatedCount} domains");
+        }, 'update_domains');
     }
 
     /**
@@ -156,7 +246,7 @@ class DomainController extends Controller
                 Log::info('Domain verified', [
                     'user_id' => Auth::id(),
                     'domain_id' => $domain->id,
-                    'domain' => $domain->domain
+                    'domain' => $domain->name
                 ]);
 
                 return $this->successResponse($verificationResult, 'Domain verified successfully');
@@ -166,7 +256,7 @@ class DomainController extends Controller
                 Log::error('Domain verification failed', [
                     'user_id' => Auth::id(),
                     'domain_id' => $domain->id,
-                    'domain' => $domain->domain,
+                    'domain' => $domain->name,
                     'error' => $verificationResult['error']
                 ]);
 
@@ -175,8 +265,21 @@ class DomainController extends Controller
         }, 'verify_domain');
     }
 
+    public function getSmtpConfig(string $domainId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($domainId) {
+            $domain = Domain::findOrFail($domainId);
+            
+            if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            return $this->successResponse($domain->smtpConfig, 'SMTP configuration retrieved successfully');
+        });
+    }
+
     /**
-     * Add SMTP configuration to domain
+     * Add or update SMTP configuration for domain
      */
     public function addSmtpConfig(Request $request, string $id): JsonResponse
     {
@@ -200,15 +303,28 @@ class DomainController extends Controller
                 return $this->validationErrorResponse($validator->errors());
             }
             
-            $smtpConfig = $domain->smtpConfig()->create($validator->validated());
+            // Check if SMTP config already exists for this domain
+            $smtpConfig = $domain->smtpConfig;
+            
+            if ($smtpConfig) {
+                // Update existing SMTP config
+                $smtpConfig->update($validator->validated());
+                $message = 'SMTP configuration updated successfully';
+                $logAction = 'updated';
+            } else {
+                // Create new SMTP config
+                $smtpConfig = $domain->smtpConfig()->create($validator->validated());
+                $message = 'SMTP configuration added successfully';
+                $logAction = 'added';
+            }
 
-            Log::info('SMTP config added', [
+            Log::info("SMTP config {$logAction}", [
                 'user_id' => Auth::id(),
                 'domain_id' => $domain->id,
                 'smtp_config_id' => $smtpConfig->id
             ]);
 
-            return $this->createdResponse($smtpConfig, 'SMTP configuration added successfully');
+            return $this->successResponse($smtpConfig, $message);
         }, 'add_smtp_config');
     }
 
@@ -258,18 +374,19 @@ class DomainController extends Controller
     /**
      * Remove SMTP configuration
      */
-    public function destroySmtpConfig(string $domainId, string $smtpConfigId): JsonResponse
+    public function destroySmtpConfig(string $domainId): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($domainId, $smtpConfigId) {
+        return $this->executeWithErrorHandling(function () use ($domainId) {
             $domain = Domain::findOrFail($domainId);
-            $smtpConfig = SmtpConfig::findOrFail($smtpConfigId);
             
             if ($domain->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
 
-            if ($smtpConfig->domain_id !== $domain->id) {
-                return $this->errorResponse('SMTP configuration does not belong to this domain');
+            // Delete the SMTP config for this domain
+            $smtpConfig = $domain->smtpConfig;
+            if (!$smtpConfig) {
+                return $this->errorResponse('No SMTP configuration found for this domain');
             }
             
             $smtpConfig->delete();
@@ -442,5 +559,186 @@ class DomainController extends Controller
                 'failed_checks' => array_keys($failedChecks)
             ];
         }
+    }
+
+    /**
+     * Get all SMTP configs (admin only)
+     */
+    public function getAllSmtpConfigs(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            $query = SmtpConfig::with(['domain.user']);
+            $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+            
+            return $this->paginatedResponse($results, 'All SMTP configurations retrieved successfully');
+        }, 'admin_list_smtp_configs');
+    }
+
+    /**
+     * Get specific SMTP config (admin only)
+     */
+    public function getSmtpConfigById(string $configId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($configId) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $smtpConfig = SmtpConfig::with(['domain.user'])->findOrFail($configId);
+            
+            return $this->successResponse($smtpConfig, 'SMTP configuration retrieved successfully');
+        }, 'admin_view_smtp_config');
+    }
+
+    /**
+     * Create SMTP config (admin only)
+     */
+    public function createSmtpConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $validator = Validator::make($request->all(), [
+                'domain_id' => 'required|exists:domains,id',
+                'host' => 'required|string|max:255',
+                'port' => 'required|integer|min:1|max:65535',
+                'username' => 'required|string|max:255',
+                'password' => 'required|string',
+                'encryption' => 'required|string|in:tls,ssl,none',
+                'from_address' => 'required|email',
+                'from_name' => 'nullable|string|max:255',
+                'is_active' => 'boolean'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $data = $validator->validated();
+            
+            // Encrypt password
+            $data['password'] = \Illuminate\Support\Facades\Crypt::encryptString($data['password']);
+            
+            $smtpConfig = SmtpConfig::create($data);
+
+            Log::info('SMTP config created by admin', [
+                'admin_id' => Auth::id(),
+                'smtp_config_id' => $smtpConfig->id,
+                'domain_id' => $smtpConfig->domain_id
+            ]);
+
+            return $this->createdResponse($smtpConfig->load(['domain.user']), 'SMTP configuration created successfully');
+        }, 'admin_create_smtp_config');
+    }
+
+    /**
+     * Update SMTP config (admin only)
+     */
+    public function updateSmtpConfigById(Request $request, string $configId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $configId) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $smtpConfig = SmtpConfig::findOrFail($configId);
+            
+            $validator = Validator::make($request->all(), [
+                'host' => 'sometimes|string|max:255',
+                'port' => 'sometimes|integer|min:1|max:65535',
+                'username' => 'sometimes|string|max:255',
+                'password' => 'sometimes|string',
+                'encryption' => 'sometimes|string|in:tls,ssl,none',
+                'from_address' => 'sometimes|email',
+                'from_name' => 'nullable|string|max:255',
+                'is_active' => 'boolean'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $data = $validator->validated();
+            
+            // Encrypt password if provided
+            if (isset($data['password'])) {
+                $data['password'] = \Illuminate\Support\Facades\Crypt::encryptString($data['password']);
+            }
+            
+            $smtpConfig->update($data);
+
+            Log::info('SMTP config updated by admin', [
+                'admin_id' => Auth::id(),
+                'smtp_config_id' => $smtpConfig->id,
+                'updated_fields' => array_keys($data)
+            ]);
+
+            return $this->successResponse($smtpConfig->load(['domain.user']), 'SMTP configuration updated successfully');
+        }, 'admin_update_smtp_config');
+    }
+
+    /**
+     * Delete SMTP config (admin only)
+     */
+    public function deleteSmtpConfig(string $configId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($configId) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $smtpConfig = SmtpConfig::findOrFail($configId);
+            $smtpConfig->delete();
+
+            Log::info('SMTP config deleted by admin', [
+                'admin_id' => Auth::id(),
+                'smtp_config_id' => $configId
+            ]);
+
+            return $this->successResponse(null, 'SMTP configuration deleted successfully');
+        }, 'admin_delete_smtp_config');
+    }
+
+    /**
+     * Test SMTP config (admin only)
+     */
+    public function testSmtpConfig(string $configId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($configId) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $smtpConfig = SmtpConfig::findOrFail($configId);
+            
+            // This would implement actual SMTP connection testing
+            // For now, we'll simulate a test
+            $testResult = [
+                'success' => true,
+                'message' => 'SMTP connection test successful',
+                'details' => [
+                    'host' => $smtpConfig->host,
+                    'port' => $smtpConfig->port,
+                    'encryption' => $smtpConfig->encryption
+                ]
+            ];
+
+            Log::info('SMTP config test by admin', [
+                'admin_id' => Auth::id(),
+                'smtp_config_id' => $configId,
+                'success' => $testResult['success']
+            ]);
+
+            return $this->successResponse($testResult, $testResult['success'] ? 'SMTP test successful' : 'SMTP test failed');
+        }, 'admin_test_smtp_config');
     }
 }

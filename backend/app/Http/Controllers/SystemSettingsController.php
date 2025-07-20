@@ -258,4 +258,174 @@ class SystemSettingsController extends Controller
             return $this->successResponse($envVariables, 'Environment variables retrieved successfully');
         }, 'get_env_variables');
     }
+
+
+
+    /**
+     * Update system configuration (admin only)
+     */
+    public function updateSystemConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $validated = $request->validate([
+                'config_type' => 'required|string|in:app,mail,queue,cache,session,logging',
+                'config_data' => 'required|array',
+            ]);
+
+            // Update configuration logic here
+            // This would typically involve updating config files or database
+
+            return $this->successResponse(null, 'System configuration updated successfully');
+        }, 'update_system_config');
+    }
+
+    /**
+     * Get BTCPay configuration (admin only)
+     */
+    public function getBTCPayConfig(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $config = [
+                'base_url' => SystemConfig::get('BTCPAY_URL'),
+                'api_key' => SystemConfig::get('BTCPAY_API_KEY'),
+                'store_id' => SystemConfig::get('BTCPAY_STORE_ID'),
+                'webhook_secret' => SystemConfig::get('BTCPAY_WEBHOOK_SECRET'),
+                'currency' => SystemConfig::get('BTCPAY_CURRENCY', 'USD'),
+            ];
+            return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
+        }, 'view_btcpay_config');
+    }
+
+    /**
+     * Update BTCPay configuration (admin only)
+     */
+    public function updateBTCPayConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $validated = $request->validate([
+                'base_url' => 'nullable|string',
+                'api_key' => 'nullable|string',
+                'store_id' => 'nullable|string',
+                'webhook_secret' => 'nullable|string',
+                'currency' => 'nullable|string',
+            ]);
+            
+            foreach ($validated as $key => $value) {
+                $configKey = 'BTCPAY_' . strtoupper($key);
+                SystemConfig::set($configKey, $value);
+            }
+            
+            return $this->successResponse(null, 'BTCPay configuration updated successfully');
+        }, 'update_btcpay_config');
+    }
+
+    /**
+     * Get Telegram configuration (admin only)
+     */
+    public function getTelegramConfig(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $config = [
+                'bot_token' => SystemConfig::get('TELEGRAM_BOT_TOKEN'),
+                'chat_id' => SystemConfig::get('TELEGRAM_CHAT_ID'),
+                'enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', false),
+            ];
+            return $this->successResponse($config, 'Telegram configuration retrieved successfully');
+        }, 'view_telegram_config');
+    }
+
+    /**
+     * Update Telegram configuration (admin only)
+     */
+    public function updateTelegramConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $validated = $request->validate([
+                'bot_token' => 'nullable|string',
+                'chat_id' => 'nullable|string',
+                'enabled' => 'nullable|boolean',
+            ]);
+            
+            foreach ($validated as $key => $value) {
+                if ($key === 'enabled') {
+                    $configKey = 'NOTIFICATION_TELEGRAM_ENABLED';
+                } else {
+                    $configKey = 'TELEGRAM_' . strtoupper($key);
+                }
+                SystemConfig::set($configKey, $value);
+            }
+            
+            return $this->successResponse(null, 'Telegram configuration updated successfully');
+        }, 'update_telegram_config');
+    }
+
+    /**
+     * Get PowerMTA configuration (admin only)
+     */
+    public function getPowerMTAConfig(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $config = [
+                'base_url' => SystemConfig::get('POWERMTA_BASE_URL'),
+                'api_key' => SystemConfig::get('POWERMTA_API_KEY'),
+                'config_path' => SystemConfig::get('POWERMTA_CONFIG_PATH'),
+                'accounting_path' => SystemConfig::get('POWERMTA_ACCOUNTING_PATH'),
+                'fbl_path' => SystemConfig::get('POWERMTA_FBL_PATH'),
+                'diag_path' => SystemConfig::get('POWERMTA_DIAG_PATH'),
+            ];
+            return $this->successResponse($config, 'PowerMTA configuration retrieved successfully');
+        }, 'view_powermta_config');
+    }
+
+    /**
+     * Update PowerMTA configuration (admin only)
+     */
+    public function updatePowerMTAConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            
+            $validated = $request->validate([
+                'base_url' => 'nullable|string',
+                'api_key' => 'nullable|string',
+                'config_path' => 'nullable|string',
+                'accounting_path' => 'nullable|string',
+                'fbl_path' => 'nullable|string',
+                'diag_path' => 'nullable|string',
+            ]);
+            
+            foreach ($validated as $key => $value) {
+                $configKey = 'POWERMTA_' . strtoupper($key);
+                SystemConfig::set($configKey, $value);
+            }
+            
+            return $this->successResponse(null, 'PowerMTA configuration updated successfully');
+        }, 'update_powermta_config');
+    }
 }

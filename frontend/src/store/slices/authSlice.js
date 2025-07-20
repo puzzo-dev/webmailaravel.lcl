@@ -8,16 +8,18 @@ export const initializeAuth = createAsyncThunk(
     try {
       // Try to get user profile - if successful, user is authenticated
       const response = await authService.getProfile(true); // Mark as auth init
-      const user = response.data?.user || response.data;
+      const user = response.data?.user || response.user || response;
       
       if (user) {
+        console.log('Auth initialization: User authenticated', user);
         return { user };
       } else {
+        console.log('Auth initialization: No user data in response');
         return rejectWithValue('No user found');
       }
     } catch (error) {
       // If API call fails (no cookie, expired token, etc.), user is not authenticated
-      console.log('Auth initialization: No valid session found');
+      console.log('Auth initialization: No valid session found', error.message);
       return rejectWithValue('Not authenticated');
     }
   }
@@ -33,19 +35,13 @@ export const login = createAsyncThunk(
         remember: remember,
       });
       
-      if (response.success && response.data) {
-        const { user } = response.data;
-        if (!user) {
-          throw new Error('Missing user in response');
-        }
-        // User data will be stored in Redux state only
+      // The API returns: { success: true, data: { user: {...} } }
+      if (response.success && response.data && response.data.user) {
+        return response;
       } else {
-        throw new Error('Missing user in response');
+        throw new Error('Invalid response structure from server');
       }
-      
-      return response;
     } catch (error) {
-      console.error('Login error in authSlice:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Login failed';
       return rejectWithValue(errorMessage);
     }
@@ -58,17 +54,12 @@ export const register = createAsyncThunk(
     try {
       const response = await authService.register(userData);
       
-      if (response.success && response.data) {
-        const { user } = response.data;
-        if (!user) {
-          throw new Error('Missing user in response');
-        }
-        // User data will be stored in Redux state only
+      // The API returns: { success: true, data: { user: {...} } }
+      if (response.success && response.data && response.data.user) {
+        return response;
       } else {
-        throw new Error('Missing user in response');
+        throw new Error('Invalid response structure from server');
       }
-      
-      return response;
     } catch (error) {
       console.error('Register error in authSlice:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
@@ -183,6 +174,7 @@ const initialState = {
   isAuthenticated: false, // Will be determined by API call
   isLoading: false,
   error: null,
+  currentView: 'user', // 'user' or 'admin' - for admin users to switch between views
 };
 
 const authSlice = createSlice({
@@ -200,6 +192,17 @@ const authSlice = createSlice({
       state.user = null;
       state.isAuthenticated = false;
       state.error = null;
+      state.currentView = 'user';
+    },
+    switchToAdminView: (state) => {
+      if (state.user?.role === 'admin') {
+        state.currentView = 'admin';
+      }
+    },
+    switchToUserView: (state) => {
+      if (state.user?.role === 'admin') {
+        state.currentView = 'user';
+      }
     },
   },
   extraReducers: (builder) => {
@@ -211,8 +214,11 @@ const authSlice = createSlice({
       })
       .addCase(initializeAuth.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload.user;
-        state.isAuthenticated = !!action.payload.user;
+        const user = action.payload.user;
+        state.user = user;
+        state.isAuthenticated = !!user;
+        // Admin users start in user view by default
+        state.currentView = 'user';
       })
       .addCase(initializeAuth.rejected, (state, action) => {
         state.isLoading = false;
@@ -226,8 +232,12 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
+        // Handle both response structures: action.payload.data.user and action.payload.user
+        const user = action.payload.data?.user || action.payload.user;
+        state.user = user;
+        state.isAuthenticated = !!user;
+        // Admin users start in user view by default
+        state.currentView = 'user';
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -240,8 +250,12 @@ const authSlice = createSlice({
       })
       .addCase(register.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
+        // Handle both response structures: action.payload.data.user and action.payload.user
+        const user = action.payload.data?.user || action.payload.user;
+        state.user = user;
+        state.isAuthenticated = !!user;
+        // Admin users start in user view by default
+        state.currentView = 'user';
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
@@ -350,5 +364,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUser, clearAuth } = authSlice.actions;
+export const { clearError, setUser, clearAuth, switchToAdminView, switchToUserView } = authSlice.actions;
 export default authSlice.reducer; 

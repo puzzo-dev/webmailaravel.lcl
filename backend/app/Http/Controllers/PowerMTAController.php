@@ -32,7 +32,7 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $hours = $request->input('validated_data.hours', 24);
-                $analytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->domain, $hours);
+                $analytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->name, $hours);
 
                 return $this->successResponse($analytics, 'Domain analytics retrieved successfully');
             },
@@ -56,7 +56,7 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $hours = $request->input('validated_data.hours', 24);
-                $metrics = $this->powerMTAService->parseAccountingFiles($domain->domain, $hours);
+                $metrics = $this->powerMTAService->parseAccountingFiles($domain->name, $hours);
 
                 return $this->successResponse($metrics, 'Accounting metrics retrieved successfully');
             },
@@ -80,7 +80,7 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $hours = $request->input('validated_data.hours', 24);
-                $fblData = $this->powerMTAService->parseFBLFiles($domain->domain, $hours);
+                $fblData = $this->powerMTAService->parseFBLFiles($domain->name, $hours);
 
                 return $this->successResponse([
                     'total_complaints' => count($fblData),
@@ -108,7 +108,7 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $hours = $request->input('validated_data.hours', 24);
-                $diagData = $this->powerMTAService->parseDiagFiles($domain->domain, $hours);
+                $diagData = $this->powerMTAService->parseDiagFiles($domain->name, $hours);
 
                 return $this->successResponse([
                     'total_diagnostics' => count($diagData),
@@ -190,14 +190,14 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $maxMsgRate = $request->input('validated_data.max_msg_rate');
-                $result = $this->powerMTAService->updateDomainConfig($domain->domain, $maxMsgRate);
+                $result = $this->powerMTAService->updateDomainConfig($domain->name, $maxMsgRate);
 
                 if ($result) {
                     // Update database
                     $domain->update(['max_msg_rate' => $maxMsgRate]);
                     
                     return $this->successResponse([
-                        'domain' => $domain->domain,
+                        'domain' => $domain->name,
                         'max_msg_rate' => $maxMsgRate
                     ], 'Domain configuration updated successfully');
                 } else {
@@ -224,10 +224,10 @@ class PowerMTAController extends Controller
                     ->firstOrFail();
 
                 $hours = $request->input('validated_data.hours', 24);
-                $csvData = $this->powerMTAService->exportDomainAnalytics($domain->domain, $hours);
+                $csvData = $this->powerMTAService->exportDomainAnalytics($domain->name, $hours);
 
                 return $this->successResponse([
-                    'filename' => "domain_analytics_{$domain->domain}_{$hours}h.csv",
+                    'filename' => "domain_analytics_{$domain->name}_{$hours}h.csv",
                     'data' => $csvData
                 ], 'Domain analytics exported successfully');
             },
@@ -251,10 +251,10 @@ class PowerMTAController extends Controller
 
                 $analytics = [];
                 foreach ($domains as $domain) {
-                    $domainAnalytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->domain, $hours);
+                    $domainAnalytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->name, $hours);
                     $analytics[] = [
                         'domain_id' => $domain->id,
-                        'domain' => $domain->domain,
+                        'domain' => $domain->name,
                         'provider' => $domain->provider,
                         'max_msg_rate' => $domain->max_msg_rate,
                         'analytics' => $domainAnalytics
@@ -283,7 +283,7 @@ class PowerMTAController extends Controller
                     $result = $this->powerMTAService->applyTrainingConfig($domain->id);
                     $results[] = [
                         'domain_id' => $domain->id,
-                        'domain' => $domain->domain,
+                        'domain' => $domain->name,
                         'result' => $result
                     ];
                 }

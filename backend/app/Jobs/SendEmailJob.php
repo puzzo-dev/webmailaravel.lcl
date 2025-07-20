@@ -56,6 +56,9 @@ class SendEmailJob implements ShouldQueue
             $campaignService = app(\App\Services\CampaignService::class);
             $recipientData = $campaignService->getRecipientData($this->campaign->id, $this->recipient);
 
+            // Configure mail settings for this specific sender's domain
+            $this->configureMailForSender();
+
             // Send email using Laravel's Mail facade
             Mail::to($this->recipient)
                 ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData));
@@ -87,6 +90,55 @@ class SendEmailJob implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Configure mail settings for the sender's domain SMTP configuration
+     */
+    private function configureMailForSender(): void
+    {
+        // Get the sender's domain SMTP configuration
+        $smtpConfig = $this->sender->domain->smtpConfig;
+        
+        if (!$smtpConfig) {
+            Log::error('No SMTP configuration found for sender domain', [
+                'sender_id' => $this->sender->id,
+                'domain_id' => $this->sender->domain_id
+            ]);
+            throw new \Exception('No SMTP configuration found for sender domain');
+        }
+
+        // Store original mail configuration
+        $originalConfig = config('mail');
+        
+        // Set the mail configuration for this specific sender
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp' => [
+                'transport' => 'smtp',
+                'host' => $smtpConfig->host,
+                'port' => $smtpConfig->port,
+                'username' => $smtpConfig->username,
+                'password' => $smtpConfig->password,
+                'encryption' => $smtpConfig->encryption,
+                'timeout' => 30,
+                'local_domain' => $smtpConfig->host,
+            ],
+            'mail.from.address' => $this->sender->email,
+            'mail.from.name' => $this->sender->name,
+        ]);
+
+        // Clear the mail manager cache to force reload of configuration
+        app('mail.manager')->purge('smtp');
+
+        Log::info('Mail configured for sender', [
+            'sender_id' => $this->sender->id,
+            'sender_email' => $this->sender->email,
+            'smtp_host' => $smtpConfig->host,
+            'smtp_port' => $smtpConfig->port,
+            'smtp_username' => $smtpConfig->username,
+            'smtp_encryption' => $smtpConfig->encryption
+        ]);
     }
 
     /**

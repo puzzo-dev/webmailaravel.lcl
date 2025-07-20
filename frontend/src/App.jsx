@@ -3,6 +3,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useSelector, useDispatch } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import { initializeAuth } from './store/slices/authSlice';
+import { hideSubscriptionOverlay } from './store/slices/uiSlice';
+
+// Auth Components
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthRoute from './components/auth/AuthRoute';
 
 // Layout Components
 import Layout from './components/layout/Layout';
@@ -18,7 +23,7 @@ import Verify2FA from './pages/auth/Verify2FA';
 // Landing Page
 import Landing from './pages/Landing';
 
-// Main Pages
+// User Pages
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
@@ -26,8 +31,9 @@ import CampaignDetail from './pages/campaigns/CampaignDetail';
 import Analytics from './pages/analytics/Analytics';
 import Notifications from './pages/Notifications';
 import Account from './pages/Account';
+import UserActivity from './pages/UserActivity';
 
-// Feature Pages
+// User Feature Pages
 import Billing from './pages/billing/Billing';
 import SuppressionList from './pages/suppression/SuppressionList';
 import Senders from './pages/senders/Senders';
@@ -36,114 +42,25 @@ import Domains from './pages/domains/Domains';
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
-import AdminLogs from './pages/admin/AdminLogs';
-import AdminBackups from './pages/admin/AdminBackups';
-import AdminPowerMTA from './pages/admin/AdminPowerMTA';
+import AdminCampaigns from './pages/admin/AdminCampaigns';
+import AdminDomains from './pages/admin/AdminDomains';
+import AdminSenders from './pages/admin/AdminSenders';
+import AdminSmtp from './pages/admin/AdminSmtp';
 import AdminSystem from './pages/admin/AdminSystem';
-import SystemSettings from './pages/SystemSettings';
-import UserActivity from './pages/UserActivity';
+import AdminBackups from './pages/admin/AdminBackups';
+import AdminLogs from './pages/admin/AdminLogs';
+import AdminPowerMTA from './pages/admin/AdminPowerMTA';
 import AdminNotifications from './pages/admin/AdminNotifications';
-
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
-};
-
-// Auth Route Component
-const AuthRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : children;
-};
-
-// Admin Route Component
-const AdminRoute = ({ children }) => {
-  const { isAuthenticated, user } = useSelector((state) => state.auth);
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!user?.role || user.role !== 'admin') return <Navigate to="/" replace />;
-  return children;
-};
-
-// Route Configurations
-const authRoutes = [
-  { path: '/login', component: Login },
-  { path: '/register', component: Register },
-  { path: '/forgot-password', component: ForgotPassword },
-  { path: '/reset-password', component: ResetPassword },
-  { path: '/verify-2fa', component: Verify2FA },
-];
-
-const mainRoutes = [
-  { path: '/dashboard', component: Dashboard },
-  { path: '/campaigns', component: Campaigns },
-  { path: '/campaigns/new', component: CampaignBuilder },
-  { path: '/campaigns/:id', component: CampaignDetail },
-  { path: '/campaigns/:id/edit', component: CampaignBuilder },
-  { path: '/analytics', component: Analytics },
-  { path: '/notifications', component: Notifications },
-  { path: '/account', component: Account },
-  { path: '/activity', component: UserActivity },
-];
-
-const featureRoutes = [
-  { path: '/billing', component: Billing },
-  { path: '/suppression-list', component: SuppressionList },
-  { path: '/senders', component: Senders },
-  { path: '/domains', component: Domains },
-];
-
-const adminRoutes = [
-  { path: '/admin', component: AdminDashboard },
-  { path: '/admin/users', component: AdminUsers },
-  { path: '/admin/logs', component: AdminLogs },
-  { path: '/admin/backups', component: AdminBackups },
-  { path: '/admin/powermta', component: AdminPowerMTA },
-  { path: '/admin/system', component: AdminSystem },
-  { path: '/admin/system-settings', component: SystemSettings },
-  { path: '/admin/notifications', component: AdminNotifications },
-];
-
-const adminPlaceholderRoutes = [
-  {
-    path: '/admin/campaigns',
-    title: 'Admin Campaigns',
-    description: 'Admin campaign management coming soon...',
-  },
-  {
-    path: '/admin/domains',
-    title: 'Domain Management',
-    description: 'Domain management coming soon...',
-  },
-  {
-    path: '/admin/billing',
-    title: 'Billing Management',
-    description: 'Billing management coming soon...',
-  },
-  {
-    path: '/admin/settings',
-    title: 'System Settings',
-    description: 'System settings coming soon...',
-  },
-  {
-    path: '/admin/security',
-    title: 'Security Settings',
-    description: 'Security settings coming soon...',
-  },
-  {
-    path: '/admin/reports',
-    title: 'Reports',
-    description: 'Reporting features coming soon...',
-  },
-];
-
+import AdminBilling from './pages/admin/AdminBilling';
 function App() {
-  const { isAuthenticated, isLoading, user } = useSelector((state) => state.auth);
+  const { isAuthenticated, user, isLoading, currentView } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(initializeAuth());
   }, []);
 
+  // Show loading screen while initializing authentication
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -177,86 +94,56 @@ function App() {
           }}
         />
         <Routes>
-          {/* Public Routes */}
-          {!isAuthenticated && <Route path="/" element={<Landing />} />}
+          {/* Landing Page */}
+          <Route path="/" element={
+            !isAuthenticated ? <Landing /> : <Navigate to={currentView === 'admin' ? "/admin" : "/dashboard"} replace />
+          } />
           
           {/* Auth Routes */}
-          {authRoutes.map(({ path, component: Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <AuthRoute>
-                  <AuthLayout>
-                    <Component />
-                  </AuthLayout>
-                </AuthRoute>
-              }
-            />
-          ))}
+          <Route element={<AuthRoute />}>
+            <Route element={<AuthLayout />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-2fa" element={<Verify2FA />} />
+            </Route>
+          </Route>
 
-          {/* Main Protected Routes */}
-          {mainRoutes.map(({ path, component: Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Component />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-          ))}
+          {/* All Protected Routes - Available to all authenticated users */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              {/* User Routes - Available to all authenticated users */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/campaigns/new" element={<CampaignBuilder />} />
+              <Route path="/campaigns/:id" element={<CampaignDetail />} />
+              <Route path="/campaigns/:id/edit" element={<CampaignBuilder />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/activity" element={<UserActivity />} />
+              <Route path="/billing" element={<Billing />} />
+              <Route path="/suppression-list" element={<SuppressionList />} />
+              <Route path="/senders" element={<Senders />} />
+              <Route path="/domains" element={<Domains />} />
 
-          {/* Feature Routes */}
-          {featureRoutes.map(({ path, component: Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Component />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-          ))}
-
-          {/* Admin Routes */}
-          {adminRoutes.map(({ path, component: Component }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <AdminRoute>
-                  <Layout>
-                    <Component />
-                  </Layout>
-                </AdminRoute>
-              }
-            />
-          ))}
-
-          {/* Admin Placeholder Routes */}
-          {adminPlaceholderRoutes.map(({ path, title, description }) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <AdminRoute>
-                  <Layout>
-                    <div className="p-6">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-4">{title}</h1>
-                      <p className="text-gray-600">{description}</p>
-                    </div>
-                  </Layout>
-                </AdminRoute>
-              }
-            />
-          ))}
+              {/* Admin Routes - Only available to admin users */}
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+                <Route path="/admin/domains" element={<AdminDomains />} />
+                <Route path="/admin/senders" element={<AdminSenders />} />
+                <Route path="/admin/smtp" element={<AdminSmtp />} />
+                <Route path="/admin/system" element={<AdminSystem />} />
+                <Route path="/admin/backups" element={<AdminBackups />} />
+                <Route path="/admin/logs" element={<AdminLogs />} />
+                <Route path="/admin/powermta" element={<AdminPowerMTA />} />
+                <Route path="/admin/notifications" element={<AdminNotifications />} />
+              <Route path="/admin/billing" element={<AdminBilling />} />
+            </Route>
+          </Route>
 
           {/* Test Route */}
           <Route
@@ -272,8 +159,15 @@ function App() {
           />
 
           {/* Redirects */}
-          {isAuthenticated && <Route path="/" element={<Navigate to="/dashboard" replace />} />}
-          <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
+          <Route path="*" element={
+            isAuthenticated ? (
+              currentView === 'admin' ? 
+                <Navigate to="/admin" replace /> : 
+                <Navigate to="/dashboard" replace />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          } />
         </Routes>
       </div>
     </Router>

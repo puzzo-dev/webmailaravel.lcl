@@ -3,7 +3,6 @@ import authReducer from './slices/authSlice';
 import userReducer from './slices/userSlice';
 import campaignReducer from './slices/campaignSlice';
 import senderReducer from './slices/senderSlice';
-import domainReducer from './slices/domainSlice';
 import domainsReducer from './slices/domainsSlice';
 import billingReducer from './slices/billingSlice';
 import securityReducer from './slices/securitySlice';
@@ -21,7 +20,6 @@ export const store = configureStore({
     campaigns: campaignReducer,
     senders: senderReducer,
     domains: domainsReducer,
-    domain: domainReducer,
     billing: billingReducer,
     security: securityReducer,
     suppression: suppressionReducer,
@@ -36,7 +34,7 @@ export const store = configureStore({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST'],
         // Ignore specific action types that might cause performance issues
-        ignoredActionPaths: ['payload.timestamp', 'meta.timestamp'],
+        ignoredActionPaths: ['payload.timestamp', 'meta.timestamp', 'meta.arg'],
         ignoredPaths: ['some.path.to.ignore'],
       },
       immutableCheck: {

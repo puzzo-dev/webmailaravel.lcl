@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Device;
-use App\Services\GeoIPService;
+use App\Traits\GeoIPTrait;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
+use App\Traits\ResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -17,10 +18,12 @@ use Illuminate\Support\Facades\Log;
 class UserController extends Controller
 {
     use LoggingTrait,
-        ValidationTrait;
+        GeoIPTrait,
+        ValidationTrait,
+        ResponseTrait;
 
     public function __construct(
-        private GeoIPService $geoIPService
+        // private GeoIPService $geoIPService
     ) {}
 
     /**
@@ -28,28 +31,19 @@ class UserController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $this->authorize('admin');
-        
-        $users = User::with(['devices', 'campaigns'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 20));
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Users retrieved successfully',
-            'data' => $users->items(),
-            'pagination' => [
-                'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
-                'per_page' => $users->perPage(),
-                'total' => $users->total(),
-                'from' => $users->firstItem(),
-                'to' => $users->lastItem(),
-                'has_more_pages' => $users->hasMorePages(),
-                'next_page_url' => $users->nextPageUrl(),
-                'previous_page_url' => $users->previousPageUrl()
-            ]
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            $query = User::with(['devices', 'campaigns']);
+            $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+            
+            return $this->paginatedResponse($results, 'Users retrieved successfully');
+        }, 'list_users');
     }
 
     /**
@@ -117,43 +111,42 @@ class UserController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
-        $user = User::findOrFail($id);
-        
-        $this->authorize('update', $user);
-        
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
-            'password' => 'sometimes|string|min:8|confirmed',
-        ]);
-        
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-        
-        $userData = $validator->validated();
-        
-        if (isset($userData['password'])) {
-            $userData['password'] = Hash::make($userData['password']);
-        }
-        
-        $user->update($userData);
-        
-        Log::info('User updated', [
-            'user_id' => $user->id,
-            'updated_fields' => array_keys($userData),
-            'ip' => $request->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'User updated successfully',
-            'data' => $user
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $user = User::findOrFail($id);
+            
+            // Admin can update any user, regular users can only update themselves
+            if (!Auth::user()->hasRole('admin') && $user->id !== Auth::id()) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
+                'password' => 'sometimes|string|min:8|confirmed',
+                'status' => 'sometimes|string|in:active,inactive,suspended'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $userData = $validator->validated();
+            
+            if (isset($userData['password'])) {
+                $userData['password'] = Hash::make($userData['password']);
+            }
+            
+            $user->update($userData);
+            
+            Log::info('User updated', [
+                'updated_by' => Auth::id(),
+                'user_id' => $user->id,
+                'updated_fields' => array_keys($userData),
+                'ip' => $request->ip()
+            ]);
+            
+            return $this->successResponse($user, 'User updated successfully');
+        }, 'update_user');
     }
 
     /**
@@ -161,21 +154,29 @@ class UserController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        $user = User::findOrFail($id);
-        
-        $this->authorize('delete', $user);
-        
-        $user->delete();
-        
-        Log::info('User deleted', [
-            'user_id' => $user->id,
-            'ip' => request()->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'User deleted successfully'
-        ]);
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $user = User::findOrFail($id);
+            
+            // Admin can delete any user, regular users can only delete themselves
+            if (!Auth::user()->hasRole('admin') && $user->id !== Auth::id()) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            // Prevent admin from deleting themselves
+            if (Auth::user()->hasRole('admin') && $user->id === Auth::id()) {
+                return $this->errorResponse('Cannot delete your own account');
+            }
+            
+            $user->delete();
+            
+            Log::info('User deleted', [
+                'deleted_by' => Auth::id(),
+                'deleted_user_id' => $user->id,
+                'ip' => request()->ip()
+            ]);
+            
+            return $this->successResponse(null, 'User deleted successfully');
+        }, 'delete_user');
     }
 
     /**
@@ -586,26 +587,29 @@ class UserController extends Controller
      */
     public function testTelegram(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'chat_id' => 'required|string',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $validator = Validator::make($request->all(), [
+                'chat_id' => 'required|string',
+                'message' => 'nullable|string'
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
 
-        // Simple response for now - actual Telegram integration would go here
-        return response()->json([
-            'success' => true,
-            'message' => 'Telegram test completed',
-            'data' => [
-                'chat_id' => $request->chat_id,
-                'status' => 'test_message_sent'
-            ]
-        ]);
+            $chatId = $request->input('chat_id');
+            $message = $request->input('message', 'Test message from WebMail system');
+
+            try {
+                // Test Telegram notification
+                $this->sendTelegramNotification($message);
+                
+                return $this->successResponse(null, 'Telegram test message sent successfully');
+            } catch (\Exception $e) {
+                return $this->errorResponse('Failed to send Telegram test message: ' . $e->getMessage());
+            }
+        }, 'test_telegram');
     }
+
+
 }

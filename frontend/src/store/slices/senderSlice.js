@@ -7,7 +7,9 @@ export const fetchSenders = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await api.get('/senders', params);
-      return response;
+      // The API response structure is: { success: true, message: "...", data: [...], pagination: {...} }
+      // So response.data contains the entire response object
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -19,7 +21,7 @@ export const createSender = createAsyncThunk(
   async (senderData, { rejectWithValue }) => {
     try {
       const response = await api.post('/senders', senderData);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -31,7 +33,7 @@ export const updateSender = createAsyncThunk(
   async ({ id, data }, { rejectWithValue }) => {
     try {
       const response = await api.put(`/senders/${id}`, data);
-      return response;
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -52,10 +54,10 @@ export const deleteSender = createAsyncThunk(
 
 export const testSenderConnection = createAsyncThunk(
   'senders/testSenderConnection',
-  async (id, { rejectWithValue }) => {
+  async ({ id, test_email }, { rejectWithValue }) => {
     try {
-      const response = await api.post(`/senders/${id}/test`);
-      return response;
+      const response = await api.post(`/senders/${id}/test`, { test_email });
+      return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
     }
@@ -95,8 +97,17 @@ const senderSlice = createSlice({
       })
       .addCase(fetchSenders.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.senders = action.payload.data || action.payload;
-        state.pagination = action.payload.pagination || state.pagination;
+        // Handle the API response structure: { success: true, message: "...", data: [...], pagination: {...} }
+        const responseData = action.payload;
+        const sendersData = responseData?.data || [];
+        
+        console.log('SenderSlice - Response Data:', responseData);
+        console.log('SenderSlice - Senders Data:', sendersData);
+        
+        state.senders = Array.isArray(sendersData) ? sendersData : [];
+        state.pagination = responseData?.pagination || state.pagination;
+        
+        console.log('SenderSlice - Final State Senders:', state.senders);
       })
       .addCase(fetchSenders.rejected, (state, action) => {
         state.isLoading = false;
@@ -111,7 +122,10 @@ const senderSlice = createSlice({
       })
       .addCase(createSender.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.senders.push(action.payload);
+        const newSender = action.payload.data || action.payload;
+        if (newSender && Array.isArray(state.senders)) {
+          state.senders.push(newSender);
+        }
       })
       .addCase(createSender.rejected, (state, action) => {
         state.isLoading = false;
@@ -126,9 +140,12 @@ const senderSlice = createSlice({
       })
       .addCase(updateSender.fulfilled, (state, action) => {
         state.isLoading = false;
-        const index = state.senders.findIndex(s => s.id === action.payload.id);
-        if (index !== -1) {
-          state.senders[index] = action.payload;
+        const updatedSender = action.payload.data || action.payload;
+        if (updatedSender && Array.isArray(state.senders)) {
+          const index = state.senders.findIndex(s => s.id === updatedSender.id);
+          if (index !== -1) {
+            state.senders[index] = updatedSender;
+          }
         }
       })
       .addCase(updateSender.rejected, (state, action) => {
@@ -144,7 +161,9 @@ const senderSlice = createSlice({
       })
       .addCase(deleteSender.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.senders = state.senders.filter(s => s.id !== action.payload);
+        if (Array.isArray(state.senders)) {
+          state.senders = state.senders.filter(s => s.id !== action.payload);
+        }
       })
       .addCase(deleteSender.rejected, (state, action) => {
         state.isLoading = false;

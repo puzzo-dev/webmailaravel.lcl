@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Sender;
 use App\Models\SmtpConfig;
 use App\Mail\TestEmail;
+use App\Traits\ResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 
 class SenderController extends Controller
 {
+    use ResponseTrait;
     public function __construct()
     {
         // No parent constructor to call for base Controller
@@ -23,12 +25,25 @@ class SenderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        return $this->executeControllerMethod(function () use ($request) {
-            $query = Sender::where('user_id', Auth::id())
-                ->with(['domain', 'domain.smtpConfig'])
-                ->orderBy('created_at', 'desc');
-
-            return $this->getPaginatedResults($query, $request, 'senders', ['domain', 'domain.smtpConfig']);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            // Check if user is admin
+            if (Auth::user()->hasRole('admin')) {
+                // Admin sees all senders
+                $query = Sender::with(['domain', 'domain.smtpConfig', 'user']);
+                $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'All senders retrieved successfully');
+            } else {
+                // Regular users see only their senders
+                $query = Sender::with(['domain', 'domain.smtpConfig'])
+                    ->where('user_id', Auth::id());
+                $results = $query->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'Senders retrieved successfully');
+            }
         }, 'list_senders');
     }
 
@@ -73,7 +88,7 @@ class SenderController extends Controller
                 return $this->forbiddenResponse('Access denied');
             }
             
-            return $this->getResource($sender, 'sender', $id);
+            return $this->successResponse($sender, 'Sender retrieved successfully');
         }, 'view_sender');
     }
 
@@ -85,7 +100,8 @@ class SenderController extends Controller
         return $this->executeWithErrorHandling(function () use ($request, $id) {
             $sender = Sender::findOrFail($id);
             
-            if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+            // Admin can update any sender, regular users can only update their own
+            if (!Auth::user()->hasRole('admin') && $sender->user_id !== Auth::id()) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -103,6 +119,65 @@ class SenderController extends Controller
             $sender->update($validator->validated());
             return $this->successResponse($sender->load(['domain', 'domain.smtpConfig']), 'Sender updated successfully');
         }, 'update_sender');
+    }
+
+    /**
+     * Update sender (admin functionality)
+     */
+    public function updateSender(Request $request, string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $sender = Sender::findOrFail($id);
+            
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|max:255',
+                'domain_id' => 'sometimes|exists:domains,id',
+                'is_active' => 'boolean'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $sender->update($validator->validated());
+            return $this->successResponse($sender->load(['domain', 'domain.smtpConfig']), 'Sender updated successfully');
+        }, 'update_sender');
+    }
+
+    /**
+     * Update multiple senders with common data (admin functionality)
+     */
+    public function updateSenders(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'sender_ids' => 'required|array',
+                'sender_ids.*' => 'exists:senders,id',
+                'is_active' => 'sometimes|boolean'
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $senderIds = $request->input('sender_ids');
+            $updateData = $request->only(['is_active']);
+            $updatedCount = Sender::whereIn('id', $senderIds)->update($updateData);
+            
+            return $this->successResponse([
+                'updated_count' => $updatedCount,
+                'sender_ids' => $senderIds
+            ], "Successfully updated {$updatedCount} senders");
+        }, 'update_senders');
     }
 
     /**
@@ -127,37 +202,27 @@ class SenderController extends Controller
      */
     public function testConnection(Request $request, Sender $sender): JsonResponse
     {
-        return $this->validateAuthorizeAndExecute(
+        return $this->validateAndExecute(
             $request,
             [
                 'test_email' => 'required|email'
             ],
-            function () use ($sender) {
+            function () use ($request, $sender) {
                 if ($sender->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
                     return $this->forbiddenResponse('Access denied');
                 }
-                return null;
-            },
-            function () use ($request, $sender) {
+                
                 $testEmail = $request->input('validated_data')['test_email'];
                 
-                $result = $this->callExternalService(
-                    function () use ($sender, $testEmail) {
-                        return $this->testSmtpConfig($sender->domain->smtpConfig, $sender, $testEmail);
-                    },
-                    'SMTP',
-                    'test_connection',
-                    ['sender_id' => $sender->id, 'test_email' => $testEmail]
-                );
+                $result = $this->testSmtpConfig($sender->domain->smtpConfig, $sender, $testEmail);
 
                 if ($result['success']) {
-                    return $this->actionResponse($result, 'Sender test completed successfully');
+                    return $this->successResponse($result, 'Sender test completed successfully');
                 } else {
-                    return $this->errorResponse('Sender test failed', $result['error']);
+                    return $this->errorResponse($result['error'], 400);
                 }
             },
-            'test_sender',
-            ['sender_id' => $sender->id]
+            'test_sender'
         );
     }
 
@@ -167,33 +232,74 @@ class SenderController extends Controller
     protected function testSmtpConfig(SmtpConfig $smtpConfig, Sender $sender, string $testEmail): array
     {
         try {
-            // Configure mail settings
+            // Store original mail configuration
+            $originalConfig = config('mail');
+            
+            // Set the mail configuration for this specific test
             config([
-                'mail.mailers.smtp.host' => $smtpConfig->host,
-                'mail.mailers.smtp.port' => $smtpConfig->port,
-                'mail.mailers.smtp.username' => $smtpConfig->username,
-                'mail.mailers.smtp.password' => $smtpConfig->password,
-                'mail.mailers.smtp.encryption' => $smtpConfig->encryption,
+                'mail.default' => 'smtp',
+                'mail.mailers.smtp' => [
+                    'transport' => 'smtp',
+                    'host' => $smtpConfig->host,
+                    'port' => $smtpConfig->port,
+                    'username' => $smtpConfig->username,
+                    'password' => $smtpConfig->password,
+                    'encryption' => $smtpConfig->encryption,
+                    'timeout' => 30,
+                    'local_domain' => $smtpConfig->host,
+                ],
                 'mail.from.address' => $sender->email,
                 'mail.from.name' => $sender->name,
             ]);
 
+            // Clear the mail manager cache to force reload of configuration
+            app('mail.manager')->purge('smtp');
+
             // Send test email
             Mail::to($testEmail)->send(new TestEmail($sender));
+
+            // Restore original configuration
+            config(['mail' => $originalConfig]);
 
             return [
                 'success' => true,
                 'message' => 'Test email sent successfully',
                 'sender' => $sender->email,
-                'test_email' => $testEmail
+                'test_email' => $testEmail,
+                'smtp_config' => [
+                    'host' => $smtpConfig->host,
+                    'port' => $smtpConfig->port,
+                    'username' => $smtpConfig->username,
+                    'encryption' => $smtpConfig->encryption
+                ]
             ];
 
         } catch (\Exception $e) {
+            // Restore original configuration in case of error
+            if (isset($originalConfig)) {
+                config(['mail' => $originalConfig]);
+            }
+            
+            // Get the actual error message, not the email content
+            $errorMessage = $e->getMessage();
+            
+            // If the error message contains the email content, extract the real error
+            if (str_contains($errorMessage, 'Test Email - SMTP Configuration Test')) {
+                // This means Laravel is still trying to interpret the content as a view
+                $errorMessage = 'Failed to send test email: Invalid email template configuration';
+            }
+            
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
+                'error' => $errorMessage,
                 'sender' => $sender->email,
-                'test_email' => $testEmail
+                'test_email' => $testEmail,
+                'smtp_config' => [
+                    'host' => $smtpConfig->host,
+                    'port' => $smtpConfig->port,
+                    'username' => $smtpConfig->username,
+                    'encryption' => $smtpConfig->encryption
+                ]
             ];
         }
     }

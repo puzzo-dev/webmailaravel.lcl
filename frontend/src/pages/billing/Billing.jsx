@@ -19,6 +19,7 @@ import {
   fetchSubscriptions,
   fetchPaymentHistory,
   fetchPaymentRates,
+  fetchPlans,
   createSubscription,
   cancelSubscription,
   clearError,
@@ -33,6 +34,7 @@ const Billing = () => {
     paymentHistory,
     paymentRates,
     invoices,
+    plans,
     isLoading,
     error,
   } = useSelector((state) => state.billing);
@@ -43,6 +45,7 @@ const Billing = () => {
     dispatch(fetchSubscriptions());
     dispatch(fetchPaymentHistory());
     dispatch(fetchPaymentRates());
+    dispatch(fetchPlans());
   }, [dispatch]);
 
   useEffect(() => {
@@ -55,11 +58,13 @@ const Billing = () => {
     }
   }, [error, dispatch]);
 
-  const handleUpgrade = async (planName) => {
+  const handleUpgrade = async (planId) => {
     try {
-      await dispatch(createSubscription({ plan: planName })).unwrap();
+      await dispatch(createSubscription({ plan_id: planId })).unwrap();
+      toast.success('Subscription created successfully! Check your email for payment instructions.');
     } catch (error) {
       console.error('Plan upgrade failed:', error);
+      toast.error('Failed to create subscription. Please try again.');
     }
   };
 
@@ -85,45 +90,7 @@ const Billing = () => {
     console.log('Viewing invoice:', invoiceId);
   };
 
-  // Mock plans data - replace with actual API call
-  const plans = [
-    {
-      name: 'Starter',
-      price: 19.99,
-      features: [
-        '1,000 emails/month',
-        'Basic Analytics',
-        'Email Support',
-        'Standard Templates',
-      ],
-      current: currentSubscription?.plan === 'Starter',
-    },
-    {
-      name: 'Professional',
-      price: 49.99,
-      features: [
-        '10,000 emails/month',
-        'Advanced Analytics',
-        'Priority Support',
-        'Custom Domains',
-        'API Access',
-      ],
-      current: currentSubscription?.plan === 'Professional',
-    },
-    {
-      name: 'Enterprise',
-      price: 99.99,
-      features: [
-        'Unlimited emails',
-        'Advanced Analytics',
-        'Dedicated Support',
-        'Custom Domains',
-        'API Access',
-        'White-label Options',
-      ],
-      current: currentSubscription?.plan === 'Enterprise',
-    },
-  ];
+
 
   return (
     <div className="space-y-6">
@@ -225,12 +192,14 @@ const Billing = () => {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Features</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {currentSubscription.features?.map((feature, index) => (
-                      <div key={index} className="flex items-center">
-                        <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
-                        <span className="text-gray-700">{feature}</span>
-                      </div>
-                    )) || (
+                    {Array.isArray(currentSubscription.features) && currentSubscription.features.length > 0 ? (
+                      currentSubscription.features.map((feature, index) => (
+                        <div key={index} className="flex items-center">
+                          <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
+                          <span className="text-gray-700">{feature}</span>
+                        </div>
+                      ))
+                    ) : (
                       <div className="text-gray-500">No features listed</div>
                     )}
                   </div>
@@ -240,12 +209,18 @@ const Billing = () => {
               {/* Available Plans */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Available Plans</h3>
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {plans.map((plan) => (
+                    {Array.isArray(plans) && plans.length > 0 ? (
+                      plans.map((plan) => (
                     <div
-                      key={plan.name}
+                          key={plan.id}
                       className={`border rounded-lg p-6 ${
-                        plan.current
+                            currentSubscription?.plan?.id === plan.id
                           ? 'border-primary-500 bg-primary-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
@@ -254,36 +229,63 @@ const Billing = () => {
                         <h4 className="text-lg font-medium text-gray-900">{plan.name}</h4>
                         <div className="mt-2">
                           <span className="text-3xl font-bold text-gray-900">
-                            ${plan.price}
+                                ${formatNumber(plan.price, 2)}
                           </span>
-                          <span className="text-gray-500">/month</span>
+                              <span className="text-gray-500">/{plan.duration_days} days</span>
                         </div>
-                        {plan.current && (
+                            {currentSubscription?.plan?.id === plan.id && (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 mt-2">
                             Current Plan
                           </span>
                         )}
                       </div>
-                      <ul className="mt-6 space-y-3">
-                        {plan.features.map((feature, index) => (
-                          <li key={index} className="flex items-center">
-                            <HiCheckCircle className="h-4 w-4 text-success-500 mr-3" />
-                            <span className="text-sm text-gray-700">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      {!plan.current && (
+                          <div className="mt-6 space-y-3">
+                            <div className="text-sm text-gray-700">
+                              <div className="flex justify-between">
+                                <span>Max Domains:</span>
+                                <span className="font-medium">{plan.max_domains}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Max Campaigns:</span>
+                                <span className="font-medium">{plan.max_total_campaigns}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Daily Limit:</span>
+                                <span className="font-medium">{formatNumber(plan.daily_sending_limit)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Max Senders/Domain:</span>
+                                <span className="font-medium">{plan.max_senders_per_domain}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-6">
+                            {currentSubscription?.plan?.id === plan.id ? (
+                              <button
+                                disabled
+                                className="w-full btn btn-secondary disabled:opacity-50"
+                              >
+                                Current Plan
+                              </button>
+                            ) : (
                         <button
-                          onClick={() => handleUpgrade(plan.name)}
-                          className="w-full mt-6 btn btn-primary"
+                                onClick={() => handleUpgrade(plan.id)}
+                                className="w-full btn btn-primary"
                           disabled={isLoading}
                         >
                           {isLoading ? 'Processing...' : `Upgrade to ${plan.name}`}
                         </button>
                       )}
                     </div>
-                  ))}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="col-span-full text-center py-8">
+                        <p className="text-gray-500">No plans available</p>
+                      </div>
+                    )}
                 </div>
+                )}
               </div>
 
               {/* Cancel Subscription */}
@@ -337,50 +339,58 @@ const Billing = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {paymentHistory.map((payment) => (
-                        <tr key={payment.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(payment.date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${formatNumber(payment.amount, 2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              payment.status === 'completed'
-                                ? 'bg-success-100 text-success-800'
-                                : 'bg-warning-100 text-warning-800'
-                            }`}>
-                              {payment.status === 'completed' ? (
-                                <HiCheckCircle className="h-3 w-3 mr-1" />
-                              ) : (
-                                <HiClock className="h-3 w-3 mr-1" />
-                              )}
-                              {payment.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {payment.method}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {payment.invoice}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => handleViewInvoice(payment.invoice)}
-                              className="text-primary-600 hover:text-primary-900 mr-3"
-                            >
-                              <HiEye className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownloadInvoice(payment.invoice)}
-                              className="text-primary-600 hover:text-primary-900"
-                            >
-                              <HiDownload className="h-4 w-4" />
-                            </button>
+                      {Array.isArray(paymentHistory) && paymentHistory.length > 0 ? (
+                        paymentHistory.map((payment) => (
+                          <tr key={payment.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatDate(payment.date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${formatNumber(payment.amount, 2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                payment.status === 'completed'
+                                  ? 'bg-success-100 text-success-800'
+                                  : 'bg-warning-100 text-warning-800'
+                              }`}>
+                                {payment.status === 'completed' ? (
+                                  <HiCheckCircle className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <HiClock className="h-3 w-3 mr-1" />
+                                )}
+                                {payment.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {payment.method}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {payment.invoice}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleViewInvoice(payment.invoice)}
+                                className="text-primary-600 hover:text-primary-900 mr-3"
+                              >
+                                <HiEye className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadInvoice(payment.invoice)}
+                                className="text-primary-600 hover:text-primary-900"
+                              >
+                                <HiDownload className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                            No payment history found
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -420,50 +430,58 @@ const Billing = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {invoices.map((invoice) => (
-                        <tr key={invoice.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {invoice.id}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(invoice.date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${formatNumber(invoice.amount, 2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              invoice.status === 'paid'
-                                ? 'bg-success-100 text-success-800'
-                                : 'bg-warning-100 text-warning-800'
-                            }`}>
-                              {invoice.status === 'paid' ? (
-                                <HiCheckCircle className="h-3 w-3 mr-1" />
-                              ) : (
-                                <HiClock className="h-3 w-3 mr-1" />
-                              )}
-                              {invoice.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(invoice.due_date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => handleViewInvoice(invoice.id)}
-                              className="text-primary-600 hover:text-primary-900 mr-3"
-                            >
-                              <HiEye className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownloadInvoice(invoice.id)}
-                              className="text-primary-600 hover:text-primary-900"
-                            >
-                              <HiDownload className="h-4 w-4" />
-                            </button>
+                      {Array.isArray(invoices) && invoices.length > 0 ? (
+                        invoices.map((invoice) => (
+                          <tr key={invoice.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {invoice.id}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatDate(invoice.date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${formatNumber(invoice.amount, 2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                invoice.status === 'paid'
+                                  ? 'bg-success-100 text-success-800'
+                                  : 'bg-warning-100 text-warning-800'
+                              }`}>
+                                {invoice.status === 'paid' ? (
+                                  <HiCheckCircle className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <HiClock className="h-3 w-3 mr-1" />
+                                )}
+                                {invoice.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatDate(invoice.due_date)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleViewInvoice(invoice.id)}
+                                className="text-primary-600 hover:text-primary-900 mr-3"
+                              >
+                                <HiEye className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadInvoice(invoice.id)}
+                                className="text-primary-600 hover:text-primary-900"
+                              >
+                                <HiDownload className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                            No invoices found
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>

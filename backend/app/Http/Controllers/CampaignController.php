@@ -7,6 +7,7 @@ use App\Services\CampaignService;
 use App\Traits\LoggingTrait;
 use App\Traits\ResponseTrait;
 use App\Traits\ValidationTrait;
+use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -16,23 +17,37 @@ class CampaignController extends Controller
 {
     use ResponseTrait,
         LoggingTrait,
-        ValidationTrait;
+        ValidationTrait,
+        FileProcessingTrait;
 
     public function __construct(
         private CampaignService $campaignService
     ) {}
 
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource
      */
     public function index(Request $request): JsonResponse
     {
-        return $this->executeControllerMethod(function () use ($request) {
-            $query = Campaign::where('user_id', Auth::id())
-                ->with(['contents', 'sender'])
-                ->orderBy('created_at', 'desc');
-
-            return $this->getPaginatedResults($query, $request, 'campaigns', ['contents', 'sender']);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $perPage = $request->input('per_page', 15);
+            $page = $request->input('page', 1);
+            
+            // Check if user is admin
+            if (Auth::user()->hasRole('admin')) {
+                // Admin sees all campaigns
+                $query = Campaign::with(['contents', 'senders', 'user']);
+                $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'All campaigns retrieved successfully');
+            } else {
+                // Regular users see only their campaigns
+                $query = Campaign::with(['contents', 'senders'])
+                    ->where('user_id', Auth::id());
+                $results = $query->paginate($perPage, ['*'], 'page', $page);
+                
+                return $this->paginatedResponse($results, 'Campaigns retrieved successfully');
+            }
         }, 'list_campaigns');
     }
 
@@ -41,23 +56,34 @@ class CampaignController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Debug: Log received data BEFORE validation
+        \Log::info('Campaign creation request received:', [
+            'all_input' => $request->all(),
+            'files' => $request->allFiles(),
+            'has_recipient_file' => $request->hasFile('recipient_file'),
+            'file_info' => $request->file('recipient_file') ? [
+                'name' => $request->file('recipient_file')->getClientOriginalName(),
+                'size' => $request->file('recipient_file')->getSize(),
+                'mime' => $request->file('recipient_file')->getMimeType()
+            ] : null,
+            'all_files' => array_keys($request->allFiles()),
+            'request_headers' => $request->headers->all()
+        ]);
+
         return $this->validateAndExecute(
             $request,
             [
                 'name' => 'required|string|max:255',
-                'subject' => 'required|string|max:255',
-                'content' => 'required|string',
-                'sender_id' => 'required|exists:senders,id',
-                'recipient_list' => 'required|file|mimes:txt,csv,xls,xlsx|max:10240',
-                'scheduled_at' => 'nullable|date|after:now',
-                'content_variations' => 'nullable|array',
-                'content_variations.*.subject' => 'required_with:content_variations|string|max:255',
-                'content_variations.*.content' => 'required_with:content_variations|string',
-                'template_variables' => 'nullable|array',
-                'enable_template_variables' => 'nullable|boolean',
-                'enable_open_tracking' => 'nullable|boolean',
-                'enable_click_tracking' => 'nullable|boolean',
-                'enable_unsubscribe_link' => 'nullable|boolean',
+                'subject' => 'nullable|string|max:255',
+                'content' => 'nullable|string',
+                'recipient_file' => 'required|file|mimes:txt,csv,xls,xlsx|max:10240',
+                'enable_content_switching' => 'nullable|string',
+                'content_variations' => 'nullable|string',
+                'template_variables' => 'nullable|string',
+                'enable_template_variables' => 'nullable|string',
+                'enable_open_tracking' => 'nullable|string',
+                'enable_click_tracking' => 'nullable|string',
+                'enable_unsubscribe_link' => 'nullable|string',
                 'recipient_field_mapping' => 'nullable|array',
                 'recipient_field_mapping.*' => 'string',
             ],
@@ -65,7 +91,47 @@ class CampaignController extends Controller
                 $data = $request->input('validated_data');
                 $data['user_id'] = Auth::id();
 
-                $campaign = $this->campaignService->createCampaign($data, $request->file('recipient_list'));
+                // Debug: Log received data
+                \Log::info('Campaign creation data received:', [
+                    'all_input' => $request->all(),
+                    'validated_data' => $data,
+                    'files' => $request->allFiles(),
+                    'has_recipient_file' => $request->hasFile('recipient_file'),
+                    'file_info' => $request->file('recipient_file') ? [
+                        'name' => $request->file('recipient_file')->getClientOriginalName(),
+                        'size' => $request->file('recipient_file')->getSize(),
+                        'mime' => $request->file('recipient_file')->getMimeType()
+                    ] : null,
+                    'all_files' => array_keys($request->allFiles()),
+                    'request_headers' => $request->headers->all()
+                ]);
+
+                // Convert string boolean values to actual booleans
+                $booleanFields = [
+                    'enable_content_switching',
+                    'enable_template_variables', 
+                    'enable_open_tracking',
+                    'enable_click_tracking',
+                    'enable_unsubscribe_link'
+                ];
+
+                foreach ($booleanFields as $field) {
+                    if (isset($data[$field])) {
+                        $data[$field] = in_array($data[$field], ['1', 'true', true], true);
+                    }
+                }
+
+                // Parse template_variables if it's a JSON string
+                if (isset($data['template_variables']) && is_string($data['template_variables'])) {
+                    $data['template_variables'] = json_decode($data['template_variables'], true);
+                }
+
+                // Parse content_variations if it's a JSON string
+                if (isset($data['content_variations']) && is_string($data['content_variations'])) {
+                    $data['content_variations'] = json_decode($data['content_variations'], true);
+                }
+
+                $campaign = $this->campaignService->createCampaign($data, $request->file('recipient_file'));
                 
                 // Process webhook
                 $webhookResult = $this->processCampaignWebhook($campaign, 'created');
@@ -76,7 +142,7 @@ class CampaignController extends Controller
                     ]);
                 }
 
-                return $this->createdResponse($campaign->load(['contents', 'sender']), 'Campaign created successfully');
+                return $this->createdResponse($campaign->load(['contents', 'senders']), 'Campaign created successfully');
             },
             'create_campaign'
         );
@@ -88,13 +154,17 @@ class CampaignController extends Controller
     public function show(string $id): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($id) {
-            $campaign = Campaign::with(['contents', 'sender', 'user'])->findOrFail($id);
+            try {
+                $campaign = Campaign::with(['contents', 'senders', 'user'])->findOrFail($id);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                return $this->errorResponse('Campaign not found', null, 404);
+            }
             
-            if (!$this->authorizeResourceAccess($campaign)) {
+            if (!$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
-            return $this->getResource($campaign, 'campaign', $id);
+            return $this->successResponse($campaign, 'Campaign retrieved successfully');
         }, 'view_campaign');
     }
 
@@ -104,9 +174,14 @@ class CampaignController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request, $id) {
-            $campaign = Campaign::findOrFail($id);
+            try {
+                $campaign = Campaign::findOrFail($id);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                return $this->errorResponse('Campaign not found', null, 404);
+            }
             
-            if (!$this->authorizeResourceAccess($campaign)) {
+            // Admin can update any campaign, regular users can only update their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -126,8 +201,73 @@ class CampaignController extends Controller
             }
             
             $campaign->update($validator->validated());
-            return $this->successResponse($campaign->load(['contents', 'sender']), 'Campaign updated successfully');
+            return $this->successResponse($campaign->load(['contents', 'senders']), 'Campaign updated successfully');
         }, 'update_campaign');
+    }
+
+    /**
+     * Update campaign status (admin functionality)
+     */
+    public function updateCampaign(Request $request, string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $campaign = Campaign::findOrFail($id);
+            
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255',
+                'subject' => 'sometimes|string|max:255',
+                'content' => 'sometimes|string',
+                'sender_id' => 'sometimes|exists:senders,id',
+                'status' => 'sometimes|string|in:draft,scheduled,sending,paused,completed,failed',
+                'scheduled_at' => 'nullable|date|after:now',
+                'content_variations' => 'nullable|array',
+                'content_variations.*.subject' => 'required_with:content_variations|string|max:255',
+                'content_variations.*.content' => 'required_with:content_variations|string',
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $campaign->update($validator->validated());
+            return $this->successResponse($campaign->load(['contents', 'senders']), 'Campaign updated successfully');
+        }, 'update_campaign');
+    }
+
+    /**
+     * Update multiple campaigns with common data (admin functionality)
+     */
+    public function updateCampaigns(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'campaign_ids' => 'required|array',
+                'campaign_ids.*' => 'exists:campaigns,id',
+                'status' => 'sometimes|string|in:draft,scheduled,sending,paused,completed,failed',
+                'scheduled_at' => 'nullable|date|after:now',
+            ]);
+            
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+            
+            $campaignIds = $request->input('campaign_ids');
+            $updateData = $request->only(['status', 'scheduled_at']);      
+            $updatedCount = Campaign::whereIn('id', $campaignIds)->update($updateData);
+            
+            return $this->successResponse([
+                'updated_count' => $updatedCount,
+                'campaign_ids' => $campaignIds
+            ], "Successfully updated {$updatedCount} campaigns");
+        }, 'update_campaigns');
     }
 
     /**
@@ -136,14 +276,23 @@ class CampaignController extends Controller
     public function destroy(string $id): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($id) {
-            $campaign = Campaign::findOrFail($id);
+            try {
+                $campaign = Campaign::findOrFail($id);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                return $this->errorResponse('Campaign not found', null, 404);
+            }
             
-            if (!$this->authorizeResourceAccess($campaign)) {
+            if (!$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
-            $campaign->delete();
-            return $this->successResponse(null, 'Campaign deleted successfully');
+            $result = $this->campaignService->deleteCampaign($campaign);
+            
+            if ($result['success']) {
+                return $this->successResponse(null, 'Campaign deleted successfully');
+            }
+            
+            return $this->errorResponse('Failed to delete campaign', $result['error']);
         }, 'delete_campaign');
     }
 
@@ -152,29 +301,29 @@ class CampaignController extends Controller
      */
     public function getCampaignStatistics(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $stats = [
-                    'total_sent' => $campaign->total_sent,
-                    'total_failed' => $campaign->total_failed,
-                    'opens' => $campaign->opens,
-                    'clicks' => $campaign->clicks,
-                    'bounces' => $campaign->bounces,
-                    'complaints' => $campaign->complaints,
-                    'open_rate' => $campaign->open_rate,
-                    'click_rate' => $campaign->click_rate,
-                    'bounce_rate' => $campaign->bounce_rate,
-                    'complaint_rate' => $campaign->complaint_rate,
-                    'geo_distribution' => $this->getGeoDistribution($campaign),
-                    'device_distribution' => $this->getDeviceDistribution($campaign),
-                    'hourly_activity' => $this->getHourlyActivity($campaign)
-                ];
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $stats = [
+                'total_sent' => $campaign->total_sent,
+                'total_failed' => $campaign->total_failed,
+                'opens' => $campaign->opens,
+                'clicks' => $campaign->clicks,
+                'bounces' => $campaign->bounces,
+                'complaints' => $campaign->complaints,
+                'open_rate' => $campaign->open_rate,
+                'click_rate' => $campaign->click_rate,
+                'bounce_rate' => $campaign->bounce_rate,
+                'complaint_rate' => $campaign->complaint_rate,
+                'geo_distribution' => $this->getGeoDistribution($campaign),
+                'device_distribution' => $this->getDeviceDistribution($campaign),
+                'hourly_activity' => $this->getHourlyActivity($campaign)
+            ];
 
-                return $this->successResponse($stats, 'Campaign statistics retrieved successfully');
-            },
-            'view_campaign_statistics'
-        );
+            return $this->successResponse($stats, 'Campaign statistics retrieved successfully');
+        }, 'view_campaign_statistics');
     }
 
     /**
@@ -182,19 +331,19 @@ class CampaignController extends Controller
      */
     public function startCampaign(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $result = $this->campaignService->startCampaign($campaign);
-                
-                if ($result['success']) {
-                    return $this->actionResponse($campaign, 'Campaign started successfully');
-                }
-                
-                return $this->errorResponse('Failed to start campaign', $result['error']);
-            },
-            'start_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $result = $this->campaignService->startCampaign($campaign);
+            
+            if ($result['success']) {
+                return $this->successResponse($campaign, 'Campaign started successfully');
+            }
+            
+            return $this->errorResponse('Failed to start campaign', $result['error']);
+        }, 'start_campaign');
     }
 
     /**
@@ -202,19 +351,19 @@ class CampaignController extends Controller
      */
     public function pauseCampaign(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $result = $this->campaignService->pauseCampaign($campaign);
-                
-                if ($result['success']) {
-                    return $this->actionResponse($campaign, 'Campaign paused successfully');
-                }
-                
-                return $this->errorResponse('Failed to pause campaign', $result['error']);
-            },
-            'pause_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $result = $this->campaignService->pauseCampaign($campaign);
+            
+            if ($result['success']) {
+                return $this->successResponse($result['campaign'], 'Campaign paused successfully');
+            }
+            
+            return $this->errorResponse('Failed to pause campaign', $result['error']);
+        }, 'pause_campaign');
     }
 
     /**
@@ -222,19 +371,19 @@ class CampaignController extends Controller
      */
     public function resumeCampaign(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $result = $this->campaignService->resumeCampaign($campaign);
-                
-                if ($result['success']) {
-                    return $this->actionResponse($campaign, 'Campaign resumed successfully');
-                }
-                
-                return $this->errorResponse('Failed to resume campaign', $result['error']);
-            },
-            'resume_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $result = $this->campaignService->resumeCampaign($campaign);
+            
+            if ($result['success']) {
+                return $this->successResponse($result['campaign'], 'Campaign resumed successfully');
+            }
+            
+            return $this->errorResponse('Failed to resume campaign', $result['error']);
+        }, 'resume_campaign');
     }
 
     /**
@@ -242,19 +391,19 @@ class CampaignController extends Controller
      */
     public function stopCampaign(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $result = $this->campaignService->stopCampaign($campaign);
-                
-                if ($result['success']) {
-                    return $this->actionResponse($campaign, 'Campaign stopped successfully');
-                }
-                
-                return $this->errorResponse('Failed to stop campaign', $result['error']);
-            },
-            'stop_campaign'
-        );
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $result = $this->campaignService->stopCampaign($campaign);
+            
+            if ($result['success']) {
+                return $this->successResponse($result['campaign'], 'Campaign stopped successfully');
+            }
+            
+            return $this->errorResponse('Failed to stop campaign', $result['error']);
+        }, 'stop_campaign');
     }
 
     /**
@@ -262,24 +411,24 @@ class CampaignController extends Controller
      */
     public function trackingStats(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $stats = [
-                    'opens' => $campaign->opens,
-                    'clicks' => $campaign->clicks,
-                    'open_rate' => $campaign->open_rate,
-                    'click_rate' => $campaign->click_rate,
-                    'unique_opens' => $campaign->unique_opens ?? 0,
-                    'unique_clicks' => $campaign->unique_clicks ?? 0,
-                    'total_recipients' => $campaign->recipient_count,
-                    'total_sent' => $campaign->total_sent
-                ];
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $stats = [
+                'opens' => $campaign->opens,
+                'clicks' => $campaign->clicks,
+                'open_rate' => $campaign->open_rate,
+                'click_rate' => $campaign->click_rate,
+                'unique_opens' => $campaign->unique_opens ?? 0,
+                'unique_clicks' => $campaign->unique_clicks ?? 0,
+                'total_recipients' => $campaign->recipient_count,
+                'total_sent' => $campaign->total_sent
+            ];
 
-                return $this->successResponse($stats, 'Campaign tracking statistics retrieved successfully');
-            },
-            'view_campaign_tracking_stats'
-        );
+            return $this->successResponse($stats, 'Campaign tracking statistics retrieved successfully');
+        }, 'view_campaign_tracking_stats');
     }
 
     /**
@@ -287,7 +436,7 @@ class CampaignController extends Controller
      */
     public function getTemplateVariables(): JsonResponse
     {
-        return $this->executeControllerMethod(function () {
+        return $this->executeWithErrorHandling(function () {
             $variables = [
                 'username' => 'User\'s username',
                 'email' => 'User\'s email address',
@@ -308,14 +457,14 @@ class CampaignController extends Controller
      */
     public function getCampaignTemplateVariables(Campaign $campaign): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($campaign) {
-                $variables = $campaign->getAvailableTemplateVariables();
-                return $this->successResponse($variables, 'Campaign template variables retrieved successfully');
-            },
-            'get_campaign_template_variables'
-        );
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $variables = $campaign->getAvailableTemplateVariables();
+            return $this->successResponse($variables, 'Campaign template variables retrieved successfully');
+        }, 'get_campaign_template_variables');
     }
 
     /**
@@ -323,31 +472,31 @@ class CampaignController extends Controller
      */
     public function downloadUnsubscribeList(Request $request, Campaign $campaign, string $format = null): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeResourceAccess($campaign),
-            function () use ($request, $campaign, $format) {
-                $format = $format ?: $request->input('format', 'txt');
-                
-                if (!in_array($format, ['txt', 'csv', 'xls', 'xlsx'])) {
-                    return $this->validationErrorResponse(['format' => ['Invalid format specified']]);
-                }
+        return $this->executeWithErrorHandling(function () use ($request, $campaign, $format) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $format = $format ?: $request->input('format', 'txt');
+            
+            if (!in_array($format, ['txt', 'csv', 'xls', 'xlsx'])) {
+                return $this->validationErrorResponse(['format' => ['Invalid format specified']]);
+            }
 
-                $unsubscribeService = app(\App\Services\UnsubscribeExportService::class);
-                $result = $unsubscribeService->exportUnsubscribeList($campaign->id, $format);
+            $unsubscribeService = app(\App\Services\UnsubscribeExportService::class);
+            $result = $unsubscribeService->exportUnsubscribeList($campaign->id, $format);
 
-                if (!$result['success']) {
-                    return $this->errorResponse('Failed to export unsubscribe list', $result['error']);
-                }
+            if (!$result['success']) {
+                return $this->errorResponse('Failed to export unsubscribe list', $result['error']);
+            }
 
-                $filename = "unsubscribe_list_{$campaign->id}.{$format}";
-                $contentType = $this->getContentType($format);
+            $filename = "unsubscribe_list_{$campaign->id}.{$format}";
+            $contentType = $this->getContentType($format);
 
-                return response()->download($result['file_path'], $filename, [
-                    'Content-Type' => $contentType
-                ]);
-            },
-            'download_unsubscribe_list'
-        );
+            return response()->download($result['file_path'], $filename, [
+                'Content-Type' => $contentType
+            ]);
+        }, 'download_unsubscribe_list');
     }
 
     /**

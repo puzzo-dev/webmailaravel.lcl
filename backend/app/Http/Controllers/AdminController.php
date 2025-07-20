@@ -7,76 +7,49 @@ use App\Http\Controllers\AnalyticsController;
 use App\Models\User;
 use App\Models\Campaign;
 use App\Models\Analytics;
+use App\Traits\ResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
 
 class AdminController extends Controller
 {
+    use ResponseTrait;
     /**
      * Get admin dashboard data
      */
     public function dashboard(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $stats = [
-                    'total_users' => User::count(),
-                    'total_campaigns' => Campaign::count(),
-                    'active_campaigns' => Campaign::where('status', 'active')->count(),
-                    'total_emails_sent' => Campaign::sum('emails_sent'),
-                    'total_opens' => Campaign::sum('opens'),
-                    'total_clicks' => Campaign::sum('clicks'),
-                    'avg_open_rate' => Campaign::avg('open_rate'),
-                    'avg_click_rate' => Campaign::avg('click_rate'),
-                ];
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $stats = [
+                'total_users' => User::count(),
+                'total_campaigns' => Campaign::count(),
+                'active_campaigns' => Campaign::where('status', 'active')->count(),
+                'total_emails_sent' => Campaign::sum('emails_sent'),
+                'total_opens' => Campaign::sum('opens'),
+                'total_clicks' => Campaign::sum('clicks'),
+                'avg_open_rate' => Campaign::avg('open_rate'),
+                'avg_click_rate' => Campaign::avg('click_rate'),
+            ];
 
-                $recentUsers = User::latest()->take(5)->get();
-                $recentCampaigns = Campaign::latest()->take(5)->get();
+            $recentUsers = User::latest()->take(5)->get();
+            $recentCampaigns = Campaign::latest()->take(5)->get();
 
-                return $this->successResponse([
-                    'stats' => $stats,
-                    'recent_users' => $recentUsers,
-                    'recent_campaigns' => $recentCampaigns,
-                ], 'Dashboard data retrieved successfully');
-            },
-            'view_admin_dashboard'
-        );
+            return $this->successResponse([
+                'stats' => $stats,
+                'recent_users' => $recentUsers,
+                'recent_campaigns' => $recentCampaigns,
+            ], 'Dashboard data retrieved successfully');
+        }, 'view_admin_dashboard');
     }
 
-    /**
-     * Get all users (admin only)
-     */
-    public function users(): JsonResponse
-    {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            fn() => $this->getPaginatedResults(
-                User::with(['devices', 'campaigns']),
-                request(),
-                'users'
-            ),
-            'list_users'
-        );
-    }
 
-    /**
-     * Get all campaigns (admin only)
-     */
-    public function campaigns(): JsonResponse
-    {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            fn() => $this->getPaginatedResults(
-                Campaign::with(['user', 'sender', 'domain']),
-                request(),
-                'campaigns'
-            ),
-            'list_campaigns'
-        );
-    }
 
     /**
      * Get analytics data (admin only) - redirects to AnalyticsController
@@ -93,22 +66,22 @@ class AdminController extends Controller
      */
     public function systemStatus(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $status = [
-                    'database' => $this->checkDatabaseStatus(),
-                    'cache' => $this->checkCacheStatus(),
-                    'queue' => $this->checkQueueStatus(),
-                    'storage' => $this->checkStorageStatus(),
-                    'memory' => $this->getMemoryUsage(),
-                    'disk' => $this->getDiskUsage(),
-                ];
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $status = [
+                'database' => $this->checkDatabaseStatus(),
+                'cache' => $this->checkCacheStatus(),
+                'queue' => $this->checkQueueStatus(),
+                'storage' => $this->checkStorageStatus(),
+                'memory' => $this->getMemoryUsage(),
+                'disk' => $this->getDiskUsage(),
+            ];
 
-                return $this->successResponse($status, 'System status retrieved successfully');
-            },
-            'view_system_status'
-        );
+            return $this->successResponse($status, 'System status retrieved successfully');
+        }, 'view_system_status');
     }
 
     /**
@@ -116,22 +89,22 @@ class AdminController extends Controller
      */
     public function getSystemConfig(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $config = [
-                    'app' => config('app'),
-                    'mail' => config('mail'),
-                    'queue' => config('queue'),
-                    'cache' => config('cache'),
-                    'session' => config('session'),
-                    'logging' => config('logging'),
-                ];
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $config = [
+                'app' => config('app'),
+                'mail' => config('mail'),
+                'queue' => config('queue'),
+                'cache' => config('cache'),
+                'session' => config('session'),
+                'logging' => config('logging'),
+            ];
 
-                return $this->successResponse($config, 'System configuration retrieved successfully');
-            },
-            'view_system_config'
-        );
+            return $this->successResponse($config, 'System configuration retrieved successfully');
+        }, 'view_system_config');
     }
 
     /**
@@ -139,21 +112,21 @@ class AdminController extends Controller
      */
     public function updateSystemConfig(Request $request): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () use ($request) {
-                $validated = $request->validate([
-                    'config_type' => 'required|string|in:app,mail,queue,cache,session,logging',
-                    'config_data' => 'required|array',
-                ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validated = $request->validate([
+                'config_type' => 'required|string|in:app,mail,queue,cache,session,logging',
+                'config_data' => 'required|array',
+            ]);
 
-                // Update configuration logic here
-                // This would typically involve updating config files or database
+            // Update configuration logic here
+            // This would typically involve updating config files or database
 
-                return $this->successResponse(null, 'System configuration updated successfully');
-            },
-            'update_system_config'
-        );
+            return $this->successResponse(null, 'System configuration updated successfully');
+        }, 'update_system_config');
     }
 
     /**
@@ -161,20 +134,20 @@ class AdminController extends Controller
      */
     public function getBTCPayConfig(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $config = [
-                    'base_url' => \App\Models\SystemConfig::getValue('btcpay_url'),
-                    'api_key' => \App\Models\SystemConfig::getValue('btcpay_api_key'),
-                    'store_id' => \App\Models\SystemConfig::getValue('btcpay_store_id'),
-                    'webhook_secret' => \App\Models\SystemConfig::getValue('btcpay_webhook_secret'),
-                    'currency' => \App\Models\SystemConfig::getValue('btcpay_currency', 'USD'),
-                ];
-                return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
-            },
-            'view_system_config'
-        );
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $config = [
+                'base_url' => \App\Models\SystemConfig::getValue('btcpay_url'),
+                'api_key' => \App\Models\SystemConfig::getValue('btcpay_api_key'),
+                'store_id' => \App\Models\SystemConfig::getValue('btcpay_store_id'),
+                'webhook_secret' => \App\Models\SystemConfig::getValue('btcpay_webhook_secret'),
+                'currency' => \App\Models\SystemConfig::getValue('btcpay_currency', 'USD'),
+            ];
+            return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
+        }, 'view_system_config');
     }
 
     /**
@@ -182,24 +155,24 @@ class AdminController extends Controller
      */
     public function updateBTCPayConfig(Request $request): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () use ($request) {
-                $validated = $request->validate([
-                    'base_url' => 'nullable|string',
-                    'api_key' => 'nullable|string',
-                    'store_id' => 'nullable|string',
-                    'webhook_secret' => 'nullable|string',
-                    'currency' => 'nullable|string',
-                ]);
-                foreach ($validated as $key => $value) {
-                    $configKey = 'btcpay_' . ($key === 'base_url' ? 'url' : $key);
-                    \App\Models\SystemConfig::setValue($configKey, $value);
-                }
-                return $this->successResponse(null, 'BTCPay configuration updated successfully');
-            },
-            'update_system_config'
-        );
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validated = $request->validate([
+                'base_url' => 'nullable|string',
+                'api_key' => 'nullable|string',
+                'store_id' => 'nullable|string',
+                'webhook_secret' => 'nullable|string',
+                'currency' => 'nullable|string',
+            ]);
+            foreach ($validated as $key => $value) {
+                $configKey = 'btcpay_' . ($key === 'base_url' ? 'url' : $key);
+                \App\Models\SystemConfig::setValue($configKey, $value);
+            }
+            return $this->successResponse(null, 'BTCPay configuration updated successfully');
+        }, 'update_system_config');
     }
 
     /**
@@ -207,18 +180,18 @@ class AdminController extends Controller
      */
     public function getTelegramConfig(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $config = [
-                    'bot_token' => \App\Models\SystemConfig::getValue('notification_telegram_bot_token'),
-                    'chat_id' => \App\Models\SystemConfig::getValue('notification_telegram_chat_id'),
-                    'enabled' => \App\Models\SystemConfig::getValue('notification_telegram_enabled', false),
-                ];
-                return $this->successResponse($config, 'Telegram configuration retrieved successfully');
-            },
-            'view_system_config'
-        );
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $config = [
+                'bot_token' => \App\Models\SystemConfig::getValue('notification_telegram_bot_token'),
+                'chat_id' => \App\Models\SystemConfig::getValue('notification_telegram_chat_id'),
+                'enabled' => \App\Models\SystemConfig::getValue('notification_telegram_enabled', false),
+            ];
+            return $this->successResponse($config, 'Telegram configuration retrieved successfully');
+        }, 'view_system_config');
     }
 
     /**
@@ -226,22 +199,22 @@ class AdminController extends Controller
      */
     public function updateTelegramConfig(Request $request): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () use ($request) {
-                $validated = $request->validate([
-                    'bot_token' => 'nullable|string',
-                    'chat_id' => 'nullable|string',
-                    'enabled' => 'nullable|boolean',
-                ]);
-                foreach ($validated as $key => $value) {
-                    $configKey = 'notification_telegram_' . $key;
-                    \App\Models\SystemConfig::setValue($configKey, $value);
-                }
-                return $this->successResponse(null, 'Telegram configuration updated successfully');
-            },
-            'update_system_config'
-        );
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validated = $request->validate([
+                'bot_token' => 'nullable|string',
+                'chat_id' => 'nullable|string',
+                'enabled' => 'nullable|boolean',
+            ]);
+            foreach ($validated as $key => $value) {
+                $configKey = 'notification_telegram_' . $key;
+                \App\Models\SystemConfig::setValue($configKey, $value);
+            }
+            return $this->successResponse(null, 'Telegram configuration updated successfully');
+        }, 'update_system_config');
     }
 
     /**
@@ -249,21 +222,21 @@ class AdminController extends Controller
      */
     public function getPowerMTAConfig(): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () {
-                $config = [
-                    'base_url' => \App\Models\SystemConfig::getValue('powermta_base_url'),
-                    'api_key' => \App\Models\SystemConfig::getValue('powermta_api_key'),
-                    'config_path' => \App\Models\SystemConfig::getValue('powermta_config_path'),
-                    'accounting_path' => \App\Models\SystemConfig::getValue('powermta_accounting_path'),
-                    'fbl_path' => \App\Models\SystemConfig::getValue('powermta_fbl_path'),
-                    'diag_path' => \App\Models\SystemConfig::getValue('powermta_diag_path'),
-                ];
-                return $this->successResponse($config, 'PowerMTA configuration retrieved successfully');
-            },
-            'view_system_config'
-        );
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $config = [
+                'base_url' => \App\Models\SystemConfig::getValue('powermta_base_url'),
+                'api_key' => \App\Models\SystemConfig::getValue('powermta_api_key'),
+                'config_path' => \App\Models\SystemConfig::getValue('powermta_config_path'),
+                'accounting_path' => \App\Models\SystemConfig::getValue('powermta_accounting_path'),
+                'fbl_path' => \App\Models\SystemConfig::getValue('powermta_fbl_path'),
+                'diag_path' => \App\Models\SystemConfig::getValue('powermta_diag_path'),
+            ];
+            return $this->successResponse($config, 'PowerMTA configuration retrieved successfully');
+        }, 'view_system_config');
     }
 
     /**
@@ -271,25 +244,25 @@ class AdminController extends Controller
      */
     public function updatePowerMTAConfig(Request $request): JsonResponse
     {
-        return $this->authorizeAndExecute(
-            fn() => $this->authorizeAdmin(),
-            function () use ($request) {
-                $validated = $request->validate([
-                    'base_url' => 'nullable|string',
-                    'api_key' => 'nullable|string',
-                    'config_path' => 'nullable|string',
-                    'accounting_path' => 'nullable|string',
-                    'fbl_path' => 'nullable|string',
-                    'diag_path' => 'nullable|string',
-                ]);
-                foreach ($validated as $key => $value) {
-                    $configKey = 'powermta_' . $key;
-                    \App\Models\SystemConfig::setValue($configKey, $value);
-                }
-                return $this->successResponse(null, 'PowerMTA configuration updated successfully');
-            },
-            'update_system_config'
-        );
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $validated = $request->validate([
+                'base_url' => 'nullable|string',
+                'api_key' => 'nullable|string',
+                'config_path' => 'nullable|string',
+                'accounting_path' => 'nullable|string',
+                'fbl_path' => 'nullable|string',
+                'diag_path' => 'nullable|string',
+            ]);
+            foreach ($validated as $key => $value) {
+                $configKey = 'powermta_' . $key;
+                \App\Models\SystemConfig::setValue($configKey, $value);
+            }
+            return $this->successResponse(null, 'PowerMTA configuration updated successfully');
+        }, 'update_system_config');
     }
 
     /**

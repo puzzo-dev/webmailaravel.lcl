@@ -1,32 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
-  ServerIcon,
-  CogIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ExclamationTriangleIcon,
-  PlayIcon,
-  PauseIcon,
-  PlusIcon,
-  PencilIcon,
-  TrashIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  KeyIcon,
-  GlobeAltIcon,
-  EnvelopeIcon,
-  ShieldCheckIcon,
-  ClockIcon,
-  ChartBarIcon
-} from '@heroicons/react/24/outline';
+  HiServer as ServerIcon,
+  HiCog as CogIcon,
+  HiCheckCircle as CheckCircleIcon,
+  HiXCircle as XCircleIcon,
+  HiExclamationTriangle as ExclamationTriangleIcon,
+  HiPlay as PlayIcon,
+  HiPause as PauseIcon,
+  HiPlus as PlusIcon,
+  HiPencil as PencilIcon,
+  HiTrash as TrashIcon,
+  HiEye as EyeIcon,
+  HiEyeSlash as EyeSlashIcon,
+  HiKey as KeyIcon,
+  HiGlobeAlt as GlobeAltIcon,
+  HiEnvelope as EnvelopeIcon,
+  HiShieldCheck as ShieldCheckIcon,
+  HiClock as ClockIcon,
+  HiChartBar as ChartBarIcon
+} from 'react-icons/hi2';
+import { adminService } from '../../services/api';
 import { formatDate, formatNumber } from '../../utils/helpers';
 import Skeleton from '../../components/ui/Skeleton';
 import toast from 'react-hot-toast';
 
 const AdminSmtp = () => {
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('configurations');
   const [smtpConfigs, setSmtpConfigs] = useState([]);
   const [domains, setDomains] = useState([]);
@@ -48,108 +51,33 @@ const AdminSmtp = () => {
     bounce_handling: true
   });
 
-  // Mock data
-  const mockConfigs = [
-    {
-      id: 1,
-      domain: { id: 1, name: 'example.com' },
-      host: 'smtp.gmail.com',
-      port: 587,
-      encryption: 'tls',
-      username: 'smtp@example.com',
-      password: 'encrypted_password',
-      from_name: 'Example Team',
-      from_email: 'noreply@example.com',
-      is_active: true,
-      max_emails_per_hour: 1000,
-      bounce_handling: true,
-      created_at: '2024-01-15T10:30:00Z',
-      last_tested: '2024-01-15T14:20:00Z',
-      stats: {
-        emails_sent_today: 450,
-        success_rate: 98.5,
-        bounce_rate: 1.2,
-        complaint_rate: 0.1,
-        last_error: null
-      }
-    },
-    {
-      id: 2,
-      domain: { id: 2, name: 'company.com' },
-      host: 'smtp.mailgun.org',
-      port: 587,
-      encryption: 'tls',
-      username: 'postmaster@mg.company.com',
-      password: 'encrypted_password',
-      from_name: 'Company Support',
-      from_email: 'support@company.com',
-      is_active: true,
-      max_emails_per_hour: 2000,
-      bounce_handling: true,
-      created_at: '2024-01-14T09:15:00Z',
-      last_tested: '2024-01-15T11:45:00Z',
-      stats: {
-        emails_sent_today: 120,
-        success_rate: 99.1,
-        bounce_rate: 0.8,
-        complaint_rate: 0.05,
-        last_error: null
-      }
-    },
-    {
-      id: 3,
-      domain: { id: 3, name: 'testdomain.com' },
-      host: 'smtp.sendgrid.net',
-      port: 587,
-      encryption: 'tls',
-      username: 'apikey',
-      password: 'encrypted_api_key',
-      from_name: 'Test Team',
-      from_email: 'test@testdomain.com',
-      is_active: false,
-      max_emails_per_hour: 500,
-      bounce_handling: false,
-      created_at: '2024-01-13T16:20:00Z',
-      last_tested: null,
-      stats: {
-        emails_sent_today: 0,
-        success_rate: 0,
-        bounce_rate: 0,
-        complaint_rate: 0,
-        last_error: 'Connection timeout'
-      }
-    }
-  ];
-
+  // Check if user has admin access
   useEffect(() => {
+    if (user?.role === 'admin') {
     fetchSmtpConfigs();
     fetchDomains();
-  }, []);
+    }
+  }, [user]);
 
   const fetchSmtpConfigs = async () => {
     setLoading(true);
     try {
-      // Replace with actual API call
-      setTimeout(() => {
-        setSmtpConfigs(mockConfigs);
-        setLoading(false);
-      }, 1000);
+      setError(null);
+      const response = await adminService.getSmtpConfigs();
+      setSmtpConfigs(response.data || []);
     } catch (error) {
+      setError('Failed to load SMTP configurations');
+      toast.error('Failed to load SMTP configurations');
       console.error('Error fetching SMTP configs:', error);
+    } finally {
       setLoading(false);
     }
   };
 
   const fetchDomains = async () => {
     try {
-      // Replace with actual API call
-      const mockDomains = [
-        { id: 1, name: 'example.com' },
-        { id: 2, name: 'company.com' },
-        { id: 3, name: 'testdomain.com' },
-        { id: 4, name: 'newdomain.com' }
-      ];
-      setDomains(mockDomains);
+      const response = await adminService.getDomains();
+      setDomains(response.data || []);
     } catch (error) {
       console.error('Error fetching domains:', error);
     }
@@ -158,16 +86,9 @@ const AdminSmtp = () => {
   const handleTestConnection = async (configId) => {
     setTestingConnection(configId);
     try {
-      // Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setSmtpConfigs(prev => prev.map(config => 
-        config.id === configId 
-          ? { ...config, last_tested: new Date().toISOString() }
-          : config
-      ));
-      
+      await adminService.testSmtpConnection(configId);
       toast.success('SMTP connection test successful');
+      await fetchSmtpConfigs(); // Refresh data
     } catch (error) {
       console.error('Error testing SMTP connection:', error);
       toast.error('SMTP connection test failed');
@@ -178,13 +99,15 @@ const AdminSmtp = () => {
 
   const handleStatusChange = async (configId, status) => {
     try {
-      setSmtpConfigs(prev => prev.map(config => 
-        config.id === configId ? { ...config, is_active: status } : config
-      ));
+      setActionLoading(true);
+      await adminService.updateSmtpConfigStatus(configId, status);
       toast.success(`SMTP configuration ${status ? 'activated' : 'deactivated'} successfully`);
+      await fetchSmtpConfigs(); // Refresh data
     } catch (error) {
       console.error('Error updating SMTP config status:', error);
       toast.error('Failed to update SMTP configuration status');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -192,59 +115,57 @@ const AdminSmtp = () => {
     if (!confirm('Are you sure you want to delete this SMTP configuration?')) return;
     
     try {
-      setSmtpConfigs(prev => prev.filter(config => config.id !== configId));
+      setActionLoading(true);
+      await adminService.deleteSmtpConfig(configId);
       toast.success('SMTP configuration deleted successfully');
+      await fetchSmtpConfigs(); // Refresh data
     } catch (error) {
       console.error('Error deleting SMTP config:', error);
       toast.error('Failed to delete SMTP configuration');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCreateConfig = async () => {
+    if (!configForm.domain_id || !configForm.host || !configForm.username || !configForm.password) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     try {
-      const newConfig = {
-        id: Date.now(),
-        ...configForm,
-        domain: domains.find(d => d.id === parseInt(configForm.domain_id)),
-        created_at: new Date().toISOString(),
-        last_tested: null,
-        stats: {
-          emails_sent_today: 0,
-          success_rate: 0,
-          bounce_rate: 0,
-          complaint_rate: 0,
-          last_error: null
-        }
-      };
-      
-      setSmtpConfigs(prev => [newConfig, ...prev]);
+      setActionLoading(true);
+      await adminService.createSmtpConfig(configForm);
+      toast.success('SMTP configuration created successfully');
       setShowModal(false);
       resetForm();
-      toast.success('SMTP configuration created successfully');
+      await fetchSmtpConfigs(); // Refresh data
     } catch (error) {
       console.error('Error creating SMTP config:', error);
       toast.error('Failed to create SMTP configuration');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleEditConfig = async () => {
+    if (!editingConfig || !configForm.domain_id || !configForm.host || !configForm.username) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     try {
-      setSmtpConfigs(prev => prev.map(config => 
-        config.id === editingConfig.id 
-          ? { 
-              ...config, 
-              ...configForm,
-              domain: domains.find(d => d.id === parseInt(configForm.domain_id))
-            }
-          : config
-      ));
-      setShowModal(false);
-      setEditingConfig(null);
-      resetForm();
+      setActionLoading(true);
+      await adminService.updateSmtpConfig(editingConfig.id, configForm);
       toast.success('SMTP configuration updated successfully');
+      setShowModal(false);
+      resetForm();
+      await fetchSmtpConfigs(); // Refresh data
     } catch (error) {
       console.error('Error updating SMTP config:', error);
       toast.error('Failed to update SMTP configuration');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -262,10 +183,10 @@ const AdminSmtp = () => {
       max_emails_per_hour: 1000,
       bounce_handling: true
     });
+    setEditingConfig(null);
   };
 
   const openCreateModal = () => {
-    setEditingConfig(null);
     resetForm();
     setShowModal(true);
   };
@@ -273,12 +194,12 @@ const AdminSmtp = () => {
   const openEditModal = (config) => {
     setEditingConfig(config);
     setConfigForm({
-      domain_id: config.domain.id.toString(),
+      domain_id: config.domain_id || config.domain?.id || '',
       host: config.host,
       port: config.port,
       encryption: config.encryption,
       username: config.username,
-      password: config.password,
+      password: '', // Don't populate password for security
       from_name: config.from_name,
       from_email: config.from_email,
       is_active: config.is_active,
@@ -295,22 +216,53 @@ const AdminSmtp = () => {
     }));
   };
 
-  const totalEmailsToday = smtpConfigs.reduce((acc, config) => acc + config.stats.emails_sent_today, 0);
-  const averageSuccessRate = smtpConfigs.length > 0 
-    ? smtpConfigs.reduce((acc, config) => acc + config.stats.success_rate, 0) / smtpConfigs.length 
-    : 0;
-  const activeConfigs = smtpConfigs.filter(config => config.is_active).length;
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      active: { color: 'bg-green-100 text-green-800', icon: CheckCircleIcon },
+      inactive: { color: 'bg-gray-100 text-gray-800', icon: XCircleIcon },
+      error: { color: 'bg-red-100 text-red-800', icon: ExclamationTriangleIcon }
+    };
+    
+    const config = statusConfig[status] || statusConfig.inactive;
+    const Icon = config.icon;
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+        <Icon className="w-3 h-3 mr-1" />
+        {status}
+      </span>
+    );
+  };
+
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>You need admin privileges to manage SMTP configurations.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-12 w-full" />
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
-        <Skeleton className="h-96" />
       </div>
     );
   }
@@ -318,10 +270,10 @@ const AdminSmtp = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">SMTP Configuration</h1>
-          <p className="text-gray-600">Manage SMTP servers and email delivery settings</p>
+          <h1 className="text-2xl font-bold text-gray-900">SMTP Management</h1>
+          <p className="text-gray-600">Manage SMTP configurations for all domains</p>
         </div>
         <button
           onClick={openCreateModal}
@@ -332,106 +284,68 @@ const AdminSmtp = () => {
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-primary-100 rounded-lg">
-              <ServerIcon className="h-6 w-6 text-primary-600" />
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <XCircleIcon className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{error}</p>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Configs</p>
-              <p className="text-2xl font-bold text-gray-900">{smtpConfigs.length}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-success-100 rounded-lg">
-              <CheckCircleIcon className="h-6 w-6 text-success-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Configs</p>
-              <p className="text-2xl font-bold text-gray-900">{activeConfigs}</p>
             </div>
           </div>
         </div>
-        
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-info-100 rounded-lg">
-              <EnvelopeIcon className="h-6 w-6 text-info-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Emails Today</p>
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(totalEmailsToday)}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-success-100 rounded-lg">
-              <ChartBarIcon className="h-6 w-6 text-success-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Avg Success Rate</p>
-              <p className="text-2xl font-bold text-gray-900">{averageSuccessRate.toFixed(1)}%</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8 px-6">
-            {[
-              { id: 'configurations', name: 'Configurations', icon: CogIcon },
-              { id: 'monitoring', name: 'Monitoring', icon: ChartBarIcon },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              return (
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('configurations')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'configurations'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Configurations
+          </button>
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
+            onClick={() => setActiveTab('statistics')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'statistics'
+                ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
-                  <Icon className="h-5 w-5 mr-2" />
-                  {tab.name}
+            Statistics
                 </button>
-              );
-            })}
           </nav>
         </div>
 
-        <div className="p-6">
-          {/* Configurations Tab */}
+      {/* SMTP Configurations */}
           {activeTab === 'configurations' && (
-            <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-sm border">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Domain & Host
+                    Domain
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Connection
+                    SMTP Server
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        From Details
+                    From Address
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Performance
+                    Last Tested
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
@@ -439,183 +353,168 @@ const AdminSmtp = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {smtpConfigs.map((config) => (
+                {smtpConfigs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                      No SMTP configurations found
+                    </td>
+                  </tr>
+                ) : (
+                  smtpConfigs.map((config) => (
                       <tr key={config.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <GlobeAltIcon className="h-5 w-5 text-gray-400 mr-2" />
                           <div>
-                            <div className="flex items-center">
-                              <GlobeAltIcon className="h-4 w-4 text-gray-400 mr-2" />
-                              <span className="text-sm font-medium text-gray-900">{config.domain.name}</span>
+                            <div className="text-sm font-medium text-gray-900">
+                              {config.domain?.name || 'Unknown Domain'}
                             </div>
-                            <div className="text-sm text-gray-500">{config.host}:{config.port}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm text-gray-900">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {config.encryption.toUpperCase()}
-                              </span>
+                            <div className="text-sm text-gray-500">
+                              {config.domain?.id || 'No domain'}
                             </div>
-                            <div className="text-sm text-gray-500">{config.username}</div>
+                          </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-sm text-gray-900">{config.from_name}</div>
-                            <div className="text-sm text-gray-500">{config.from_email}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {config.host}:{config.port}
+                            </div>
+                          <div className="text-sm text-gray-500">
+                            {config.username} • {config.encryption?.toUpperCase()}
+                          </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex flex-col space-y-1">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              config.is_active 
-                                ? 'bg-success-100 text-success-800' 
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {config.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                            {config.last_tested && (
-                              <span className="text-xs text-gray-500">
-                                Tested {formatDate(config.last_tested)}
-                              </span>
-                            )}
+                          <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {config.from_name || 'Not Set'}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {config.from_email || 'Not Set'}
+                          </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm">
-                            <div className="text-gray-900">{config.stats.emails_sent_today} today</div>
-                            <div className="text-gray-500">{config.stats.success_rate}% success</div>
-                            {config.stats.last_error && (
-                              <div className="text-red-500 text-xs">{config.stats.last_error}</div>
-                            )}
-                          </div>
+                        {getStatusBadge(config.is_active ? 'active' : 'inactive')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {config.last_tested ? formatDate(config.last_tested) : 'Never tested'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center space-x-3">
+                        <div className="flex space-x-2">
                             <button
                               onClick={() => handleTestConnection(config.id)}
                               disabled={testingConnection === config.id}
-                              className="text-blue-600 hover:text-blue-900"
+                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
                               title="Test Connection"
                             >
-                              {testingConnection === config.id ? (
-                                <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                              ) : (
                                 <PlayIcon className="h-4 w-4" />
-                              )}
                             </button>
                             <button
                               onClick={() => openEditModal(config)}
-                              className="text-primary-600 hover:text-primary-900"
-                              title="Edit"
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit Configuration"
                             >
                               <PencilIcon className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleStatusChange(config.id, !config.is_active)}
-                              className={`${
-                                config.is_active 
-                                  ? 'text-warning-600 hover:text-warning-900' 
-                                  : 'text-success-600 hover:text-success-900'
-                              }`}
+                            disabled={actionLoading}
+                            className="text-orange-600 hover:text-orange-900 disabled:opacity-50"
                               title={config.is_active ? 'Deactivate' : 'Activate'}
                             >
                               {config.is_active ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
                             </button>
                             <button
                               onClick={() => handleDelete(config.id)}
-                              className="text-danger-600 hover:text-danger-900"
-                              title="Delete"
+                            disabled={actionLoading}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            title="Delete Configuration"
                             >
                               <TrashIcon className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                  ))
+                )}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
 
-          {/* Monitoring Tab */}
-          {activeTab === 'monitoring' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {smtpConfigs.map((config) => (
-                  <div key={config.id} className="bg-white border border-gray-200 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">{config.domain.name}</h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        config.is_active 
-                          ? 'bg-success-100 text-success-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {config.is_active ? 'Active' : 'Inactive'}
-                      </span>
+      {/* Statistics Tab */}
+      {activeTab === 'statistics' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <EnvelopeIcon className="h-5 w-5 text-blue-600" />
                     </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Emails Today:</span>
-                        <span className="text-sm font-medium text-gray-900">{config.stats.emails_sent_today}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Success Rate:</span>
-                        <span className="text-sm font-medium text-success-600">{config.stats.success_rate}%</span>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Configurations</p>
+                <p className="text-2xl font-bold text-gray-900">{smtpConfigs.length}</p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Bounce Rate:</span>
-                        <span className="text-sm font-medium text-warning-600">{config.stats.bounce_rate}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Complaint Rate:</span>
-                        <span className="text-sm font-medium text-danger-600">{config.stats.complaint_rate}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Rate Limit:</span>
-                        <span className="text-sm font-medium text-gray-900">{config.max_emails_per_hour}/hr</span>
                       </div>
                     </div>
 
-                    {config.stats.last_error && (
-                      <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                        <div className="flex">
-                          <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-                          <div className="ml-3">
-                            <h3 className="text-sm font-medium text-red-800">Last Error</h3>
-                            <div className="mt-2 text-sm text-red-700">{config.stats.last_error}</div>
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Active Configurations</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {smtpConfigs.filter(config => config.is_active).length}
+                </p>
                           </div>
                         </div>
                       </div>
-                    )}
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600" />
+                </div>
                   </div>
-                ))}
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Inactive Configurations</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {smtpConfigs.filter(config => !config.is_active).length}
+                </p>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Create/Edit SMTP Config Modal */}
+      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {editingConfig ? 'Edit SMTP Configuration' : 'Create New SMTP Configuration'}
+                {editingConfig ? 'Edit SMTP Configuration' : 'Create SMTP Configuration'}
               </h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Domain
+                    Domain *
                   </label>
                   <select
                     value={configForm.domain_id}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, domain_id: e.target.value }))}
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, domain_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   >
                     <option value="">Select Domain</option>
                     {domains.map((domain) => (
@@ -625,18 +524,21 @@ const AdminSmtp = () => {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    SMTP Host
+                    SMTP Host *
                   </label>
                   <input
                     type="text"
                     value={configForm.host}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, host: e.target.value }))}
+                    onChange={(e) => setConfigForm({ ...configForm, host: e.target.value })}
                     placeholder="smtp.gmail.com"
-                    className="input w-full"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Port
@@ -644,48 +546,55 @@ const AdminSmtp = () => {
                   <input
                     type="number"
                     value={configForm.port}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, port: parseInt(e.target.value) }))}
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, port: parseInt(e.target.value) })}
+                    placeholder="587"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Encryption
                   </label>
                   <select
                     value={configForm.encryption}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, encryption: e.target.value }))}
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, encryption: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="tls">TLS</option>
                     <option value="ssl">SSL</option>
                     <option value="none">None</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username
+                    Username *
                   </label>
                   <input
                     type="text"
                     value={configForm.username}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="your-email@gmail.com"
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, username: e.target.value })}
+                    placeholder="smtp@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
+                    Password *
                   </label>
                   <input
                     type="password"
                     value={configForm.password}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Your password or app password"
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, password: e.target.value })}
+                    placeholder="Enter password"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     From Name
@@ -693,11 +602,12 @@ const AdminSmtp = () => {
                   <input
                     type="text"
                     value={configForm.from_name}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, from_name: e.target.value }))}
+                    onChange={(e) => setConfigForm({ ...configForm, from_name: e.target.value })}
                     placeholder="Your Company"
-                    className="input w-full"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     From Email
@@ -705,11 +615,12 @@ const AdminSmtp = () => {
                   <input
                     type="email"
                     value={configForm.from_email}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, from_email: e.target.value }))}
-                    placeholder="noreply@domain.com"
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, from_email: e.target.value })}
+                    placeholder="noreply@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Max Emails Per Hour
@@ -717,35 +628,37 @@ const AdminSmtp = () => {
                   <input
                     type="number"
                     value={configForm.max_emails_per_hour}
-                    onChange={(e) => setConfigForm(prev => ({ ...prev, max_emails_per_hour: parseInt(e.target.value) }))}
-                    className="input w-full"
+                    onChange={(e) => setConfigForm({ ...configForm, max_emails_per_hour: parseInt(e.target.value) })}
+                    placeholder="1000"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div className="md:col-span-2 space-y-3">
-                  <div className="flex items-center">
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={configForm.is_active}
-                      onChange={(e) => setConfigForm(prev => ({ ...prev, is_active: e.target.checked }))}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      onChange={(e) => setConfigForm({ ...configForm, is_active: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label className="ml-2 text-sm text-gray-700">
-                      Active
+                    <span className="ml-2 text-sm text-gray-700">Active</span>
                     </label>
                   </div>
-                  <div className="flex items-center">
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={configForm.bounce_handling}
-                      onChange={(e) => setConfigForm(prev => ({ ...prev, bounce_handling: e.target.checked }))}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      onChange={(e) => setConfigForm({ ...configForm, bounce_handling: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
-                    <label className="ml-2 text-sm text-gray-700">
-                      Enable Bounce Handling
+                    <span className="ml-2 text-sm text-gray-700">Enable Bounce Handling</span>
                     </label>
-                  </div>
                 </div>
               </div>
+
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={() => setShowModal(false)}
@@ -755,10 +668,10 @@ const AdminSmtp = () => {
                 </button>
                 <button
                   onClick={editingConfig ? handleEditConfig : handleCreateConfig}
-                  disabled={!configForm.domain_id || !configForm.host || !configForm.username}
+                  disabled={actionLoading}
                   className="btn btn-primary"
                 >
-                  {editingConfig ? 'Update' : 'Create'} Configuration
+                  {actionLoading ? 'Saving...' : (editingConfig ? 'Update Configuration' : 'Create Configuration')}
                 </button>
               </div>
             </div>

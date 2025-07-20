@@ -144,9 +144,13 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         try {
-            JWTAuth::invalidate(JWTAuth::getToken());
+            // Try to get the token and invalidate it if it exists
+            $token = JWTAuth::getToken();
+            if ($token) {
+                JWTAuth::invalidate($token);
+            }
             
-            // Clear the JWT cookie
+            // Clear the JWT cookie regardless of token validity
             $cookie = cookie()->forget('jwt_token');
             
             return response()->json([
@@ -154,10 +158,13 @@ class AuthController extends Controller
                 'message' => 'Logged out successfully'
             ])->withCookie($cookie);
         } catch (JWTException $e) {
+            // Even if token invalidation fails, clear the cookie
+            $cookie = cookie()->forget('jwt_token');
+            
             return response()->json([
-                'success' => false,
-                'message' => 'Could not invalidate token'
-            ], 500);
+                'success' => true,
+                'message' => 'Logged out successfully'
+            ])->withCookie($cookie);
         }
     }
 
@@ -201,8 +208,8 @@ class AuthController extends Controller
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Could not refresh token'
-            ], 500);
+                'message' => 'Could not refresh token - please login again'
+            ], 401);
         }
     }
 

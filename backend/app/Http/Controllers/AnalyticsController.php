@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Campaign;
 use App\Services\AnalyticsService;
+use App\Traits\ResponseTrait;
 use App\Traits\LoggingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class AnalyticsController extends Controller
 {
-    use LoggingTrait;
+    use ResponseTrait, LoggingTrait;
 
     protected $analyticsService;
 
@@ -274,17 +276,23 @@ class AnalyticsController extends Controller
     {
         try {
             $timeRange = $request->get('timeRange', '30d');
+            $period = $request->get('period', 'monthly');
+            $limit = (int) $request->get('limit', 12);
             
             $analytics = [
-                'user_growth' => $this->analyticsService->getUserGrowth($timeRange),
-                'campaign_performance' => $this->analyticsService->getCampaignPerformance($timeRange),
-                'deliverability_stats' => $this->analyticsService->getDeliverabilityStats($timeRange),
-                'revenue_metrics' => $this->analyticsService->getRevenueMetrics($timeRange),
+                'user_growth' => $this->analyticsService->getUserGrowth($period, $limit),
+                'campaign_performance' => $this->analyticsService->getCampaignPerformance([
+                    'period' => $period,
+                    'limit' => $limit
+                ]),
+                'deliverability_stats' => $this->analyticsService->getDeliverabilityAnalytics(),
+                'revenue_metrics' => $this->analyticsService->getRevenueAnalytics(),
             ];
 
             $this->logInfo('admin_analytics.accessed', [
                 'user_id' => auth()->id(),
-                'time_range' => $timeRange
+                'time_range' => $timeRange,
+                'period' => $period
             ]);
 
             return response()->json([
@@ -305,9 +313,8 @@ class AnalyticsController extends Controller
             ], 500);
         }
     }
-} 
- 
- 
- 
- 
- 
+}
+
+
+
+

@@ -13,7 +13,7 @@ import {
   HiEye,
   HiX,
   HiLockClosed,
-  HiExclamationTriangle,
+  HiExclamation,
   HiCheckCircle,
   HiInformationCircle,
   HiKey,
@@ -113,7 +113,7 @@ const UserActivity = () => {
       case 'password_change':
         return <HiLockClosed className="h-5 w-5 text-blue-500" />;
       case 'security_alert':
-        return <HiExclamationTriangle className="h-5 w-5 text-red-500" />;
+        return <HiExclamation className="h-5 w-5 text-red-500" />;
       case 'api_access':
         return <HiKey className="h-5 w-5 text-purple-500" />;
       default:
