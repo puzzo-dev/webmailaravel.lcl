@@ -203,9 +203,9 @@ const Landing = () => {
                 Built for modern businesses that demand results.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/register" className="btn btn-primary btn-lg flex items-center justify-center">
-                  <HiPlay className="h-5 w-5 mr-2" />
-                  Start Free Trial
+                <Link to="/register?from=pricing" className="btn btn-primary btn-lg flex items-center justify-center">
+                <HiPlay className="h-5 w-5 mr-2" />
+                Start Free Trial
                 </Link>
                 <button className="btn btn-secondary btn-lg flex items-center justify-center">
                   <HiArrowRight className="h-5 w-5 mr-2" />
@@ -375,7 +375,7 @@ const Landing = () => {
                       ))}
                     </ul>
                     <Link 
-                      to="/register" 
+                      to="/register?from=pricing" 
                       className={`w-full btn ${plan.name === 'Professional' ? 'btn-primary' : 'btn-secondary'}`}
                     >
                       Get Started
@@ -399,7 +399,7 @@ const Landing = () => {
             Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register" className="btn btn-white btn-lg flex items-center justify-center">
+            <Link to="/register?from=pricing" className="btn btn-white btn-lg flex items-center justify-center">
               <HiLightningBolt className="h-5 w-5 mr-2" />
               Start Free Trial
             </Link>

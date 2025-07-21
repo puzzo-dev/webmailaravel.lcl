@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 class AdminController extends Controller
 {
     use ResponseTrait;
+    
     /**
      * Get admin dashboard data
      */
@@ -76,6 +77,7 @@ class AdminController extends Controller
                 'cache' => $this->checkCacheStatus(),
                 'queue' => $this->checkQueueStatus(),
                 'storage' => $this->checkStorageStatus(),
+                'backup' => $this->getBackupStatus(),
                 'memory' => $this->getMemoryUsage(),
                 'disk' => $this->getDiskUsage(),
                 'system' => $this->getSystemInfo(),
@@ -346,8 +348,53 @@ class AdminController extends Controller
 
     private function checkQueueStatus()
     {
-        // Check if queue workers are running
-        return ['status' => 'unknown', 'message' => 'Queue status check not implemented'];
+        try {
+            // Check if queue workers are running by examining failed jobs and queue statistics
+            $failedJobs = DB::table('failed_jobs')->count();
+            $pendingJobs = DB::table('jobs')->count();
+            
+            // Check for recent job processing (jobs processed in last 5 minutes)
+            $recentlyProcessed = DB::table('jobs')
+                ->where('created_at', '>=', now()->subMinutes(5))
+                ->count();
+            
+            // Determine queue health
+            $status = 'healthy';
+            $message = 'Queue workers are running normally';
+            
+            if ($failedJobs > 50) {
+                $status = 'warning';
+                $message = "High number of failed jobs: {$failedJobs}";
+            }
+            
+            if ($pendingJobs > 1000) {
+                $status = 'warning';
+                $message = "High queue backlog: {$pendingJobs} pending jobs";
+            }
+            
+            if ($pendingJobs > 0 && $recentlyProcessed === 0) {
+                $status = 'error';
+                $message = 'Queue workers appear to be stuck or not running';
+            }
+            
+            return [
+                'status' => $status,
+                'message' => $message,
+                'details' => [
+                    'failed_jobs' => $failedJobs,
+                    'pending_jobs' => $pendingJobs,
+                    'recently_processed' => $recentlyProcessed,
+                    'last_check' => now()->toISOString(),
+                ]
+            ];
+            
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Failed to check queue status: ' . $e->getMessage(),
+                'details' => []
+            ];
+        }
     }
 
     private function checkStorageStatus()
@@ -364,6 +411,31 @@ class AdminController extends Controller
             'free_space' => $this->formatBytes($freeSpace),
             'total_space' => $this->formatBytes($totalSpace),
         ];
+    }
+    
+    private function getBackupStatus()
+    {
+        try {
+            $latestBackup = \App\Models\Backup::where('status', 'completed')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            return [
+                'status' => $latestBackup ? 'ok' : 'warning',
+                'last_backup' => $latestBackup ? $latestBackup->created_at : null,
+                'last_backup_size' => $latestBackup ? $latestBackup->human_size : null,
+                'message' => $latestBackup 
+                    ? 'Backups are available' 
+                    : 'No backups found - consider creating a backup'
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Failed to check backup status: ' . $e->getMessage(),
+                'last_backup' => null,
+                'last_backup_size' => null
+            ];
+        }
     }
 
     private function getMemoryUsage()
@@ -499,4 +571,5 @@ class AdminController extends Controller
             return 1;
         }
     }
+
 }

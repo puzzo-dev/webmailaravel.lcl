@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { register as registerUser, clearError } from '../../store/slices/authSlice';
@@ -9,9 +9,13 @@ import { HiInbox, HiLockClosed, HiUser, HiEye, HiEyeOff } from 'react-icons/hi';
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [searchParams] = useSearchParams();
   
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  
+  // Check if user came from pricing page
+  const fromPricing = searchParams.get('from') === 'pricing';
   
   const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth);
   
@@ -27,9 +31,11 @@ const Register = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      // If user came from pricing, redirect to billing after registration
+      const redirectTo = fromPricing ? '/billing?welcome=true' : '/dashboard';
+      navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, fromPricing]);
 
   // Show error toast
   useEffect(() => {
@@ -50,7 +56,9 @@ const Register = () => {
       })).unwrap();
       
       toast.success('Registration successful! Welcome to EmailCampaign.');
-      navigate('/dashboard');
+      // If user came from pricing, redirect to billing to complete subscription
+      const redirectTo = fromPricing ? '/billing?welcome=true' : '/dashboard';
+      navigate(redirectTo);
     } catch (error) {
       // Error is handled by useEffect above
     }

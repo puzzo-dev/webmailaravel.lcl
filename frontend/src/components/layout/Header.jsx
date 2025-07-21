@@ -105,7 +105,6 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     { name: 'Analytics', href: '/analytics', icon: HiChartBar },
     { name: 'Senders', href: '/senders', icon: HiSenders },
     { name: 'Domains', href: '/domains', icon: HiGlobe },
-    { name: 'Suppression List', href: '/suppression-list', icon: HiBan },
     { name: 'Settings', href: '/account', icon: HiCog },
   ];
 
@@ -113,6 +112,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     { name: 'Admin Dashboard', href: '/admin', icon: HiHome },
     { name: 'Users', href: '/admin/users', icon: HiUsers },
     { name: 'Campaigns', href: '/admin/campaigns', icon: HiInbox },
+    { name: 'Suppression List', href: '/admin/suppression-list', icon: HiBan },
     { name: 'System', href: '/admin/system', icon: HiCog },
     { name: 'Logs', href: '/admin/logs', icon: HiClipboardList },
   ];

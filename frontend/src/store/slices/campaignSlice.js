@@ -41,12 +41,7 @@ export const createCampaign = createAsyncThunk(
   'campaigns/createCampaign',
   async (campaignData, { rejectWithValue }) => {
     try {
-      // Debug log FormData contents
-      if (campaignData instanceof FormData) {
-        for (let [key, value] of campaignData.entries()) {
-          console.log(`FormData entry - ${key}:`, value instanceof File ? `File: ${value.name}` : value);
-        }
-      }
+
 
       // Remove Content-Type header for FormData
       const config = {
@@ -128,6 +123,18 @@ export const resumeCampaign = createAsyncThunk(
   async (campaignId, { rejectWithValue }) => {
     try {
       const response = await api.post(`/campaigns/${campaignId}/resume`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(handleApiError(error).message);
+    }
+  }
+);
+
+export const duplicateCampaign = createAsyncThunk(
+  'campaigns/duplicateCampaign',
+  async (campaignId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/campaigns/${campaignId}/duplicate`);
       return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);
@@ -376,6 +383,13 @@ const campaignSlice = createSlice({
         if (state.currentCampaign?.id === campaign.id) {
           state.currentCampaign = campaign;
         }
+      })
+
+      // Duplicate Campaign
+      .addCase(duplicateCampaign.fulfilled, (state, action) => {
+        const duplicatedCampaign = action.payload.data || action.payload;
+        // Add the duplicated campaign to the beginning of the campaigns list
+        state.campaigns.unshift(duplicatedCampaign);
       })
 
       // Fetch Campaign Stats

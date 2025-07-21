@@ -6,13 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\EmailTracking;
 use App\Models\ClickTracking;
 use App\Traits\GeoIPTrait;
+use App\Traits\SuppressionListTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class TrackingController extends Controller
 {
-    use GeoIPTrait;
+    use GeoIPTrait, SuppressionListTrait;
 
     /**
      * Track email open
@@ -89,6 +90,19 @@ class TrackingController extends Controller
                 return response()->json(['error' => 'Email not found'], 404);
             }
 
+            // Find the click tracking record
+            $clickTracking = ClickTracking::where('email_tracking_id', $emailTracking->id)
+                ->where('link_id', $linkId)
+                ->first();
+
+            if (!$clickTracking) {
+                Log::warning('Click tracking record not found', [
+                    'email_id' => $emailId,
+                    'link_id' => $linkId
+                ]);
+                return response()->json(['error' => 'Link not found'], 404);
+            }
+
             // Get IP and user agent
             $ipAddress = $request->ip();
             $userAgent = $request->userAgent();
@@ -99,11 +113,8 @@ class TrackingController extends Controller
             // Mark email as clicked
             $emailTracking->markAsClicked($ipAddress, $userAgent);
 
-            // Create click tracking record
-            ClickTracking::create([
-                'email_tracking_id' => $emailTracking->id,
-                'link_id' => $linkId,
-                'original_url' => $request->get('url', ''),
+            // Update click tracking record with click details
+            $clickTracking->update([
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
                 'country' => $geoData['success'] ? ($geoData['country'] ?? null) : null,
@@ -118,13 +129,13 @@ class TrackingController extends Controller
                 'email_id' => $emailId,
                 'link_id' => $linkId,
                 'campaign_id' => $emailTracking->campaign_id,
+                'original_url' => $clickTracking->original_url,
                 'ip_address' => $ipAddress
             ]);
 
             // Redirect to original URL
-            $originalUrl = $request->get('url', '');
-            if ($originalUrl) {
-                return redirect($originalUrl);
+            if ($clickTracking->original_url) {
+                return redirect($clickTracking->original_url);
             }
 
             return response()->json(['success' => true]);
@@ -160,9 +171,8 @@ class TrackingController extends Controller
                 'unsubscribed_at' => now()->toISOString()
             ];
 
-            // Process unsubscribe through suppression list service
-            $suppressionService = app(\App\Services\SuppressionListService::class);
-            $result = $suppressionService->handleUnsubscribe($emailId, $email, $metadata);
+            // Process unsubscribe through suppression list trait
+            $result = $this->handleUnsubscribe($emailId, $email, $metadata);
 
             // Append to per-campaign unsubscribe file (for user info only)
             $unsubscribeService = app(\App\Services\UnsubscribeExportService::class);

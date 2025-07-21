@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { analyticsService } from '../../services/api';
 import {
   HiArrowLeft,
   HiPlay,
@@ -15,8 +16,9 @@ import {
   HiCalendar,
   HiClock,
   HiUserGroup,
+  HiDuplicate,
 } from 'react-icons/hi';
-import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign } from '../../store/slices/campaignSlice';
+import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
 
 const CampaignDetail = () => {
@@ -27,6 +29,8 @@ const CampaignDetail = () => {
   const { currentCampaign, campaignStats, campaignTracking, isLoading } = useSelector((state) => state.campaigns);
   const [activeTab, setActiveTab] = useState('overview');
   const [actionLoading, setActionLoading] = useState(false);
+  const [senderPerformance, setSenderPerformance] = useState([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -59,6 +63,26 @@ const CampaignDetail = () => {
     };
   }, [currentCampaign?.status, dispatch, id]);
 
+  // Load sender analytics when analytics tab is active
+  useEffect(() => {
+    if (activeTab === 'analytics' && id && currentCampaign) {
+      loadSenderAnalytics();
+    }
+  }, [activeTab, id, currentCampaign]);
+
+  const loadSenderAnalytics = async () => {
+    try {
+      setLoadingAnalytics(true);
+      const performance = await analyticsService.getCampaignSenderPerformance(id);
+      setSenderPerformance(performance.data || []);
+    } catch (error) {
+      console.error('Failed to load sender analytics:', error);
+      setSenderPerformance([]);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
       try {
@@ -67,6 +91,23 @@ const CampaignDetail = () => {
         navigate('/campaigns');
       } catch (error) {
         toast.error('Failed to delete campaign');
+      }
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (window.confirm('This will create a copy of this campaign with all its settings and contacts. Continue?')) {
+      setActionLoading(true);
+      try {
+        const result = await dispatch(duplicateCampaign(id)).unwrap();
+        toast.success('Campaign duplicated successfully');
+        // Navigate to the duplicated campaign
+        const duplicatedCampaignId = result.data?.id || result.id;
+        navigate(`/campaigns/${duplicatedCampaignId}`);
+      } catch (error) {
+        toast.error('Failed to duplicate campaign');
+      } finally {
+        setActionLoading(false);
       }
     }
   };
@@ -231,6 +272,15 @@ const CampaignDetail = () => {
             >
               <HiPencil className="h-5 w-5 mr-2" />
               Edit
+            </button>
+            
+            <button
+              onClick={handleDuplicate}
+              disabled={actionLoading}
+              className="btn btn-secondary flex items-center disabled:opacity-50"
+            >
+              <HiDuplicate className="h-5 w-5 mr-2" />
+              {actionLoading ? 'Duplicating...' : 'Duplicate'}
             </button>
             
             <button
@@ -704,13 +754,68 @@ const CampaignDetail = () => {
                     </div>
                   )}
                   
-                  {currentCampaign?.senders?.length > 1 && (
+                  {currentCampaign?.senders?.length > 0 && (
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Sender Performance</h4>
-                      <p className="text-sm text-gray-600">
-                        This campaign rotates between {currentCampaign.senders.length} senders for improved deliverability. 
-                        Individual sender performance analytics coming soon.
-                      </p>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-gray-900">Sender Performance</h4>
+                        {loadingAnalytics && (
+                          <div className="text-sm text-gray-500">Loading...</div>
+                        )}
+                      </div>
+                      
+                      {senderPerformance.length > 0 ? (
+                        <div className="space-y-3">
+                          {senderPerformance.map((sender) => (
+                            <div key={sender.sender_id} className="border border-gray-100 rounded-lg p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray-900">{sender.sender_name}</h5>
+                                  <p className="text-xs text-gray-500">{sender.sender_email}</p>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Score: {sender.reputation_score}/100
+                                  </div>
+                                  <div className={`text-xs px-2 py-1 rounded-full inline-block ${
+                                    sender.deliverability_rating === 'Excellent' ? 'bg-green-100 text-green-800' :
+                                    sender.deliverability_rating === 'Good' ? 'bg-blue-100 text-blue-800' :
+                                    sender.deliverability_rating === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
+                                  }`}>
+                                    {sender.deliverability_rating}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                <div>
+                                  <span className="text-gray-500">Sent:</span>
+                                  <span className="ml-1 font-medium">{sender.sent.toLocaleString()}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Opens:</span>
+                                  <span className="ml-1 font-medium">{sender.open_rate}%</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Clicks:</span>
+                                  <span className="ml-1 font-medium">{sender.click_rate}%</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Bounces:</span>
+                                  <span className="ml-1 font-medium">{sender.bounce_rate}%</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {loadingAnalytics ? 
+                            'Loading sender performance data...' : 
+                            'No sender performance data available yet. Data will appear after emails are sent.'
+                          }
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

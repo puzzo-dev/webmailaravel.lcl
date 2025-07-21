@@ -302,6 +302,54 @@ class LogController extends Controller
     }
 
     /**
+     * Clear specific log file (admin only)
+     */
+    public function clearLogFile(Request $request, $filename): JsonResponse
+    {
+        try {
+            if (!auth()->user()->hasRole('admin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Admin access required'
+                ], 403);
+            }
+
+            $logPath = storage_path("logs/{$filename}");
+            
+            if (!File::exists($logPath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Log file not found'
+                ], 404);
+            }
+
+            File::put($logPath, '');
+            
+            Log::info('Log file cleared', [
+                'user_id' => auth()->id(),
+                'filename' => $filename
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Log file cleared successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Log file clear failed', [
+                'user_id' => auth()->id(),
+                'filename' => $filename ?? 'unknown',
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to clear log file'
+            ], 500);
+        }
+    }
+
+    /**
      * Get available log files
      */
     protected function getLogFilesList(): array

@@ -2,6 +2,18 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { suppressionService } from '../../services/api';
 
 // Async thunks
+export const fetchSuppressionList = createAsyncThunk(
+  'suppression/fetchSuppressionList',
+  async (params, { rejectWithValue }) => {
+    try {
+      const response = await suppressionService.getList(params);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch suppression list');
+    }
+  }
+);
+
 export const fetchSuppressionStatistics = createAsyncThunk(
   'suppression/fetchSuppressionStatistics',
   async (_, { rejectWithValue }) => {
@@ -87,6 +99,7 @@ export const downloadSuppressionFile = createAsyncThunk(
 );
 
 const initialState = {
+  list: [],
   statistics: {
     totalSuppressed: 0,
     totalBounces: 0,
@@ -96,6 +109,12 @@ const initialState = {
   },
   exportHistory: [],
   importHistory: [],
+  pagination: {
+    current_page: 1,
+    last_page: 1,
+    per_page: 20,
+    total: 0,
+  },
   isLoading: false,
   isExporting: false,
   isImporting: false,
@@ -118,6 +137,29 @@ const suppressionSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    // Fetch suppression list
+    builder
+      .addCase(fetchSuppressionList.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchSuppressionList.fulfilled, (state, action) => {
+        state.isLoading = false;
+        // Handle the nested data structure from API response
+        const responseData = action.payload.data || action.payload;
+        state.list = responseData.data || [];
+        state.pagination = {
+          current_page: responseData.current_page || 1,
+          last_page: responseData.last_page || 1,
+          per_page: responseData.per_page || 20,
+          total: responseData.total || 0,
+        };
+      })
+      .addCase(fetchSuppressionList.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
     // Fetch suppression statistics
     builder
       .addCase(fetchSuppressionStatistics.pending, (state) => {
@@ -126,7 +168,7 @@ const suppressionSlice = createSlice({
       })
       .addCase(fetchSuppressionStatistics.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.statistics = action.payload;
+        state.statistics = action.payload.data || action.payload;
       })
       .addCase(fetchSuppressionStatistics.rejected, (state, action) => {
         state.isLoading = false;

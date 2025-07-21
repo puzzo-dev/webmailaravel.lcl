@@ -69,20 +69,6 @@ class CampaignController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Debug: Log received data BEFORE validation
-        \Log::info('Campaign creation request received:', [
-            'all_input' => $request->all(),
-            'files' => $request->allFiles(),
-            'has_recipient_file' => $request->hasFile('recipient_file'),
-            'file_info' => $request->file('recipient_file') ? [
-                'name' => $request->file('recipient_file')->getClientOriginalName(),
-                'size' => $request->file('recipient_file')->getSize(),
-                'mime' => $request->file('recipient_file')->getMimeType()
-            ] : null,
-            'all_files' => array_keys($request->allFiles()),
-            'request_headers' => $request->headers->all()
-        ]);
-
         return $this->validateAndExecute(
             $request,
             [
@@ -104,20 +90,7 @@ class CampaignController extends Controller
                 $data = $request->input('validated_data');
                 $data['user_id'] = Auth::id();
 
-                // Debug: Log received data
-                \Log::info('Campaign creation data received:', [
-                    'all_input' => $request->all(),
-                    'validated_data' => $data,
-                    'files' => $request->allFiles(),
-                    'has_recipient_file' => $request->hasFile('recipient_file'),
-                    'file_info' => $request->file('recipient_file') ? [
-                        'name' => $request->file('recipient_file')->getClientOriginalName(),
-                        'size' => $request->file('recipient_file')->getSize(),
-                        'mime' => $request->file('recipient_file')->getMimeType()
-                    ] : null,
-                    'all_files' => array_keys($request->allFiles()),
-                    'request_headers' => $request->headers->all()
-                ]);
+
 
                 // Convert string boolean values to actual booleans
                 $booleanFields = [
@@ -435,6 +408,26 @@ class CampaignController extends Controller
             
             return $this->errorResponse('Failed to stop campaign', $result['error']);
         }, 'stop_campaign');
+    }
+
+    /**
+     * Duplicate campaign
+     */
+    public function duplicateCampaign(Campaign $campaign): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            if (!$this->canAccessResource($campaign)) {
+                return $this->forbiddenResponse('Access denied');
+            }
+            
+            $duplicatedCampaign = $this->campaignService->duplicateCampaign($campaign);
+            
+            // Load related data manually for the response
+            $duplicatedCampaign->senders = $duplicatedCampaign->getSenders();
+            $duplicatedCampaign->contents = $duplicatedCampaign->getContentVariations();
+            
+            return $this->successResponse($duplicatedCampaign, 'Campaign duplicated successfully');
+        }, 'duplicate_campaign');
     }
 
     /**

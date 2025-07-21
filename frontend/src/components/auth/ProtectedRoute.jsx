@@ -6,6 +6,8 @@ const ProtectedRoute = ({ requireAdmin = false }) => {
   const { isAuthenticated, user, isLoading } = useSelector((state) => state.auth);
   const location = useLocation();
   
+
+  
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

@@ -99,7 +99,7 @@ const AdminSystem = () => {
         // System info
         uptime: rawStatus.uptime || "Unknown",
         version: rawStatus.system?.version || "1.0.0",
-        last_backup: new Date().toISOString(), // TODO: Add last backup to backend
+        last_backup: rawStatus.backup?.last_backup || null,
 
         // Service statuses
         database_status: rawStatus.database?.status || "unknown",

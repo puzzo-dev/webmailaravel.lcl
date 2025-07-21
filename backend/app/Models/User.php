@@ -74,6 +74,8 @@ class User extends Authenticatable implements JWTSubject
     public function restoredBackups() { return $this->hasMany(Backup::class, 'restored_by'); }
     public function apiKeys() { return $this->hasMany(ApiKey::class); }
     public function securityLogs() { return $this->hasMany(SecurityLog::class); }
+    public function bounceCredentials() { return $this->hasMany(BounceCredential::class); }
+    public function defaultBounceCredential() { return $this->hasOne(BounceCredential::class)->where('is_default', true)->whereNull('domain_id'); }
 
     /**
      * Get current plan limits

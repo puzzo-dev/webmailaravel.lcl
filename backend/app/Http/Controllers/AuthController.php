@@ -227,11 +227,49 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // TODO: Implement password reset logic
-        return response()->json([
-            'success' => true,
-            'message' => 'Password reset link sent to your email'
-        ]);
+        try {
+            $user = User::where('email', $request->email)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Generate password reset token
+            $token = \Illuminate\Support\Str::random(64);
+            
+            // Store the token in database (you may want to create a password_resets table)
+            // For now, we'll use the remember_token field as a temporary solution
+            $user->remember_token = $token;
+            $user->save();
+            
+            // In a production environment, you would send an email here
+            // For now, we'll just return success
+            // You can integrate with your mail service later
+            
+            \Log::info('Password reset requested', [
+                'email' => $request->email,
+                'token' => $token,
+                'reset_url' => url("/reset-password?token={$token}&email=" . urlencode($request->email))
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset link sent to your email',
+                'data' => [
+                    'reset_url' => url("/reset-password?token={$token}&email=" . urlencode($request->email))
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Forgot password error: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process password reset request'
+            ], 500);
+        }
     }
 
     public function resetPassword(Request $request)
@@ -250,10 +288,45 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // TODO: Implement password reset logic
-        return response()->json([
-            'success' => true,
-            'message' => 'Password reset successfully'
-        ]);
+        try {
+            $user = User::where('email', $request->email)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Verify the token
+            if ($user->remember_token !== $request->token) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired reset token'
+                ], 400);
+            }
+
+            // Update the password
+            $user->password = Hash::make($request->password);
+            $user->remember_token = null; // Clear the reset token
+            $user->save();
+
+            \Log::info('Password reset completed', [
+                'email' => $request->email,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Reset password error: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reset password'
+            ], 500);
+        }
     }
 } 

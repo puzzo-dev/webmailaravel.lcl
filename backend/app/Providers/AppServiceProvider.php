@@ -66,6 +66,9 @@ class AppServiceProvider extends ServiceProvider
     {
         // Configure notification channels
         $this->configureNotificationChannels();
+        
+        // Configure system-wide SMTP for notifications
+        $this->configureSystemMail();
     }
 
     /**
@@ -78,5 +81,15 @@ class AppServiceProvider extends ServiceProvider
         
         // For Telegram notifications, we'll use Laravel's notification system
         // with custom Telegram channel implementation
+    }
+
+    /**
+     * Configure system-wide SMTP for notifications
+     */
+    protected function configureSystemMail(): void
+    {
+        // Configure system SMTP for notifications (not campaigns)
+        // This ensures notifications use system-wide SMTP settings
+        \App\Services\NotificationMailService::configureSystemMail();
     }
 }

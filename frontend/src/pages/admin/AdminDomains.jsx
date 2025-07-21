@@ -65,8 +65,6 @@ const AdminDomains = () => {
       };
       
       const response = await adminService.getDomains(params);
-      console.log('Domains API response:', response);
-      console.log('Domains data structure:', response.data);
       
       // Ensure domains is always an array
       const domainsData = Array.isArray(response.data.data) 

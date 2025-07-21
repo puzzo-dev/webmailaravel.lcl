@@ -53,7 +53,6 @@ class SystemSettingsController extends Controller
                 'notifications' => [
                     'email_enabled' => SystemConfig::get('NOTIFICATION_EMAIL_ENABLED', env('NOTIFICATION_EMAIL_ENABLED', true)),
                     'telegram_enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', env('NOTIFICATION_TELEGRAM_ENABLED', false)),
-                    'telegram_bot_token' => SystemConfig::get('TELEGRAM_BOT_TOKEN', env('TELEGRAM_BOT_TOKEN', '')),
                 ],
             ];
 
@@ -96,7 +95,6 @@ class SystemSettingsController extends Controller
                 // Notification validation
                 'notifications.email_enabled' => 'sometimes|boolean',
                 'notifications.telegram_enabled' => 'sometimes|boolean',
-                'notifications.telegram_bot_token' => 'sometimes|nullable|string|max:255',
             ]);
 
             $updatedSettings = [];
@@ -150,8 +148,6 @@ class SystemSettingsController extends Controller
                         $configKey = 'NOTIFICATION_EMAIL_ENABLED';
                     } elseif ($key === 'telegram_enabled') {
                         $configKey = 'NOTIFICATION_TELEGRAM_ENABLED';
-                    } elseif ($key === 'telegram_bot_token') {
-                        $configKey = 'TELEGRAM_BOT_TOKEN';
                     } else {
                         $configKey = 'NOTIFICATION_' . strtoupper($key);
                     }

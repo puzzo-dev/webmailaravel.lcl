@@ -1,82 +1,118 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { HiBell, HiX, HiCheckCircle, HiExclamation, HiInformationCircle, HiClock } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 
 const RealTimeUpdates = () => {
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Mock WebSocket connection - replace with actual WebSocket implementation
+  // Real Pusher WebSocket connection
   useEffect(() => {
-    let ws = null;
+    let pusher = null;
+    let channel = null;
     
-    const connectWebSocket = () => {
+    const connectPusher = async () => {
       try {
-        // Mock WebSocket connection
-        ws = {
-          send: (data) => console.log('WebSocket send:', data),
-          close: () => console.log('WebSocket closed'),
-        };
+        // Only connect if we have required environment variables
+        if (!process.env.REACT_APP_PUSHER_KEY || !user?.id) {
+          return;
+        }
+
+        // Dynamically import Pusher to reduce bundle size
+        const Pusher = (await import('pusher-js')).default;
         
-        // Simulate connection
-        setTimeout(() => {
+        // Initialize Pusher connection
+        pusher = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
+          cluster: process.env.REACT_APP_PUSHER_CLUSTER || 'us2',
+          encrypted: true,
+          authEndpoint: '/api/broadcasting/auth',
+          auth: {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          },
+        });
+
+        // Subscribe to user-specific private channel
+        channel = pusher.subscribe(`private-user.${user.id}`);
+        
+        // Connection state handlers
+        pusher.connection.bind('connected', () => {
           setIsConnected(true);
-          console.log('WebSocket connected');
-        }, 1000);
+        });
         
-        // Simulate incoming messages
-        const messageInterval = setInterval(() => {
-          const mockMessages = [
-            {
-              type: 'campaign_status',
-              data: {
-                campaign_id: Math.floor(Math.random() * 1000),
-                status: ['running', 'completed', 'paused'][Math.floor(Math.random() * 3)],
-                message: 'Campaign status updated',
-              },
-            },
-            {
-              type: 'notification',
-              data: {
-                id: Math.random().toString(36).substr(2, 9),
-                type: ['success', 'warning', 'info', 'error'][Math.floor(Math.random() * 4)],
-                title: 'System Update',
-                message: 'New system update available',
-                timestamp: new Date().toISOString(),
-              },
-            },
-            {
-              type: 'analytics_update',
-              data: {
-                opens: Math.floor(Math.random() * 100),
-                clicks: Math.floor(Math.random() * 50),
-                bounces: Math.floor(Math.random() * 10),
-              },
-            },
-          ];
-          
-          const randomMessage = mockMessages[Math.floor(Math.random() * mockMessages.length)];
-          handleWebSocketMessage(randomMessage);
-        }, 5000);
+        pusher.connection.bind('disconnected', () => {
+          setIsConnected(false);
+        });
         
-        return () => {
-          clearInterval(messageInterval);
-          if (ws) {
-            ws.close();
-          }
-        };
+        pusher.connection.bind('error', (error) => {
+          console.error('Real-time connection error:', error);
+          setIsConnected(false);
+        });
+
+        // Event listeners for real-time updates
+        channel.bind('campaign-status-changed', (data) => {
+          handleWebSocketMessage({
+            type: 'campaign_status',
+            data: data
+          });
+        });
+
+        channel.bind('notification', (data) => {
+          handleWebSocketMessage({
+            type: 'notification',
+            data: data
+          });
+        });
+
+        channel.bind('analytics-update', (data) => {
+          handleWebSocketMessage({
+            type: 'analytics_update',
+            data: data
+          });
+        });
+
+        channel.bind('device-detected', (data) => {
+          handleWebSocketMessage({
+            type: 'device_detected',
+            data: data
+          });
+        });
+
+        channel.bind('subscription-updated', (data) => {
+          handleWebSocketMessage({
+            type: 'subscription_updated',
+            data: data
+          });
+        });
+        
       } catch (error) {
-        console.error('WebSocket connection failed:', error);
+        console.error('Real-time connection failed:', error);
         setIsConnected(false);
       }
     };
-    
-    const cleanup = connectWebSocket();
-    return cleanup;
-  }, []);
+
+    if (user?.id) {
+      connectPusher();
+    }
+
+    return () => {
+      if (channel) {
+        channel.unbind_all();
+        if (pusher) {
+          pusher.unsubscribe(`private-user.${user.id}`);
+        }
+      }
+      if (pusher) {
+        pusher.disconnect();
+      }
+    };
+  }, [user?.id]);
 
   const handleWebSocketMessage = useCallback((message) => {
     switch (message.type) {
@@ -90,7 +126,7 @@ const RealTimeUpdates = () => {
         handleAnalyticsUpdate(message.data);
         break;
       default:
-        console.log('Unknown message type:', message.type);
+        break;
     }
   }, []);
 

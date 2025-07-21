@@ -34,6 +34,8 @@ import {
   HiCursorClick,
   HiPaperAirplane,
   HiX,
+  HiShieldCheck,
+  HiBan,
 } from 'react-icons/hi';
 
 const UserDashboard = ({ data, onRefresh }) => {
@@ -51,6 +53,8 @@ const UserDashboard = ({ data, onRefresh }) => {
   const deliverability = safeData.deliverability || {};
   const revenue = safeData.revenue || {};
   const reputation = safeData.reputation || {};
+  const bounceProcessing = safeData.bounce_processing || {};
+  const suppression = safeData.suppression || {};
 
   // Generate performance chart data from last 7 days
   const getPerformanceData = () => {
@@ -213,8 +217,93 @@ const UserDashboard = ({ data, onRefresh }) => {
         </div>
       </div>
 
+      {/* Bounce Processing Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-12 w-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <HiShieldCheck className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Bounce Credentials</p>
+              <p className="text-3xl font-bold text-gray-900">{bounceProcessing.credentials?.total || 0}</p>
+              <div className="flex items-center mt-1">
+                <HiTrendingUp className="h-3 w-3 text-indigo-500 mr-1" />
+                <span className="text-xs font-medium text-indigo-600">
+                  {bounceProcessing.credentials?.active || 0} active
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-12 w-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                <HiExclamation className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Bounces Processed</p>
+              <p className="text-3xl font-bold text-gray-900">{bounceProcessing.processing?.total_processed || 0}</p>
+              <div className="flex items-center mt-1">
+                <HiTrendingUp className="h-3 w-3 text-red-500 mr-1" />
+                <span className="text-xs font-medium text-red-600">
+                  {bounceProcessing.processing?.recent_processed || 0} this week
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-12 w-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg">
+                <HiBan className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Suppressed Emails</p>
+              <p className="text-3xl font-bold text-gray-900">{suppression.summary?.total || 0}</p>
+              <div className="flex items-center mt-1">
+                <HiTrendingUp className="h-3 w-3 text-yellow-500 mr-1" />
+                <span className="text-xs font-medium text-yellow-600">
+                  {suppression.summary?.this_week || 0} this week
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-12 w-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                <HiCheckCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Suppression Rate</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {bounceProcessing.processing?.suppression_rate ? `${bounceProcessing.processing.suppression_rate}%` : '0%'}
+              </p>
+              <div className="flex items-center mt-1">
+                <HiTrendingUp className="h-3 w-3 text-green-500 mr-1" />
+                <span className="text-xs font-medium text-green-600">
+                  {bounceProcessing.processing?.added_to_suppression || 0} suppressed
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Performance Trends */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
@@ -269,6 +358,53 @@ const UserDashboard = ({ data, onRefresh }) => {
               />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Bounce Processing Trends */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Bounce Processing</h3>
+              <p className="text-sm text-gray-500">Daily bounce processing over the last 7 days</p>
+            </div>
+            <div className="p-2 bg-red-100 rounded-lg">
+              <HiExclamation className="h-5 w-5 text-red-600" />
+            </div>
+          </div>
+          {bounceProcessing.trends?.daily?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={bounceProcessing.trends.daily}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
+                <Bar dataKey="hard_bounces" stackId="a" fill="#EF4444" name="Hard Bounces" />
+                <Bar dataKey="soft_bounces" stackId="a" fill="#F59E0B" name="Soft Bounces" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <HiExclamation className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No bounce data yet</p>
+                <p className="text-sm">Set up bounce processing to see trends</p>
+                <button
+                  onClick={() => navigate('/bounce-credentials')}
+                  className="mt-4 btn btn-primary btn-sm"
+                >
+                  <HiPlus className="h-4 w-4 mr-2" />
+                  Setup Bounce Processing
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Campaign Status Distribution */}
@@ -369,6 +505,40 @@ const UserDashboard = ({ data, onRefresh }) => {
                   </div>
                   <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                     {deliverability.bounce_rate ? `${deliverability.bounce_rate.toFixed(1)}%` : '0%'} bounce rate
+                  </div>
+                </div>
+              )}
+
+              {bounceProcessing.processing?.total_processed > 0 && (
+                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="p-2 rounded-lg bg-indigo-100">
+                    <HiShieldCheck className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">Bounce Processing</p>
+                    <p className="text-xs text-gray-500">
+                      {bounceProcessing.processing.total_processed} bounces processed, {bounceProcessing.processing.added_to_suppression} suppressed
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    {bounceProcessing.credentials?.active || 0} active credentials
+                  </div>
+                </div>
+              )}
+
+              {suppression.summary?.total > 0 && (
+                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="p-2 rounded-lg bg-yellow-100">
+                    <HiBan className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">Suppression List</p>
+                    <p className="text-xs text-gray-500">
+                      {suppression.summary.total} total suppressed, {suppression.summary.this_week || 0} added this week
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    Active protection
                   </div>
                 </div>
               )}

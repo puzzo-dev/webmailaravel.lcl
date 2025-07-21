@@ -12,6 +12,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content as MailContent;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\URL;
 
@@ -45,13 +46,29 @@ class CampaignEmail extends Mailable
                 'email_id' => EmailTracking::generateEmailId(),
                 'sent_at' => now()
             ]);
+            
         }
     }
 
     /**
      * Get the message envelope.
+     * 
+     * Sets the sender's name as the "From" name in the email envelope.
+     * This ensures that recipients see the sender's name in their email client.
      */
     public function envelope(): Envelope
+    {
+        return new Envelope(
+            from: new Address($this->sender->email, $this->sender->name),
+            to: $this->recipient,
+            subject: $this->processTemplateVariables($this->content->subject)
+        );
+    }
+
+    /**
+     * Get the message headers.
+     */
+    public function headers(): Headers
     {
         $headers = [
             'X-Campaign-ID' => $this->campaign->id,
@@ -71,11 +88,10 @@ class CampaignEmail extends Mailable
             $headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
         }
 
-        return new Envelope(
-            from: $this->sender->email,
-            to: $this->recipient,
-            subject: $this->processTemplateVariables($this->content->subject),
-            headers: $headers
+        return new Headers(
+            messageId: null,
+            references: [],
+            text: $headers
         );
     }
 
@@ -94,8 +110,7 @@ class CampaignEmail extends Mailable
         }
 
         return new MailContent(
-            htmlString: $htmlContent,
-            textString: $textContent,
+            htmlString: $htmlContent
         );
     }
 
@@ -112,10 +127,18 @@ class CampaignEmail extends Mailable
      */
     private function addTrackingToHtml(string $html): string
     {
+        // Ensure HTML has proper structure
+        $html = $this->ensureHtmlStructure($html);
+
         // Add tracking pixel only if open tracking is enabled
         if ($this->campaign->enable_open_tracking && $this->emailTracking) {
             $trackingPixel = $this->getTrackingPixel();
-            $html = str_replace('</body>', $trackingPixel . '</body>', $html);
+            // Try to insert before </body>, fallback to end of content
+            if (stripos($html, '</body>') !== false) {
+                $html = str_ireplace('</body>', $trackingPixel . '</body>', $html);
+            } else {
+                $html .= $trackingPixel;
+            }
         }
 
         // Add click tracking to links only if click tracking is enabled
@@ -175,14 +198,25 @@ class CampaignEmail extends Mailable
             
             // Skip if it's already a tracking link or unsubscribe link
             if (strpos($originalUrl, '/api/tracking/') !== false || 
-                strpos($originalUrl, 'unsubscribe') !== false) {
+                strpos($originalUrl, 'unsubscribe') !== false ||
+                strpos($originalUrl, 'mailto:') !== false ||
+                strpos($originalUrl, 'javascript:') !== false ||
+                strpos($originalUrl, '#') === 0) {
                 continue;
             }
 
             // Create tracking URL
             $linkId = \App\Models\ClickTracking::generateLinkId();
+            
+            // Create ClickTracking record
+            \App\Models\ClickTracking::create([
+                'email_tracking_id' => $this->emailTracking->id,
+                'link_id' => $linkId,
+                'original_url' => $originalUrl,
+                'clicked_at' => null  // Will be set when actually clicked
+            ]);
+            
             $trackingUrl = URL::to('/api/tracking/click/' . $this->emailTracking->email_id . '/' . $linkId);
-            $trackingUrl .= '?url=' . urlencode($originalUrl);
 
             // Replace the href attribute
             $newLinkTag = preg_replace(
@@ -204,8 +238,12 @@ class CampaignEmail extends Mailable
     {
         $unsubscribeFooter = $this->getUnsubscribeFooterHtml();
         
-        // Add before closing body tag
-        $html = str_replace('</body>', $unsubscribeFooter . '</body>', $html);
+        // Try to add before closing body tag, fallback to end of content
+        if (stripos($html, '</body>') !== false) {
+            $html = str_ireplace('</body>', $unsubscribeFooter . '</body>', $html);
+        } else {
+            $html .= $unsubscribeFooter;
+        }
         
         return $html;
     }
@@ -250,6 +288,29 @@ class CampaignEmail extends Mailable
         
         return "You received this email because you are subscribed to our mailing list.\n" .
                "To unsubscribe, visit: " . $unsubscribeUrl;
+    }
+
+    /**
+     * Ensure HTML content has proper structure for tracking injection
+     */
+    private function ensureHtmlStructure(string $html): string
+    {
+        // If content doesn't have HTML structure, wrap it
+        if (stripos($html, '<html') === false || stripos($html, '<body') === false) {
+            $html = '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email</title>
+</head>
+<body>
+' . $html . '
+</body>
+</html>';
+        }
+        
+        return $html;
     }
 
     /**

@@ -45,9 +45,9 @@ class ProcessCampaignJob implements ShouldQueue
                 'batch_size' => $this->batchSize,
             ]);
 
-            // Check if campaign is still active
-            if ($campaign->status !== 'active') {
-                Log::info('Campaign is not active, skipping processing', [
+            // Check if campaign is still running
+            if (!in_array($campaign->status, ['RUNNING', 'active'])) {
+                Log::info('Campaign is not running, skipping processing', [
                     'campaign_id' => $this->campaignId,
                     'status' => $campaign->status
                 ]);
@@ -66,9 +66,9 @@ class ProcessCampaignJob implements ShouldQueue
 
             // Schedule next batch if there are more recipients
             if (($result['emails_sent'] ?? 0) > 0 && ($result['remaining_recipients'] ?? 0) > 0) {
-                $nextDelay = $this->delay + 60; // Add 1 minute delay between batches
+                $nextDelay = 60; // Add 1 minute delay between batches
                 
-                self::dispatch($this->campaignId, $this->batchSize, $nextDelay)
+                self::dispatch($this->campaignId, $this->batchSize)
                     ->delay(now()->addSeconds($nextDelay));
                 
                 Log::info('Scheduled next campaign batch', [

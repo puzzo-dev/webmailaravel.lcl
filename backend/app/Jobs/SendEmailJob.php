@@ -49,7 +49,9 @@ class SendEmailJob implements ShouldQueue
             Log::info('Sending campaign email', [
                 'campaign_id' => $this->campaign->id,
                 'recipient' => $this->recipient,
-                'sender_id' => $this->sender->id
+                'sender_id' => $this->sender->id,
+                'sender_name' => $this->sender->name,
+                'sender_email' => $this->sender->email
             ]);
 
             // Get recipient data for template variables
@@ -66,7 +68,9 @@ class SendEmailJob implements ShouldQueue
             Log::info('Campaign email sent successfully', [
                 'campaign_id' => $this->campaign->id,
                 'recipient' => $this->recipient,
-                'sender_id' => $this->sender->id
+                'sender_id' => $this->sender->id,
+                'sender_name' => $this->sender->name,
+                'sender_email' => $this->sender->email
             ]);
 
         } catch (\Exception $e) {
@@ -134,6 +138,7 @@ class SendEmailJob implements ShouldQueue
         Log::info('Mail configured for sender', [
             'sender_id' => $this->sender->id,
             'sender_email' => $this->sender->email,
+            'sender_name' => $this->sender->name,
             'smtp_host' => $smtpConfig->host,
             'smtp_port' => $smtpConfig->port,
             'smtp_username' => $smtpConfig->username,

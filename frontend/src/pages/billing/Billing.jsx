@@ -11,7 +11,7 @@ import {
   HiDownload,
   HiEye,
   HiPlus,
-  HiCog,
+
   HiShieldCheck,
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
@@ -40,12 +40,21 @@ const Billing = () => {
   } = useSelector((state) => state.billing);
   
   const [activeTab, setActiveTab] = useState('subscription');
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     dispatch(fetchSubscriptions());
     dispatch(fetchPaymentHistory());
     dispatch(fetchPaymentRates());
     dispatch(fetchPlans());
+    
+    // Check if user just registered and came from pricing
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('welcome') === 'true') {
+      setShowWelcome(true);
+      // Clean up the URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, [dispatch]);
 
   useEffect(() => {
@@ -101,14 +110,32 @@ const Billing = () => {
             <h1 className="text-2xl font-bold text-gray-900">Billing & Subscriptions</h1>
             <p className="text-gray-600 mt-1">Manage your subscription and billing information</p>
           </div>
-          <div className="flex space-x-3">
-            <button className="btn btn-secondary flex items-center">
-              <HiCog className="h-5 w-5 mr-2" />
-              Billing Settings
-            </button>
-          </div>
+
         </div>
       </div>
+
+      {/* Welcome Message for New Users */}
+      {showWelcome && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
+          <div className="flex">
+            <HiCheckCircle className="h-5 w-5 text-green-400" />
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-green-800">Welcome to EmailCampaign! 🎉</h3>
+              <div className="mt-2 text-sm text-green-700">
+                Your account has been created successfully. Choose a plan below to unlock premium features and start creating powerful email campaigns.
+              </div>
+              <div className="mt-3">
+                <button 
+                  onClick={() => setShowWelcome(false)}
+                  className="text-green-600 hover:text-green-800 text-sm font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (

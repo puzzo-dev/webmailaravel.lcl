@@ -19,9 +19,10 @@ class AdminUserSeeder extends Seeder
             ['email' => 'admin@example.com'],
             [
                 'email' => 'admin@example.com',
-                'password' => Hash::make('secret'),
+                'username' => 'admin',
+                'name' => 'System Administrator',
+                'password' => Hash::make('password123'),
                 'role' => 'admin',
-                'is_active' => true,
                 'country' => 'US',
                 'city' => 'New York'
             ]
@@ -32,7 +33,7 @@ class AdminUserSeeder extends Seeder
 
         $this->command->info('Admin user created successfully!');
         $this->command->info('Email: admin@example.com');
-        $this->command->info('Password: secret');
+        $this->command->info('Password: password123');
     }
 
     /**

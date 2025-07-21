@@ -180,38 +180,131 @@ class NotificationController extends Controller
             }
 
             $request->validate([
-                'user_id' => 'required|exists:users,id',
+                'user_id' => 'sometimes|exists:users,id',
+                'user_ids' => 'sometimes|array',
+                'user_ids.*' => 'exists:users,id',
+                'send_to_all' => 'sometimes|boolean',
+                'title' => 'required|string|max:255',
+                'message' => 'required|string',
+                'type' => 'nullable|string|in:info,warning,error,success',
+                'channels' => 'sometimes|array',
+                'channels.*' => 'string|in:email,telegram,database',
+            ]);
+
+            // Determine target users
+            $users = collect();
+            
+            if ($request->send_to_all) {
+                $users = \App\Models\User::all();
+            } elseif ($request->user_ids) {
+                $users = \App\Models\User::whereIn('id', $request->user_ids)->get();
+            } elseif ($request->user_id) {
+                $users = \App\Models\User::where('id', $request->user_id)->get();
+            } else {
+                return $this->errorResponse('No target users specified', 400);
+            }
+
+            if ($users->isEmpty()) {
+                return $this->errorResponse('No valid users found', 404);
+            }
+
+            $sentCount = 0;
+            $errors = [];
+
+            foreach ($users as $user) {
+                try {
+                    // Send notification using Laravel's notification system
+                    $user->notify(new \App\Notifications\AdminNotification(
+                        $request->title,
+                        $request->message,
+                        $request->type ?? 'info'
+                    ));
+                    $sentCount++;
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to send to {$user->email}: " . $e->getMessage();
+                }
+            }
+
+            $responseMessage = "Notification sent to {$sentCount} user(s)";
+            if (!empty($errors)) {
+                $responseMessage .= ". Errors: " . implode(', ', $errors);
+            }
+
+            return $this->successResponse([
+                'sent_count' => $sentCount,
+                'total_users' => $users->count(),
+                'errors' => $errors
+            ], $responseMessage);
+        }, 'create_notification');
+    }
+
+    /**
+     * Send bulk notifications to multiple users (admin only)
+     */
+    public function sendBulk(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            // Check if user is admin
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->errorResponse('Admin access required', 403);
+            }
+
+            $request->validate([
+                'recipient_type' => 'required|string|in:all,active,role,specific',
+                'role' => 'sometimes|string|in:admin,user',
+                'user_ids' => 'sometimes|array',
+                'user_ids.*' => 'exists:users,id',
                 'title' => 'required|string|max:255',
                 'message' => 'required|string',
                 'type' => 'nullable|string|in:info,warning,error,success',
             ]);
 
-            $user = \App\Models\User::find($request->user_id);
+            // Build query based on recipient type
+            $query = \App\Models\User::query();
             
-            $notification = $user->notifications()->create([
-                'id' => \Illuminate\Support\Str::uuid(),
-                'type' => 'App\Notifications\CustomNotification',
-                'data' => [
-                    'title' => $request->title,
-                    'message' => $request->message,
-                    'type' => $request->type ?? 'info',
-                ],
-            ]);
-            
-            $transformedNotification = [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'title' => $notification->data['title'] ?? 'Notification',
-                'message' => $notification->data['message'] ?? '',
-                'notification_type' => $notification->data['type'] ?? 'info',
-                'read_at' => $notification->read_at,
-                'created_at' => $notification->created_at,
-                'updated_at' => $notification->updated_at,
-                'user_id' => $notification->notifiable_id,
-                'user_email' => $user->email,
-            ];
-            
-            return $this->successResponse($transformedNotification, 'Notification created successfully');
-        }, 'create_notification');
+            switch ($request->recipient_type) {
+                case 'all':
+                    // No additional filters
+                    break;
+                case 'active':
+                    $query->where('email_verified_at', '!=', null);
+                    break;
+                case 'role':
+                    $query->where('role', $request->role);
+                    break;
+                case 'specific':
+                    $query->whereIn('id', $request->user_ids ?? []);
+                    break;
+            }
+
+            $users = $query->get();
+
+            if ($users->isEmpty()) {
+                return $this->errorResponse('No users found matching criteria', 404);
+            }
+
+            $sentCount = 0;
+            $errors = [];
+
+            foreach ($users as $user) {
+                try {
+                    $user->notify(new \App\Notifications\AdminNotification(
+                        $request->title,
+                        $request->message,
+                        $request->type ?? 'info'
+                    ));
+                    $sentCount++;
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to send to {$user->email}: " . $e->getMessage();
+                }
+            }
+
+            return $this->successResponse([
+                'sent_count' => $sentCount,
+                'total_users' => $users->count(),
+                'recipient_type' => $request->recipient_type,
+                'errors' => $errors
+            ], "Bulk notification sent to {$sentCount} user(s)");
+        }, 'send_bulk_notification');
     }
 } 

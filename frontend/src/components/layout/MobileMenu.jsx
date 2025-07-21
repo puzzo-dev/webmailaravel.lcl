@@ -2,15 +2,16 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { HiX, HiLogout, HiInbox } from 'react-icons/hi';
+import { useAppName } from '../../hooks/useSystemConfig';
 
 const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
   const { currentView } = useSelector((state) => state.auth);
+  const appName = useAppName();
   
   const userNavigation = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Campaigns', href: '/campaigns' },
     { name: 'Domains', href: '/domains' },
-    { name: 'Suppression List', href: '/suppression-list' },
     { name: 'Analytics', href: '/analytics' },
     { name: 'Account', href: '/account' },
   ];
@@ -20,6 +21,7 @@ const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
     { name: 'Users', href: '/admin/users' },
     { name: 'Campaigns', href: '/admin/campaigns' },
     { name: 'Domains', href: '/admin/domains' },
+    { name: 'Suppression List', href: '/admin/suppression-list' },
     { name: 'System', href: '/admin/system' },
     { name: 'Logs', href: '/admin/logs' },
   ];
@@ -40,7 +42,7 @@ const MobileMenu = ({ isOpen, onClose, user, onLogout }) => {
               </div>
             </div>
             <div className="ml-3">
-              <h1 className="text-white text-lg font-semibold">EmailCampaign</h1>
+              <h1 className="text-white text-lg font-semibold">{appName}</h1>
             </div>
           </div>
           <button

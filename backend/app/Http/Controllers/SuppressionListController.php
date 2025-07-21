@@ -16,6 +16,36 @@ class SuppressionListController extends Controller
     use SuppressionListTrait, FileProcessingTrait, CacheManagementTrait;
 
     /**
+     * Get suppression list (admin only)
+     */
+    public function index(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            // Check if user is admin
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->errorResponse('Admin access required', 403);
+            }
+
+            $perPage = $request->input('per_page', 20);
+            $page = $request->input('page', 1);
+            $search = $request->input('search');
+
+            $query = \App\Models\SuppressionList::query();
+
+            // Apply search filter
+            if ($search) {
+                $query->where('email', 'like', "%{$search}%")
+                     ->orWhere('reason', 'like', "%{$search}%");
+            }
+
+            $results = $query->orderBy('created_at', 'desc')
+                           ->paginate($perPage, ['*'], 'page', $page);
+
+            return $this->successResponse($results, 'Suppression list retrieved successfully');
+        }, 'get_suppression_list');
+    }
+
+    /**
      * Handle unsubscribe request
      */
     public function unsubscribe(Request $request, string $emailId): JsonResponse
@@ -79,6 +109,11 @@ class SuppressionListController extends Controller
      */
     public function processFBLFile(Request $request): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $request->validate([
                 'fbl_file' => 'required|file|mimes:csv,txt|max:10240', // 10MB max
@@ -132,6 +167,11 @@ class SuppressionListController extends Controller
      */
     public function getStatistics(): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $stats = $this->getSuppressionStatistics();
 
@@ -157,6 +197,11 @@ class SuppressionListController extends Controller
      */
     public function export(Request $request): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $filename = $request->input('filename');
             $filepath = $this->exportSuppressionList($filename);
@@ -191,6 +236,11 @@ class SuppressionListController extends Controller
      */
     public function download(string $filename): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $filepath = 'suppression_lists/' . $filename;
 
@@ -225,6 +275,11 @@ class SuppressionListController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $request->validate([
                 'file' => 'required|file|mimes:csv,txt|max:10240',
@@ -280,6 +335,11 @@ class SuppressionListController extends Controller
      */
     public function removeEmail(Request $request): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $request->validate([
                 'email' => 'required|email'
@@ -321,6 +381,11 @@ class SuppressionListController extends Controller
      */
     public function cleanup(Request $request): JsonResponse
     {
+        // Check if user is admin
+        if (!auth()->user()->hasRole('admin')) {
+            return $this->errorResponse('Admin access required', 403);
+        }
+
         try {
             $days = $request->input('days', 365);
             $removed = $this->cleanupOldEntries($days);

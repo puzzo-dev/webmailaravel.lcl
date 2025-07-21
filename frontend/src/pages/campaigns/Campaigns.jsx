@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign } from '../../store/slices/campaignSlice';
+import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
 import {
   HiPlus,
@@ -26,6 +26,7 @@ import {
   HiRefresh,
   HiDownload,
   HiDotsVertical,
+  HiDuplicate,
 } from 'react-icons/hi';
 import { debounce } from 'lodash';
 import { useSubscriptionError } from '../../hooks/useSubscriptionError';
@@ -123,6 +124,19 @@ const Campaigns = () => {
       } catch (error) {
         if (!handleSubscriptionError(error)) {
           toast.error('Failed to delete campaign');
+        }
+      }
+    }
+  };
+
+  const handleDuplicate = async (campaignId, campaignName) => {
+    if (window.confirm(`Create a copy of "${campaignName}" with all its settings and contacts?`)) {
+      try {
+        await dispatch(duplicateCampaign(campaignId)).unwrap();
+        toast.success('Campaign duplicated successfully');
+      } catch (error) {
+        if (!handleSubscriptionError(error)) {
+          toast.error('Failed to duplicate campaign');
         }
       }
     }
@@ -593,6 +607,13 @@ const Campaigns = () => {
                           >
                             <HiPencil className="h-4 w-4" />
                           </Link>
+                          <button
+                            onClick={() => handleDuplicate(campaign.id, campaign.name)}
+                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                            title="Duplicate Campaign"
+                          >
+                            <HiDuplicate className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => handleDelete(campaign.id)}
                             className="text-danger-600 hover:text-danger-900 transition-colors"

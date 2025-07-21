@@ -9,6 +9,10 @@ import {
   HiShieldCheck,
   HiExclamation,
   HiInformationCircle,
+  HiCheckCircle,
+  HiXCircle,
+  HiTrendingUp,
+  HiChartBar,
 } from 'react-icons/hi';
 
 const NotificationList = ({
@@ -24,6 +28,12 @@ const NotificationList = ({
 }) => {
   const getNotificationIcon = (type) => {
     const iconConfig = {
+      'campaign_created': HiMail,
+      'campaign_status_changed': HiMail,
+      'campaign_completed': HiCheckCircle,
+      'campaign_failed': HiXCircle,
+      'campaign_milestone': HiTrendingUp,
+      'high_bounce_rate_alert': HiChartBar,
       'campaign': HiMail,
       'security': HiShieldCheck,
       'warning': HiExclamation,
@@ -37,6 +47,12 @@ const NotificationList = ({
 
   const getNotificationColor = (type) => {
     const colorConfig = {
+      'campaign_created': 'text-blue-600 bg-blue-100',
+      'campaign_status_changed': 'text-blue-600 bg-blue-100',
+      'campaign_completed': 'text-green-600 bg-green-100',
+      'campaign_failed': 'text-red-600 bg-red-100',
+      'campaign_milestone': 'text-purple-600 bg-purple-100',
+      'high_bounce_rate_alert': 'text-orange-600 bg-orange-100',
       'campaign': 'text-blue-600 bg-blue-100',
       'security': 'text-red-600 bg-red-100',
       'warning': 'text-yellow-600 bg-yellow-100',

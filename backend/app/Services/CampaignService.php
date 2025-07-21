@@ -8,6 +8,11 @@ use App\Models\Sender;
 use App\Models\User;
 use App\Events\CampaignStatusChanged;
 use App\Notifications\CampaignStatusChanged as CampaignStatusNotification;
+use App\Notifications\CampaignCreated;
+use App\Notifications\CampaignCompleted;
+use App\Notifications\CampaignFailed;
+use App\Notifications\CampaignMilestone;
+use App\Notifications\HighBounceRateAlert;
 use App\Jobs\ProcessCampaignJob;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
@@ -15,6 +20,8 @@ use App\Traits\CacheManagementTrait;
 use App\Traits\SuppressionListTrait;
 use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
 
 use Illuminate\Support\Facades\DB;
 
@@ -109,6 +116,9 @@ class CampaignService
             $this->storeSenderList($campaign, $userSenders);
 
             DB::commit();
+
+            // Send campaign created notification
+            $campaign->user->notify(new CampaignCreated($campaign));
 
             $this->logInfo('Campaign created', [
                 'campaign_id' => $campaign->id, 
@@ -440,7 +450,7 @@ class CampaignService
     public function getRecipientData(int $campaignId, string $email): array
     {
         $cacheKey = "campaign:{$campaignId}:recipient_data";
-        $recipientData = $this->cache($cacheKey);
+        $recipientData = Cache::get($cacheKey);
         
         if ($recipientData) {
             $data = json_decode($recipientData, true);
@@ -453,7 +463,7 @@ class CampaignService
     /**
      * Start campaign
      */
-    public function startCampaign(Campaign $campaign): void
+    public function startCampaign(Campaign $campaign): array
     {
         $this->logMethodEntry(__METHOD__, ['campaign_id' => $campaign->id]);
 
@@ -481,19 +491,8 @@ class CampaignService
                 'started_at' => now()
             ]);
 
-            // Dispatch campaign processing job and store the job ID
-            $job = ProcessCampaignJob::dispatch($campaign);
-            
-            // Store job ID if the column exists
-            try {
-                $campaign->update(['job_id' => $job->getJobId()]);
-            } catch (\Exception $e) {
-                // If job_id column doesnt exist yet, just log it
-                $this->logWarning('job_id column not available yet', [
-                    'campaign_id' => $campaign->id,
-                    'job_id' => $job->getJobId()
-                ]);
-            }
+            // Dispatch campaign processing job
+            ProcessCampaignJob::dispatch($campaign->id);
 
             // Broadcast status change
             event(new CampaignStatusChanged($campaign));
@@ -504,18 +503,24 @@ class CampaignService
             $this->logInfo('Campaign started', [
                 'campaign_id' => $campaign->id,
                 'user_id' => $campaign->user_id,
-                'recipient_count' => $campaign->recipient_count,
-                'job_id' => $job->getJobId()
+                'recipient_count' => $campaign->recipient_count
             ]);
 
-           
+            return [
+                'success' => true,
+                'message' => 'Campaign started successfully'
+            ];
 
         } catch (\Exception $e) {
             $this->logError('Campaign start failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage()
             ]);
-            throw $e;
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
         }
     }
 
@@ -582,19 +587,8 @@ class CampaignService
                 'resumed_at' => now()
             ]);
 
-            // Dispatch campaign processing job and store the job ID
-            $job = ProcessCampaignJob::dispatch($campaign);
-            
-            // Store job ID if the column exists
-            try {
-                $campaign->update(['job_id' => $job->getJobId()]);
-            } catch (\Exception $e) {
-                // If job_id column doesnt exist yet, just log it
-                $this->logWarning('job_id column not available yet', [
-                    'campaign_id' => $campaign->id,
-                    'job_id' => $job->getJobId()
-                ]);
-            }
+            // Dispatch campaign processing job
+            ProcessCampaignJob::dispatch($campaign->id);
 
             // Broadcast status change
             event(new CampaignStatusChanged($campaign));
@@ -604,8 +598,7 @@ class CampaignService
 
             $this->logInfo('Campaign resumed', [
                 'campaign_id' => $campaign->id,
-                'user_id' => $campaign->user_id,
-                'job_id' => $job->getJobId
+                'user_id' => $campaign->user_id
             ]);
 
             return ['success' => true, 'campaign' => $campaign];
@@ -660,6 +653,95 @@ class CampaignService
                 'error' => $e->getMessage()
             ]);
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Duplicate campaign
+     */
+    public function duplicateCampaign(Campaign $originalCampaign): Campaign
+    {
+        $this->logMethodEntry(__METHOD__, ['original_campaign_id' => $originalCampaign->id]);
+
+        DB::beginTransaction();
+        try {
+            // Copy recipient list file if it exists
+            $newRecipientListPath = null;
+            if ($originalCampaign->recipient_list_path && $this->fileExists($originalCampaign->recipient_list_path, ['disk' => 'local'])) {
+                $originalFileContent = $this->readFile($originalCampaign->recipient_list_path, ['disk' => 'local']);
+                $newFileName = 'recipient_lists/duplicated_' . time() . '_' . basename($originalCampaign->recipient_list_path);
+                $this->writeFile($newFileName, $originalFileContent, ['disk' => 'local']);
+                $newRecipientListPath = $newFileName;
+            }
+
+            // Get current user's senders to use for the duplicate
+            $user = User::find(Auth::id());
+            $userSenders = $user->senders()->where('is_active', true)->get();
+            
+            if ($userSenders->isEmpty()) {
+                throw new \Exception('No active senders found for user. Cannot duplicate campaign.');
+            }
+
+            // Create new campaign with duplicated data
+            $duplicateData = [
+                'user_id' => Auth::id(),
+                'name' => $originalCampaign->name . ' (Copy)',
+                'subject' => $originalCampaign->subject,
+                'sender_ids' => $userSenders->pluck('id')->toArray(), // Use current user's senders
+                'content_ids' => $originalCampaign->content_ids,
+                'recipient_list_path' => $newRecipientListPath,
+                'recipient_count' => $originalCampaign->recipient_count,
+                'enable_content_switching' => $originalCampaign->enable_content_switching,
+                'template_variables' => $originalCampaign->template_variables,
+                'enable_template_variables' => $originalCampaign->enable_template_variables,
+                'enable_open_tracking' => $originalCampaign->enable_open_tracking,
+                'enable_click_tracking' => $originalCampaign->enable_click_tracking,
+                'enable_unsubscribe_link' => $originalCampaign->enable_unsubscribe_link,
+                'recipient_field_mapping' => $originalCampaign->recipient_field_mapping,
+                'status' => 'DRAFT',
+            ];
+
+            // Create the duplicated campaign
+            $duplicatedCampaign = Campaign::create($duplicateData);
+
+            // Copy recipient data to new cache keys
+            $originalRecipientData = Cache::get("campaign:{$originalCampaign->id}:recipient_data");
+            if ($originalRecipientData) {
+                Cache::put("campaign:{$duplicatedCampaign->id}:recipient_data", $originalRecipientData, now()->addHours(24));
+            }
+
+            // Copy content variations if content switching is enabled
+            if ($originalCampaign->enable_content_switching) {
+                $originalContentVariations = Cache::get("campaign:{$originalCampaign->id}:content_variations");
+                if ($originalContentVariations) {
+                    Cache::put("campaign:{$duplicatedCampaign->id}:content_variations", $originalContentVariations, now()->addHours(24));
+                }
+            }
+
+            // Store sender list in cache for the duplicated campaign
+            $this->storeSenderList($duplicatedCampaign, $userSenders);
+
+            DB::commit();
+
+            $this->logInfo('Campaign duplicated successfully', [
+                'original_campaign_id' => $originalCampaign->id,
+                'duplicated_campaign_id' => $duplicatedCampaign->id,
+                'user_id' => Auth::id(),
+                'new_recipient_list_path' => $newRecipientListPath,
+                'sender_count' => $userSenders->count()
+            ]);
+
+            $this->logMethodExit(__METHOD__, ['duplicated_campaign_id' => $duplicatedCampaign->id]);
+            return $duplicatedCampaign;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->logError('Campaign duplication failed', [
+                'original_campaign_id' => $originalCampaign->id,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
         }
     }
 
@@ -760,12 +842,196 @@ class CampaignService
     }
 
     /**
+     * Process campaign - send emails to recipients in batches
+     */
+    public function processCampaign(Campaign $campaign, int $batchSize = 100): array
+    {
+        $this->logMethodEntry(__METHOD__, [
+            'campaign_id' => $campaign->id,
+            'batch_size' => $batchSize
+        ]);
+
+        $startTime = microtime(true);
+        $emailsSent = 0;
+        $emailsFailed = 0;
+        $remainingRecipients = 0;
+
+        try {
+            // Check if campaign is still active/running
+            if (!in_array($campaign->status, ['RUNNING', 'active'])) {
+                $this->logInfo('Campaign is not in running state, skipping processing', [
+                    'campaign_id' => $campaign->id,
+                    'status' => $campaign->status
+                ]);
+                return [
+                    'emails_sent' => 0,
+                    'emails_failed' => 0,
+                    'remaining_recipients' => 0,
+                    'processing_time' => 0
+                ];
+            }
+
+            // Check if recipient list exists
+            if (!$campaign->recipient_list_path || !$this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
+                throw new \Exception('Recipient list file not found');
+            }
+
+            // Read recipient list
+            $recipientContent = $this->readFile($campaign->recipient_list_path, ['disk' => 'local']);
+            $recipients = array_filter(array_map('trim', explode("\n", $recipientContent)));
+
+            if (empty($recipients)) {
+                throw new \Exception('No recipients found in recipient list');
+            }
+
+            // Get campaign's senders for shuffling
+            $senders = $campaign->getSenders();
+            if ($senders->isEmpty()) {
+                throw new \Exception('No senders found for campaign');
+            }
+
+            // Get campaign's content variations
+            $contents = $campaign->getContentVariations();
+            if ($contents->isEmpty()) {
+                throw new \Exception('No content found for campaign');
+            }
+
+            // Process recipients in batches
+            $processedCount = $campaign->total_sent ?? 0;
+            $recipientsToProcess = array_slice($recipients, $processedCount, $batchSize);
+            $remainingRecipients = count($recipients) - ($processedCount + count($recipientsToProcess));
+
+            $this->logInfo('Processing campaign batch', [
+                'campaign_id' => $campaign->id,
+                'total_recipients' => count($recipients),
+                'processed_count' => $processedCount,
+                'batch_size' => count($recipientsToProcess),
+                'remaining_recipients' => $remainingRecipients
+            ]);
+
+            // Process each recipient in this batch
+            foreach ($recipientsToProcess as $index => $recipient) {
+                try {
+                    // Validate email
+                    if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                        $this->logWarning('Invalid email address skipped', [
+                            'campaign_id' => $campaign->id,
+                            'recipient' => $recipient
+                        ]);
+                        $emailsFailed++;
+                        continue;
+                    }
+
+                    // Get sender for this email (shuffling)
+                    $currentIndex = $processedCount + $index;
+                    $sender = $senders[$currentIndex % $senders->count()];
+
+                    // Get content for this email (content switching if enabled)
+                    if ($campaign->enable_content_switching && $contents->count() > 1) {
+                        $content = $contents[$currentIndex % $contents->count()];
+                    } else {
+                        $content = $contents->first();
+                    }
+
+                    // Get recipient data for template variables
+                    $recipientData = $this->getRecipientData($campaign->id, $recipient);
+
+                    // Dispatch email sending job
+                    \App\Jobs\SendEmailJob::dispatch($recipient, $sender, $content, $campaign, $recipientData);
+
+                    $emailsSent++;
+
+                    $this->logInfo('Email job dispatched', [
+                        'campaign_id' => $campaign->id,
+                        'recipient' => $recipient,
+                        'sender_id' => $sender->id,
+                        'sender_name' => $sender->name,
+                        'sender_email' => $sender->email,
+                        'content_id' => $content->id
+                    ]);
+
+                } catch (\Exception $e) {
+                    $this->logError('Failed to dispatch email job', [
+                        'campaign_id' => $campaign->id,
+                        'recipient' => $recipient,
+                        'error' => $e->getMessage()
+                    ]);
+                    $emailsFailed++;
+                }
+            }
+
+            // Update campaign statistics
+            $campaign->update([
+                'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
+                'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed
+            ]);
+
+            // Check for milestones and send notifications
+            $this->checkCampaignMilestones($campaign);
+
+            // Mark campaign as completed if all emails have been processed
+            if ($remainingRecipients <= 0) {
+                $campaign->update([
+                    'status' => 'COMPLETED',
+                    'completed_at' => now()
+                ]);
+
+                // Send campaign completed notification
+                $campaign->user->notify(new CampaignCompleted($campaign));
+
+                $this->logInfo('Campaign completed', [
+                    'campaign_id' => $campaign->id,
+                    'total_sent' => $campaign->total_sent,
+                    'total_failed' => $campaign->total_failed
+                ]);
+            }
+
+            $processingTime = microtime(true) - $startTime;
+
+            $this->logInfo('Campaign batch processed successfully', [
+                'campaign_id' => $campaign->id,
+                'emails_sent' => $emailsSent,
+                'emails_failed' => $emailsFailed,
+                'remaining_recipients' => $remainingRecipients,
+                'processing_time' => $processingTime
+            ]);
+
+            $this->logMethodExit(__METHOD__, [
+                'emails_sent' => $emailsSent,
+                'emails_failed' => $emailsFailed,
+                'remaining_recipients' => $remainingRecipients
+            ]);
+
+            return [
+                'emails_sent' => $emailsSent,
+                'emails_failed' => $emailsFailed,
+                'remaining_recipients' => $remainingRecipients,
+                'processing_time' => $processingTime
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Campaign processing failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage()
+            ]);
+
+            // Mark campaign as failed
+            $campaign->update(['status' => 'FAILED']);
+
+            // Send campaign failed notification
+            $campaign->user->notify(new CampaignFailed($campaign, $e->getMessage()));
+
+            throw $e;
+        }
+    }
+
+    /**
      * Get next sender for shuffling
      */
     public function getNextSender(int $campaignId, int $index): ?array
     {
         $cacheKey = "campaign:{$campaignId}:senders";
-        $senderList = $this->getCache($cacheKey);
+        $senderList = Cache::get($cacheKey);
         
         if (!$senderList) {
             return null;
@@ -781,7 +1047,7 @@ class CampaignService
     public function getNextContent(int $campaignId, int $index): ?array
     {
         $cacheKey = "campaign:{$campaignId}:content_variations";
-        $contentList = $this->getCache($cacheKey);
+        $contentList = Cache::get($cacheKey);
         
         if (!$contentList) {
             return null;
@@ -1020,5 +1286,72 @@ class CampaignService
     private function validateEmail(string $email): bool
     {
         return filter_var(trim($email), FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    /**
+     * Check campaign milestones and send notifications
+     */
+    private function checkCampaignMilestones(Campaign $campaign): void
+    {
+        if ($campaign->recipient_count <= 0) {
+            return;
+        }
+
+        $percentage = intval(($campaign->total_sent / $campaign->recipient_count) * 100);
+        
+        // Check for milestone percentages (25%, 50%, 75%, 90%)
+        $milestones = [25, 50, 75, 90];
+        
+        foreach ($milestones as $milestone) {
+            if ($percentage >= $milestone) {
+                $cacheKey = "campaign:{$campaign->id}:milestone:{$milestone}";
+                
+                // Only send notification once per milestone
+                if (!Cache::get($cacheKey)) {
+                    $campaign->user->notify(new CampaignMilestone($campaign, $milestone));
+                    Cache::put($cacheKey, true, now()->addDays(7)); // Cache for a week
+                    
+                    $this->logInfo('Campaign milestone reached', [
+                        'campaign_id' => $campaign->id,
+                        'milestone' => $milestone,
+                        'percentage' => $percentage
+                    ]);
+                }
+            }
+        }
+
+        // Check for high bounce rate
+        $this->checkBounceRate($campaign);
+    }
+
+    /**
+     * Check bounce rate and send alert if too high
+     */
+    private function checkBounceRate(Campaign $campaign): void
+    {
+        if ($campaign->total_sent <= 0) {
+            return;
+        }
+
+        $bounceRate = ($campaign->bounces / $campaign->total_sent) * 100;
+        $threshold = 10.0; // 10% bounce rate threshold
+        
+        if ($bounceRate >= $threshold) {
+            $cacheKey = "campaign:{$campaign->id}:bounce_alert";
+            
+            // Only send alert once per campaign
+            if (!Cache::get($cacheKey)) {
+                $campaign->user->notify(new HighBounceRateAlert($campaign, $bounceRate, $threshold));
+                Cache::put($cacheKey, true, now()->addDays(1)); // Cache for a day
+                
+                $this->logWarning('High bounce rate detected', [
+                    'campaign_id' => $campaign->id,
+                    'bounce_rate' => $bounceRate,
+                    'threshold' => $threshold,
+                    'bounces' => $campaign->bounces,
+                    'total_sent' => $campaign->total_sent
+                ]);
+            }
+        }
     }
 }

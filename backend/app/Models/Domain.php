@@ -54,6 +54,8 @@ class Domain extends Model
     public function smtpConfig() { return $this->hasOne(SmtpConfig::class); }
     public function trainingConfigs() { return $this->hasMany(TrainingConfig::class); }
     public function reputationHistories() { return $this->hasMany(ReputationHistory::class); }
+    public function bounceCredential() { return $this->hasOne(BounceCredential::class); }
+    public function bounceCredentials() { return $this->hasMany(BounceCredential::class); }
 
     /**
      * Get the latest reputation history

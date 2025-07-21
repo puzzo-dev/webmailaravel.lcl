@@ -34,7 +34,6 @@ export const authService = {
         try {
         const config = isAuthInit ? { _isAuthInit: true } : {};
         const response = await api.get('/user/me', {}, config);
-            console.log('getProfile response:', response);
             return response.data;
         } catch (error) {
             console.error('getProfile error:', error);
@@ -212,6 +211,54 @@ export const domainService = {
     }
 };
 
+// Bounce credential service methods
+export const bounceCredentialService = {
+    async getBounceCredentials(params = {}) {
+        const response = await api.get('/bounce-credentials', params);
+        return response.data;
+    },
+
+    async createBounceCredential(credentialData) {
+        const response = await api.post('/bounce-credentials', credentialData);
+        return response.data;
+    },
+
+    async getBounceCredential(id) {
+        const response = await api.get(`/bounce-credentials/${id}`);
+        return response.data;
+    },
+
+    async updateBounceCredential(id, credentialData) {
+        const response = await api.put(`/bounce-credentials/${id}`, credentialData);
+        return response.data;
+    },
+
+    async deleteBounceCredential(id) {
+        const response = await api.delete(`/bounce-credentials/${id}`);
+        return response.data;
+    },
+
+    async testConnection(id) {
+        const response = await api.post(`/bounce-credentials/${id}/test`);
+        return response.data;
+    },
+
+    async setAsDefault(id) {
+        const response = await api.post(`/bounce-credentials/${id}/set-default`);
+        return response.data;
+    },
+
+    async getStatistics() {
+        const response = await api.get('/bounce-credentials/statistics');
+        return response.data;
+    },
+
+    async getUserDomains() {
+        const response = await api.get('/bounce-credentials/domains');
+        return response.data;
+    }
+};
+
 // Sender service methods
 export const senderService = {
     async getSenders(params = {}) {
@@ -351,43 +398,73 @@ export const analyticsService = {
     async getTrendingMetrics(params = {}) {
         const response = await api.get('/analytics/trending', params);
         return response.data;
+    },
+    
+    async getCampaignPerformance(campaignId) {
+        const response = await api.get(`/analytics/campaign/${campaignId}/performance`);
+        return response.data;
+    },
+    
+    async getCampaignHourlyStats(campaignId) {
+        const response = await api.get(`/analytics/campaign/${campaignId}/hourly`);
+        return response.data;
+    },
+    
+    async getCampaignDailyStats(campaignId) {
+        const response = await api.get(`/analytics/campaign/${campaignId}/daily`);
+        return response.data;
+    },
+    
+    async getCampaignDomainPerformance(campaignId) {
+        const response = await api.get(`/analytics/campaign/${campaignId}/domains`);
+        return response.data;
+    },
+    
+    async getCampaignSenderPerformance(campaignId) {
+        const response = await api.get(`/analytics/campaign/${campaignId}/senders`);
+        return response.data;
     }
 };
 
-// Suppression service methods
+// Suppression service methods (Admin only)
 export const suppressionService = {
+    async getList(params = {}) {
+        const response = await api.get('/admin/suppression-list', { params });
+        return response.data;
+    },
+
     async getStatistics() {
-        const response = await api.get('/suppression-list/statistics');
+        const response = await api.get('/admin/suppression-list/statistics');
         return response.data;
     },
 
     async exportList(exportData) {
-        const response = await api.post('/suppression-list/export', exportData);
+        const response = await api.post('/admin/suppression-list/export', exportData);
         return response.data;
     },
 
     async importList(importData) {
-        const response = await api.post('/suppression-list/import', importData);
+        const response = await api.post('/admin/suppression-list/import', importData);
         return response.data;
     },
 
     async processFBLFile(fileData) {
-        const response = await api.post('/suppression-list/process-fbl', fileData);
+        const response = await api.post('/admin/suppression-list/process-fbl', fileData);
         return response.data;
     },
 
     async removeEmail(emailData) {
-        const response = await api.delete('/suppression-list/remove-email', emailData);
+        const response = await api.delete('/admin/suppression-list/remove-email', emailData);
         return response.data;
     },
 
     async cleanupList(cleanupData) {
-        const response = await api.post('/suppression-list/cleanup', cleanupData);
+        const response = await api.post('/admin/suppression-list/cleanup', cleanupData);
         return response.data;
     },
 
     async downloadFile(filename) {
-        const response = await api.get(`/suppression-list/download/${filename}`);
+        const response = await api.get(`/admin/suppression-list/download/${filename}`);
         return response.data;
     }
 };
@@ -679,6 +756,62 @@ export const adminService = {
         return response.data;
     },
 
+    async clearLogs(filename) {
+        const response = await api.delete(`/admin/logs/files/${filename}`);
+        return response.data;
+    },
+
+    async downloadLogs(filename) {
+        const response = await api.get(`/admin/logs/files/${filename}/download`, { responseType: 'blob' });
+        return response;
+    },
+
+    // Queue management methods
+    async getQueueStats() {
+        const response = await api.get('/admin/queue/stats');
+        return response.data;
+    },
+
+    async getPendingJobs(params = {}) {
+        const response = await api.get('/admin/queue/pending', { params });
+        return response.data;
+    },
+
+    async getFailedJobs(params = {}) {
+        const response = await api.get('/admin/queue/failed', { params });
+        return response.data;
+    },
+
+    async retryFailedJob(jobId) {
+        const response = await api.post(`/admin/queue/failed/${jobId}/retry`);
+        return response.data;
+    },
+
+    async deleteFailedJob(jobId) {
+        const response = await api.delete(`/admin/queue/failed/${jobId}`);
+        return response.data;
+    },
+
+    async clearAllFailedJobs() {
+        const response = await api.delete('/admin/queue/failed');
+        return response.data;
+    },
+
+    async deletePendingJob(jobId) {
+        const response = await api.delete(`/admin/queue/pending/${jobId}`);
+        return response.data;
+    },
+
+    async clearAllPendingJobs() {
+        const response = await api.delete('/admin/queue/pending');
+        return response.data;
+    },
+
+    async getJobDetail(type, jobId) {
+        const response = await api.get(`/admin/queue/${type}/${jobId}`);
+        return response.data;
+    },
+
     async getSystemStatus() {
         const response = await api.get('/admin/system-status');
         return response.data;
@@ -769,6 +902,32 @@ export const adminService = {
     // Test SMTP
     async testSystemSmtp(smtpData) {
         const response = await api.post('/admin/system-settings/test-smtp', smtpData);
+        return response.data;
+    },
+
+    // Notification management
+    async getNotifications(params = {}) {
+        const response = await api.get('/admin/notifications', { params });
+        return response.data;
+    },
+
+    async createNotification(notificationData) {
+        const response = await api.post('/admin/notifications', notificationData);
+        return response.data;
+    },
+
+    async sendBulkNotification(notificationData) {
+        const response = await api.post('/admin/notifications/bulk', notificationData);
+        return response.data;
+    },
+
+    async deleteNotification(notificationId) {
+        const response = await api.delete(`/admin/notifications/${notificationId}`);
+        return response.data;
+    },
+
+    async markNotificationAsRead(notificationId) {
+        const response = await api.put(`/admin/notifications/${notificationId}/read`);
         return response.data;
     }
 }; 

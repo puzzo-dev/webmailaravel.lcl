@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { useAppName } from '../../hooks/useSystemConfig';
 import {
   HiHome,
   HiInbox,
@@ -41,7 +42,7 @@ const userNavigation = [
   { name: 'Campaigns', href: '/campaigns', icon: HiInbox },
   { name: 'Analytics', href: '/analytics', icon: HiChartBar },
   { name: 'Domains', href: '/domains', icon: HiGlobe },
-  { name: 'Suppression List', href: '/suppression-list', icon: HiBan },
+  { name: 'Bounce Processing', href: '/bounce-credentials', icon: HiShieldCheck },
   { name: 'Billing', href: '/billing', icon: HiCreditCard },
   { name: 'Account', href: '/account', icon: HiUser },
 ];
@@ -52,6 +53,7 @@ const adminNavigation = [
   { name: 'Campaigns', href: '/admin/campaigns', icon: HiInbox },
   { name: 'Domains', href: '/admin/domains', icon: HiGlobe },
   { name: 'Senders', href: '/admin/senders', icon: HiServer },
+  { name: 'Suppression List', href: '/admin/suppression-list', icon: HiBan },
   { name: 'SMTP', href: '/admin/smtp', icon: HiKey },
   { name: 'System', href: '/admin/system', icon: HiSystem },
   { name: 'Billing', href: '/admin/billing', icon: HiCreditCard },
@@ -64,6 +66,7 @@ const adminNavigation = [
 const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
   const location = useLocation();
   const { currentView } = useSelector((state) => state.auth);
+  const appName = useAppName();
   const isAdmin = user?.role === 'admin';
   const isAdminView = currentView === 'admin';
 
@@ -80,7 +83,7 @@ const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
                 </div>
               </div>
               <div className="ml-3">
-                <h1 className="text-white text-lg font-semibold">EmailCampaign</h1>
+                <h1 className="text-white text-lg font-semibold">{appName}</h1>
               </div>
             </div>
           </div>

@@ -313,6 +313,50 @@ class AnalyticsController extends Controller
             ], 500);
         }
     }
+    
+    /**
+     * Get campaign hourly statistics
+     */
+    public function getCampaignHourlyStats(Campaign $campaign): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            $stats = $this->analyticsService->getHourlyStats($campaign);
+            return $this->successResponse($stats, 'Campaign hourly statistics retrieved successfully');
+        }, 'get_campaign_hourly_stats');
+    }
+    
+    /**
+     * Get campaign daily statistics
+     */
+    public function getCampaignDailyStats(Campaign $campaign): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            $stats = $this->analyticsService->getDailyStats($campaign);
+            return $this->successResponse($stats, 'Campaign daily statistics retrieved successfully');
+        }, 'get_campaign_daily_stats');
+    }
+    
+    /**
+     * Get campaign domain performance
+     */
+    public function getCampaignDomainPerformance(Campaign $campaign): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            $performance = $this->analyticsService->getDomainPerformance($campaign);
+            return $this->successResponse($performance, 'Campaign domain performance retrieved successfully');
+        }, 'get_campaign_domain_performance');
+    }
+    
+    /**
+     * Get campaign sender performance
+     */
+    public function getCampaignSenderPerformance(Campaign $campaign): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($campaign) {
+            $performance = $this->analyticsService->getSenderPerformance($campaign);
+            return $this->successResponse($performance, 'Campaign sender performance retrieved successfully');
+        }, 'get_campaign_sender_performance');
+    }
 }
 
 

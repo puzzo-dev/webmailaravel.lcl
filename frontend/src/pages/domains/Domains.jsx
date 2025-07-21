@@ -61,11 +61,7 @@ const Domains = () => {
   // Ensure senders is always an array
   const safeSenders = Array.isArray(senders) ? senders : [];
   
-  // Debug logging
-  console.log('Selected Domain:', selectedDomain);
-  console.log('All Senders:', senders);
-  console.log('Safe Senders:', safeSenders);
-  console.log('Filtered Senders:', safeSenders.filter(s => s.domain_id === selectedDomain?.id));
+
   
   const { handleSubscriptionError } = useSubscriptionError();
   

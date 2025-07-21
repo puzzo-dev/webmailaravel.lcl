@@ -57,7 +57,6 @@ const AdminBackups = () => {
       // Handle both possible response structures
       const backupsData = response.data || response || [];
       setBackups(backupsData);
-      console.log('Backups data:', backupsData);
     } catch (error) {
       setError('Failed to load backups');
       toast.error('Failed to load backups');
@@ -79,7 +78,6 @@ const AdminBackups = () => {
         retention_days: 30,
       };
       setStatistics(statsData);
-      console.log('Statistics data:', statsData);
     } catch (error) {
       console.error('Statistics fetch error:', error);
       // Use default statistics if API fails
@@ -390,9 +388,7 @@ const AdminBackups = () => {
                   </td>
                 </tr>
               ) : (
-                backups.map((backup) => {
-                  console.log('Rendering backup:', backup);
-                  return (
+                backups.map((backup) => (
                 <tr key={backup.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
@@ -455,8 +451,7 @@ const AdminBackups = () => {
                     </div>
                   </td>
                 </tr>
-                );
-                })
+                ))
               )}
             </tbody>
           </table>

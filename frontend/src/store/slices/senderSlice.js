@@ -101,13 +101,8 @@ const senderSlice = createSlice({
         const responseData = action.payload;
         const sendersData = responseData?.data || [];
         
-        console.log('SenderSlice - Response Data:', responseData);
-        console.log('SenderSlice - Senders Data:', sendersData);
-        
         state.senders = Array.isArray(sendersData) ? sendersData : [];
         state.pagination = responseData?.pagination || state.pagination;
-        
-        console.log('SenderSlice - Final State Senders:', state.senders);
       })
       .addCase(fetchSenders.rejected, (state, action) => {
         state.isLoading = false;

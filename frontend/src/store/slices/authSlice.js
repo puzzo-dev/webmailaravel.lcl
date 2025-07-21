@@ -11,15 +11,12 @@ export const initializeAuth = createAsyncThunk(
       const user = response.data?.user || response.user || response;
       
       if (user) {
-        console.log('Auth initialization: User authenticated', user);
         return { user };
       } else {
-        console.log('Auth initialization: No user data in response');
         return rejectWithValue('No user found');
       }
     } catch (error) {
       // If API call fails (no cookie, expired token, etc.), user is not authenticated
-      console.log('Auth initialization: No valid session found', error.message);
       return rejectWithValue('Not authenticated');
     }
   }
@@ -169,10 +166,22 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
+// Check if we might be authenticated on app start (to prevent flash of unauthenticated content)
+const hasStoredAuth = () => {
+  try {
+    // Check if we have any indication of being logged in
+    return document.cookie.includes('laravel_session') || 
+           localStorage.getItem('auth_token') || 
+           sessionStorage.getItem('auth_token');
+  } catch {
+    return false;
+  }
+};
+
 const initialState = {
   user: null, // Will be initialized by initializeAuth
   isAuthenticated: false, // Will be determined by API call
-  isLoading: false,
+  isLoading: true, // Always start with loading to prevent premature redirects
   error: null,
   currentView: 'user', // 'user' or 'admin' - for admin users to switch between views
 };

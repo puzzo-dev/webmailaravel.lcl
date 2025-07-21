@@ -19,6 +19,8 @@ use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\SuppressionListController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SystemSettingsController;
+use App\Http\Controllers\PublicConfigController;
+use App\Http\Controllers\BounceCredentialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +56,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
 });
+
+// Public config routes (no authentication required)
+Route::get('/config', [PublicConfigController::class, 'getPublicConfig']);
 
 // Public tracking routes (no authentication required)
 Route::prefix('tracking')->group(function () {
@@ -108,6 +113,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}', [CampaignController::class, 'show']);
         Route::put('/{campaign}', [CampaignController::class, 'update']);
         Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
+        Route::post('/{campaign}/duplicate', [CampaignController::class, 'duplicateCampaign']);
         Route::post('/{campaign}/start', [CampaignController::class, 'startCampaign']);
         Route::post('/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
         Route::post('/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
@@ -162,6 +168,19 @@ Route::middleware(['auth:api'])->group(function () {
         });
     });
 
+    // Bounce credential routes (no subscription required)
+    Route::prefix('bounce-credentials')->group(function () {
+        Route::get('/', [BounceCredentialController::class, 'index']);
+        Route::post('/', [BounceCredentialController::class, 'store']);
+        Route::get('/domains', [BounceCredentialController::class, 'domains']);
+        Route::get('/statistics', [BounceCredentialController::class, 'statistics']);
+        Route::get('/{credential}', [BounceCredentialController::class, 'show']);
+        Route::put('/{credential}', [BounceCredentialController::class, 'update']);
+        Route::delete('/{credential}', [BounceCredentialController::class, 'destroy']);
+        Route::post('/{credential}/test', [BounceCredentialController::class, 'testConnection']);
+        Route::post('/{credential}/set-default', [BounceCredentialController::class, 'setAsDefault']);
+    });
+
     // Content routes (require active subscription)
     Route::prefix('contents')->middleware(['subscription'])->group(function () {
         Route::get('/', [ContentController::class, 'index']);
@@ -193,15 +212,9 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/webhook', [BillingController::class, 'webhook']);
     });
 
-    // Suppression List routes (require active subscription)
-    Route::prefix('suppression-list')->middleware(['subscription'])->group(function () {
-        Route::get('/statistics', [SuppressionListController::class, 'getStatistics']);
-        Route::post('/export', [SuppressionListController::class, 'export']);
-        Route::get('/download/{filename}', [SuppressionListController::class, 'download']);
-        Route::post('/import', [SuppressionListController::class, 'import']);
-        Route::post('/process-fbl', [SuppressionListController::class, 'processFBLFile']);
-        Route::delete('/remove-email', [SuppressionListController::class, 'removeEmail']);
-        Route::post('/cleanup', [SuppressionListController::class, 'cleanup']);
+    // Public suppression routes (for unsubscribe links, etc.)
+    Route::prefix('suppression-list')->group(function () {
+        Route::post('/unsubscribe/{emailId}', [SuppressionListController::class, 'unsubscribe']);
     });
 
     // Sender routes (require active subscription)
@@ -267,18 +280,35 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/{config}', [DomainController::class, 'getSmtpConfigById']);
             Route::post('/', [DomainController::class, 'createSmtpConfig']);
             Route::put('/{config}', [DomainController::class, 'updateSmtpConfigById']);
+        });
+
+        // Complete SMTP configs routes
+        Route::prefix('smtp-configs')->group(function () {
             Route::delete('/{config}', [DomainController::class, 'deleteSmtpConfig']);
             Route::post('/{config}/test', [DomainController::class, 'testSmtpConfig']);
         });
 
-        // Admin notifications management routes (admin only)
-        Route::prefix('notifications')->group(function () {
-            Route::get('/', [NotificationController::class, 'index']);
-            Route::post('/', [NotificationController::class, 'store']);
-            Route::get('/{notification}', [NotificationController::class, 'show']);
-            Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
-            Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+        // Admin-only suppression list management
+        Route::prefix('suppression-list')->group(function () {
+            Route::get('/', [SuppressionListController::class, 'index']);
+            Route::get('/statistics', [SuppressionListController::class, 'getStatistics']);
+            Route::post('/export', [SuppressionListController::class, 'export']);
+            Route::get('/download/{filename}', [SuppressionListController::class, 'download']);
+            Route::post('/import', [SuppressionListController::class, 'import']);
+            Route::post('/process-fbl', [SuppressionListController::class, 'processFBLFile']);
+            Route::delete('/remove-email', [SuppressionListController::class, 'removeEmail']);
+            Route::post('/cleanup', [SuppressionListController::class, 'cleanup']);
         });
+
+        // Admin notifications management routes (admin only)
+Route::prefix('notifications')->group(function () {
+Route::get('/', [NotificationController::class, 'index']);
+Route::post('/', [NotificationController::class, 'store']);
+Route::post('/bulk', [NotificationController::class, 'sendBulk']);
+Route::get('/{notification}', [NotificationController::class, 'show']);
+Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+});
 
         // Admin logs management routes (admin only)
         Route::prefix('logs')->group(function () {
@@ -286,7 +316,21 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/', [LogController::class, 'index']);
             Route::get('/{log}', [LogController::class, 'show']);
             Route::delete('/{log}', [LogController::class, 'destroy']);
-            Route::get('/{filename}/download', [LogController::class, 'download']);
+            Route::get('/files/{filename}/download', [LogController::class, 'download']);
+            Route::delete('/files/{filename}', [LogController::class, 'clearLogFile']);
+        });
+
+        // Admin queue management routes (admin only)
+        Route::prefix('queue')->group(function () {
+            Route::get('/stats', [App\Http\Controllers\QueueController::class, 'getQueueStats']);
+            Route::get('/pending', [App\Http\Controllers\QueueController::class, 'getPendingJobs']);
+            Route::get('/failed', [App\Http\Controllers\QueueController::class, 'getFailedJobs']);
+            Route::post('/failed/{id}/retry', [App\Http\Controllers\QueueController::class, 'retryFailedJob']);
+            Route::delete('/failed/{id}', [App\Http\Controllers\QueueController::class, 'deleteFailedJob']);
+            Route::delete('/failed', [App\Http\Controllers\QueueController::class, 'clearAllFailedJobs']);
+            Route::delete('/pending/{id}', [App\Http\Controllers\QueueController::class, 'deletePendingJob']);
+            Route::delete('/pending', [App\Http\Controllers\QueueController::class, 'clearAllPendingJobs']);
+            Route::get('/{type}/{id}', [App\Http\Controllers\QueueController::class, 'getJobDetail']);
         });
 
         // Admin PowerMTA management routes (admin only)
@@ -374,6 +418,10 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']);
             Route::get('/trending', [AnalyticsController::class, 'getTrendingMetrics']);
             Route::get('/campaign/{campaign}/performance', [AnalyticsController::class, 'getCampaignPerformanceReport']);
+            Route::get('/campaign/{campaign}/hourly', [AnalyticsController::class, 'getCampaignHourlyStats']);
+            Route::get('/campaign/{campaign}/daily', [AnalyticsController::class, 'getCampaignDailyStats']);
+            Route::get('/campaign/{campaign}/domains', [AnalyticsController::class, 'getCampaignDomainPerformance']);
+            Route::get('/campaign/{campaign}/senders', [AnalyticsController::class, 'getCampaignSenderPerformance']);
             Route::get('/export', [AnalyticsController::class, 'export']);
         });
     });

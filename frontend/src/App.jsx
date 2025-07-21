@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import { initializeAuth } from './store/slices/authSlice';
 import { hideSubscriptionOverlay } from './store/slices/uiSlice';
+import { fetchSystemConfig } from './store/slices/systemConfigSlice';
 
 // Auth Components
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -38,6 +39,7 @@ import Billing from './pages/billing/Billing';
 import SuppressionList from './pages/suppression/SuppressionList';
 import Senders from './pages/senders/Senders';
 import Domains from './pages/domains/Domains';
+import BounceCredentials from './pages/bounce-credentials/BounceCredentials';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -48,7 +50,7 @@ import AdminSenders from './pages/admin/AdminSenders';
 import AdminSmtp from './pages/admin/AdminSmtp';
 import AdminSystem from './pages/admin/AdminSystem';
 import AdminBackups from './pages/admin/AdminBackups';
-import AdminLogs from './pages/admin/AdminLogs';
+import AdminLogsAndQueues from './pages/admin/AdminLogsAndQueues';
 import AdminPowerMTA from './pages/admin/AdminPowerMTA';
 import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminBilling from './pages/admin/AdminBilling';
@@ -58,9 +60,12 @@ function App() {
 
   useEffect(() => {
     dispatch(initializeAuth());
+    // Fetch system config in parallel with auth initialization
+    dispatch(fetchSystemConfig());
   }, []);
 
   // Show loading screen while initializing authentication
+  // This prevents any routing decisions until auth is determined
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -124,21 +129,22 @@ function App() {
               <Route path="/account" element={<Account />} />
               <Route path="/activity" element={<UserActivity />} />
               <Route path="/billing" element={<Billing />} />
-              <Route path="/suppression-list" element={<SuppressionList />} />
               <Route path="/senders" element={<Senders />} />
               <Route path="/domains" element={<Domains />} />
+              <Route path="/bounce-credentials" element={<BounceCredentials />} />
 
               {/* Admin Routes - Only available to admin users */}
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/suppression-list" element={<SuppressionList />} />
                 <Route path="/admin/campaigns" element={<AdminCampaigns />} />
                 <Route path="/admin/domains" element={<AdminDomains />} />
                 <Route path="/admin/senders" element={<AdminSenders />} />
                 <Route path="/admin/smtp" element={<AdminSmtp />} />
                 <Route path="/admin/system" element={<AdminSystem />} />
                 <Route path="/admin/backups" element={<AdminBackups />} />
-                <Route path="/admin/logs" element={<AdminLogs />} />
+                <Route path="/admin/logs" element={<AdminLogsAndQueues />} />
                 <Route path="/admin/powermta" element={<AdminPowerMTA />} />
                 <Route path="/admin/notifications" element={<AdminNotifications />} />
               <Route path="/admin/billing" element={<AdminBilling />} />
@@ -158,15 +164,32 @@ function App() {
             }
           />
 
-          {/* Redirects */}
+          {/* 404 fallback for unmatched routes */}
           <Route path="*" element={
-            isAuthenticated ? (
-              currentView === 'admin' ? 
-                <Navigate to="/admin" replace /> : 
-                <Navigate to="/dashboard" replace />
-            ) : (
-              <Navigate to="/" replace />
-            )
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+              <div className="text-center">
+                <h1 className="text-6xl font-bold text-gray-400">404</h1>
+                <p className="mt-4 text-xl text-gray-600">Page not found</p>
+                <p className="mt-2 text-gray-500">The page you're looking for doesn't exist.</p>
+                <div className="mt-8">
+                  {isAuthenticated ? (
+                    <a 
+                      href={currentView === 'admin' ? '/admin' : '/dashboard'} 
+                      className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg inline-block"
+                    >
+                      Go to {currentView === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
+                    </a>
+                  ) : (
+                    <a 
+                      href="/" 
+                      className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg inline-block"
+                    >
+                      Go to Home
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
           } />
         </Routes>
       </div>

@@ -12,6 +12,7 @@ import monitoringReducer from './slices/monitoringSlice';
 import notificationsReducer from './slices/notificationsSlice';
 import analyticsReducer from './slices/analyticsSlice';
 import uiReducer from './slices/uiSlice';
+import systemConfigReducer from './slices/systemConfigSlice';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +29,7 @@ export const store = configureStore({
     notifications: notificationsReducer,
     analytics: analyticsReducer,
     ui: uiReducer,
+    systemConfig: systemConfigReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -16,6 +16,7 @@ import {
 } from 'react-icons/hi';
 import { formatDate, formatNumber } from '../../utils/helpers';
 import {
+  fetchSuppressionList,
   fetchSuppressionStatistics,
   importSuppressionList,
   removeEmailFromSuppression,
@@ -24,7 +25,8 @@ import {
 
 const SuppressionList = () => {
   const dispatch = useDispatch();
-  const { statistics, isLoading, isImporting, isExporting, error } = useSelector((state) => state.suppression);
+  const { user } = useSelector((state) => state.auth);
+  const { list = [], statistics = {}, pagination = {}, isLoading = false, isImporting = false, isExporting = false, error = null } = useSelector((state) => state.suppression || {});
   const [activeTab, setActiveTab] = useState('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmails, setSelectedEmails] = useState([]);
@@ -34,35 +36,8 @@ const SuppressionList = () => {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadReason, setUploadReason] = useState('bounce');
 
-  // Mock suppression list data - replace with actual API call
-  const suppressionList = [
-    {
-      id: 1,
-      email: 'bounce@example.com',
-      reason: 'bounce',
-      date: '2024-01-15',
-      source: 'automatic',
-      status: 'active',
-    },
-    {
-      id: 2,
-      email: 'complaint@example.com',
-      reason: 'complaint',
-      date: '2024-01-14',
-      source: 'manual',
-      status: 'active',
-    },
-    {
-      id: 3,
-      email: 'unsubscribe@example.com',
-      reason: 'unsubscribe',
-      date: '2024-01-13',
-      source: 'automatic',
-      status: 'active',
-    },
-  ];
-
   useEffect(() => {
+    dispatch(fetchSuppressionList());
     dispatch(fetchSuppressionStatistics());
   }, [dispatch]);
 
@@ -108,10 +83,11 @@ const SuppressionList = () => {
 
   const handleRemoveEmail = async (emailId) => {
     try {
-      const email = suppressionList.find(e => e.id === emailId);
+      const email = list.find(e => e.id === emailId);
       if (email) {
         await dispatch(removeEmailFromSuppression({ email: email.email })).unwrap();
-        // Refresh statistics
+        // Refresh list and statistics
+        dispatch(fetchSuppressionList());
         dispatch(fetchSuppressionStatistics());
       }
     } catch (error) {
@@ -127,10 +103,36 @@ const SuppressionList = () => {
     }
   };
 
-  const filteredEmails = suppressionList.filter(email =>
+  const filteredEmails = (Array.isArray(list) ? list : []).filter(email =>
     email.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    email.reason.toLowerCase().includes(searchTerm.toLowerCase())
+    (email.reason || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Check if user has admin access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <HiExclamationCircle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>
+                  Suppression list management is restricted to administrators only. 
+                  This ensures system-wide compliance and prevents reputation damage.
+                </p>
+                <p className="mt-2">
+                  <strong>Note:</strong> All campaigns automatically use the system-wide suppression list 
+                  to prevent sending to suppressed email addresses.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -138,8 +140,10 @@ const SuppressionList = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Suppression List</h1>
-            <p className="text-gray-600 mt-1">Manage your email suppression list</p>
+            <h1 className="text-2xl font-bold text-gray-900">System Suppression List</h1>
+            <p className="text-gray-600 mt-1">
+              Manage the system-wide email suppression list. All campaigns automatically use this list.
+            </p>
           </div>
           <div className="flex space-x-3">
             <button

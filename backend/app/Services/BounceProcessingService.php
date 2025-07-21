@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Domain;
+use App\Models\BounceCredential;
 use App\Models\BounceProcessingLog;
 use App\Models\SuppressionList;
 use App\Traits\LoggingTrait;
@@ -27,21 +28,31 @@ class BounceProcessingService
     {
         $this->logMethodEntry(__METHOD__);
 
-        $domains = Domain::needsBounceProcessing()->get();
+        // Get all active bounce credentials that need checking
+        $credentials = BounceCredential::active()
+            ->with(['domain', 'user'])
+            ->get()
+            ->filter(function ($credential) {
+                return $credential->needsCheck();
+            });
+
         $results = [];
 
-        foreach ($domains as $domain) {
+        foreach ($credentials as $credential) {
             try {
-                $result = $this->processDomainBounces($domain);
-                $results[$domain->id] = $result;
+                $result = $this->processCredentialBounces($credential);
+                $key = $credential->domain_id ? "domain_{$credential->domain_id}" : "user_{$credential->user_id}_default";
+                $results[$key] = $result;
             } catch (\Exception $e) {
-                $this->logError('Failed to process bounces for domain', [
-                    'domain_id' => $domain->id,
-                    'domain_name' => $domain->name,
+                $this->logError('Failed to process bounces for credential', [
+                    'credential_id' => $credential->id,
+                    'domain_id' => $credential->domain_id,
+                    'user_id' => $credential->user_id,
                     'error' => $e->getMessage()
                 ]);
                 
-                $results[$domain->id] = [
+                $key = $credential->domain_id ? "domain_{$credential->domain_id}" : "user_{$credential->user_id}_default";
+                $results[$key] = [
                     'success' => false,
                     'error' => $e->getMessage(),
                     'processed' => 0,
@@ -55,36 +66,33 @@ class BounceProcessingService
     }
 
     /**
-     * Process bounces for a specific domain
+     * Process bounces for a specific bounce credential
      */
-    public function processDomainBounces(Domain $domain): array
+    public function processCredentialBounces(BounceCredential $credential): array
     {
         $this->logMethodEntry(__METHOD__, [
-            'domain_id' => $domain->id,
-            'domain_name' => $domain->name
+            'credential_id' => $credential->id,
+            'domain_id' => $credential->domain_id,
+            'user_id' => $credential->user_id
         ]);
 
-        if (!$domain->isBounceProcessingConfigured()) {
-            throw new \Exception('Bounce processing not properly configured for domain');
-        }
-
-        $connection = $this->createConnection($domain);
-        $messages = $this->fetchBounceMessages($connection, $domain);
+        $connection = $this->createConnectionFromCredential($credential);
+        $messages = $this->fetchBounceMessages($connection, $credential);
         $processed = 0;
         $suppressed = 0;
 
         foreach ($messages as $message) {
             try {
-                $bounceData = $this->parseBounceMessage($message, $domain);
+                $bounceData = $this->parseBounceMessage($message, $credential);
                 
                 if ($bounceData) {
-                    $this->logBounceProcessing($domain, $bounceData);
+                    $this->logBounceProcessing($credential, $bounceData);
                     
                     // Add to suppression list if it's a hard bounce or spam
                     if (in_array($bounceData['bounce_type'], ['hard', 'spam'])) {
                         SuppressionList::addEmail(
                             $bounceData['to_email'],
-                            'bounce_processing',
+                            'bounce',
                             'bounce_processing',
                             $bounceData['bounce_reason']
                         );
@@ -95,26 +103,30 @@ class BounceProcessingService
                 }
             } catch (\Exception $e) {
                 $this->logError('Failed to process bounce message', [
-                    'domain_id' => $domain->id,
+                    'credential_id' => $credential->id,
                     'message_id' => $message['id'] ?? 'unknown',
                     'error' => $e->getMessage()
                 ]);
             }
         }
 
-        // Update domain's last bounce check
-        $domain->updateLastBounceCheck();
+        // Update credential's last checked timestamp and stats
+        $credential->updateLastChecked();
+        $credential->incrementProcessedCount($processed);
+        $credential->clearError(); // Clear any previous errors on success
 
         $result = [
             'success' => true,
             'processed' => $processed,
             'suppressed' => $suppressed,
-            'domain_name' => $domain->name
+            'credential_id' => $credential->id,
+            'domain_name' => $credential->domain ? $credential->domain->name : 'default'
         ];
 
         $this->logInfo('Bounce processing completed', [
-            'domain_id' => $domain->id,
-            'domain_name' => $domain->name,
+            'credential_id' => $credential->id,
+            'domain_id' => $credential->domain_id,
+            'user_id' => $credential->user_id,
             'processed' => $processed,
             'suppressed' => $suppressed
         ]);
@@ -124,7 +136,44 @@ class BounceProcessingService
     }
 
     /**
-     * Create IMAP/POP3 connection
+     * Process bounces for a specific domain (backwards compatibility)
+     */
+    public function processDomainBounces(Domain $domain): array
+    {
+        // Try to get domain-specific credential or fallback to user default
+        $credential = BounceCredential::getForDomain($domain);
+        
+        if (!$credential) {
+            // Fallback to old domain-based configuration
+            return $this->processDomainBouncesLegacy($domain);
+        }
+
+        return $this->processCredentialBounces($credential);
+    }
+
+    /**
+     * Create IMAP/POP3 connection from bounce credential
+     */
+    private function createConnectionFromCredential(BounceCredential $credential): object
+    {
+        $connectionString = $credential->getConnectionString();
+        $mailbox = $connectionString . ($credential->settings['mailbox'] ?? 'INBOX');
+        $username = $credential->username;
+        $password = $credential->getDecryptedPassword();
+        
+        $connection = $this->connectToMailbox($mailbox, $username, $password);
+        
+        if (!$connection) {
+            $error = "Failed to connect to {$credential->protocol} server: " . imap_last_error();
+            $credential->recordError($error);
+            throw new \Exception($error);
+        }
+
+        return $connection;
+    }
+
+    /**
+     * Create IMAP/POP3 connection (legacy domain-based)
      */
     private function createConnection(Domain $domain): object
     {

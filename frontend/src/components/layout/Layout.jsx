@@ -25,9 +25,7 @@ const Layout = () => {
 
   const handleLogout = async () => {
     try {
-      console.log('Logout initiated');
       await dispatch(logout()).unwrap();
-      console.log('Logout successful');
       toast.success('Logged out successfully');
       navigate('/login', { replace: true });
     } catch (error) {

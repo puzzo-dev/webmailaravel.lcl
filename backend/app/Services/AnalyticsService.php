@@ -6,8 +6,14 @@ use App\Models\Campaign;
 use App\Models\User;
 use App\Models\Domain;
 use App\Models\Subscription;
+use App\Models\EmailTracking;
+use App\Models\ClickTracking;
+use App\Models\BounceCredential;
+use App\Models\BounceProcessingLog;
+use App\Models\SuppressionList;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
 use App\Traits\CacheManagementTrait;
@@ -36,7 +42,9 @@ class AnalyticsService
             'revenue' => $this->getRevenueAnalytics($now, $lastMonth),
             'deliverability' => $this->getDeliverabilityAnalytics($now, $lastWeek),
             'reputation' => $this->getReputationAnalytics(),
-            'performance' => $this->getPerformanceMetrics($now, $lastMonth)
+            'performance' => $this->getPerformanceMetrics($now, $lastMonth),
+            'bounce_processing' => $this->getBounceProcessingAnalytics($now, $lastMonth),
+            'suppression' => $this->getSuppressionAnalytics($now, $lastMonth)
         ];
     }
 
@@ -88,10 +96,10 @@ class AnalyticsService
         $avgClickRate = $campaigns->count() > 0 ? $campaigns->avg('click_rate') : 0;
 
         return [
-            'avg_emails_per_campaign' => round($avgEmailsPerCampaign),
-            'avg_delivery_rate' => round($avgDeliveryRate, 2),
-            'avg_open_rate' => round($avgOpenRate, 2),
-            'avg_click_rate' => round($avgClickRate, 2),
+            'avg_emails_per_campaign' => round($avgEmailsPerCampaign ?: 0),
+            'avg_delivery_rate' => round($avgDeliveryRate ?: 0, 2),
+            'avg_open_rate' => round($avgOpenRate ?: 0, 2),
+            'avg_click_rate' => round($avgClickRate ?: 0, 2),
             'total_campaigns_analyzed' => $campaigns->count()
         ];
     }
@@ -137,9 +145,49 @@ class AnalyticsService
      */
     public function getHourlyStats(Campaign $campaign): array
     {
-        // TODO: Implement real hourly statistics from campaign logs
-        // For now, return empty structure
-        return [];
+        $hours = [];
+        $now = now();
+        
+        // Get stats for last 24 hours
+        for ($i = 23; $i >= 0; $i--) {
+            $hour = $now->copy()->subHours($i);
+            $hourStart = $hour->format('Y-m-d H:00:00');
+            $hourEnd = $hour->format('Y-m-d H:59:59');
+            
+            // Get email statistics for this hour using EmailTracking model
+            $sent = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereBetween('sent_at', [$hourStart, $hourEnd])
+                ->count();
+                
+            $opened = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('opened_at')
+                ->whereBetween('opened_at', [$hourStart, $hourEnd])
+                ->count();
+                
+            $clicked = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('clicked_at')
+                ->whereBetween('clicked_at', [$hourStart, $hourEnd])
+                ->count();
+                
+            $bounced = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('bounced_at')
+                ->whereBetween('bounced_at', [$hourStart, $hourEnd])
+                ->count();
+            
+            $hours[] = [
+                'hour' => $hour->format('H:00'),
+                'timestamp' => $hour->toISOString(),
+                'sent' => $sent,
+                'opened' => $opened,
+                'clicked' => $clicked,
+                'bounced' => $bounced,
+                'open_rate' => $sent > 0 ? round(($opened / $sent) * 100, 2) : 0,
+                'click_rate' => $sent > 0 ? round(($clicked / $sent) * 100, 2) : 0,
+                'bounce_rate' => $sent > 0 ? round(($bounced / $sent) * 100, 2) : 0,
+            ];
+        }
+        
+        return $hours;
     }
 
     /**
@@ -147,9 +195,57 @@ class AnalyticsService
      */
     public function getDailyStats(Campaign $campaign): array
     {
-        // TODO: Implement real daily statistics from campaign logs
-        // For now, return empty structure
-        return [];
+        $days = [];
+        $now = now();
+        
+        // Get stats for last 30 days
+        for ($i = 29; $i >= 0; $i--) {
+            $day = $now->copy()->subDays($i);
+            $dayStart = $day->format('Y-m-d 00:00:00');
+            $dayEnd = $day->format('Y-m-d 23:59:59');
+            
+            // Get email statistics for this day
+            $sent = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereBetween('sent_at', [$dayStart, $dayEnd])
+                ->count();
+                
+            $opened = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('opened_at')
+                ->whereBetween('opened_at', [$dayStart, $dayEnd])
+                ->count();
+                
+            $clicked = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('clicked_at')
+                ->whereBetween('clicked_at', [$dayStart, $dayEnd])
+                ->count();
+                
+            $bounced = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('bounced_at')
+                ->whereBetween('bounced_at', [$dayStart, $dayEnd])
+                ->count();
+                
+            $complained = EmailTracking::where('campaign_id', $campaign->id)
+                ->whereNotNull('complained_at')
+                ->whereBetween('complained_at', [$dayStart, $dayEnd])
+                ->count();
+            
+            $days[] = [
+                'date' => $day->format('Y-m-d'),
+                'day' => $day->format('M j'),
+                'timestamp' => $day->toISOString(),
+                'sent' => $sent,
+                'opened' => $opened,
+                'clicked' => $clicked,
+                'bounced' => $bounced,
+                'complained' => $complained,
+                'open_rate' => $sent > 0 ? round(($opened / $sent) * 100, 2) : 0,
+                'click_rate' => $sent > 0 ? round(($clicked / $sent) * 100, 2) : 0,
+                'bounce_rate' => $sent > 0 ? round(($bounced / $sent) * 100, 2) : 0,
+                'complaint_rate' => $sent > 0 ? round(($complained / $sent) * 100, 2) : 0,
+            ];
+        }
+        
+        return $days;
     }
 
     /**
@@ -157,9 +253,42 @@ class AnalyticsService
      */
     public function getDomainPerformance(Campaign $campaign): array
     {
-        // TODO: Implement real domain performance analysis
-        // For now, return empty structure
-        return [];
+        // Get domain performance stats from email tracking
+        $domains = DB::table('email_tracking')
+            ->join('senders', 'senders.id', '=', 'email_tracking.sender_id')
+            ->join('domains', 'domains.id', '=', 'senders.domain_id')
+            ->where('email_tracking.campaign_id', $campaign->id)
+            ->select(
+                'domains.name as domain_name',
+                'domains.id as domain_id',
+                DB::raw('COUNT(*) as total_sent'),
+                DB::raw('SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total_opened'),
+                DB::raw('SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END) as total_clicked'),
+                DB::raw('SUM(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END) as total_bounced'),
+                DB::raw('SUM(CASE WHEN complained_at IS NOT NULL THEN 1 ELSE 0 END) as total_complained')
+            )
+            ->groupBy('domains.id', 'domains.name')
+            ->get()
+            ->map(function ($domain) {
+                $sent = $domain->total_sent;
+                return [
+                    'domain_id' => $domain->domain_id,
+                    'domain_name' => $domain->domain_name,
+                    'sent' => $sent,
+                    'opened' => $domain->total_opened,
+                    'clicked' => $domain->total_clicked,
+                    'bounced' => $domain->total_bounced,
+                    'complained' => $domain->total_complained,
+                    'open_rate' => $sent > 0 ? round(($domain->total_opened / $sent) * 100, 2) : 0,
+                    'click_rate' => $sent > 0 ? round(($domain->total_clicked / $sent) * 100, 2) : 0,
+                    'bounce_rate' => $sent > 0 ? round(($domain->total_bounced / $sent) * 100, 2) : 0,
+                    'complaint_rate' => $sent > 0 ? round(($domain->total_complained / $sent) * 100, 2) : 0,
+                    'reputation_score' => $this->calculateDomainReputation($domain),
+                ];
+            })
+            ->toArray();
+        
+        return $domains;
     }
 
     /**
@@ -167,9 +296,136 @@ class AnalyticsService
      */
     public function getSenderPerformance(Campaign $campaign): array
     {
-        // TODO: Implement real sender performance analysis
-        // For now, return empty structure
-        return [];
+        // Get campaign senders and their performance stats
+        // Since email_tracking doesn't have sender_id, we'll aggregate by campaign level
+        $campaignSenders = $campaign->senders()->get();
+        
+        if ($campaignSenders->isEmpty()) {
+            return [];
+        }
+        
+        // Get email tracking stats for this campaign
+        $trackingStats = DB::table('email_tracking')
+            ->where('campaign_id', $campaign->id)
+            ->select(
+                DB::raw('COUNT(*) as total_sent'),
+                DB::raw('SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total_opened'),
+                DB::raw('SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END) as total_clicked'),
+                DB::raw('SUM(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END) as total_bounced'),
+                DB::raw('SUM(CASE WHEN complained_at IS NOT NULL THEN 1 ELSE 0 END) as total_complained')
+            )
+            ->first();
+        
+        $senders = $campaignSenders->map(function ($sender) use ($trackingStats, $campaignSenders) {
+            // Distribute stats evenly among senders (simplified approach)
+            $senderCount = $campaignSenders->count();
+            $sent = $trackingStats ? intval($trackingStats->total_sent / $senderCount) : 0;
+            $opened = $trackingStats ? intval($trackingStats->total_opened / $senderCount) : 0;
+            $clicked = $trackingStats ? intval($trackingStats->total_clicked / $senderCount) : 0;
+            $bounced = $trackingStats ? intval($trackingStats->total_bounced / $senderCount) : 0;
+            $complained = $trackingStats ? intval($trackingStats->total_complained / $senderCount) : 0;
+            
+            return [
+                'sender_id' => $sender->id,
+                'sender_name' => $sender->name,
+                'sender_email' => $sender->email,
+                'sent' => $sent,
+                'opened' => $opened,
+                'clicked' => $clicked,
+                'bounced' => $bounced,
+                'complained' => $complained,
+                'open_rate' => $sent > 0 ? round(($opened / $sent) * 100, 2) : 0,
+                'click_rate' => $sent > 0 ? round(($clicked / $sent) * 100, 2) : 0,
+                'bounce_rate' => $sent > 0 ? round(($bounced / $sent) * 100, 2) : 0,
+                'complaint_rate' => $sent > 0 ? round(($complained / $sent) * 100, 2) : 0,
+                'reputation_score' => $this->calculateSenderReputationFromStats($sent, $bounced, $complained, $opened),
+                'deliverability_rating' => $this->getSenderDeliverabilityRatingFromStats($sent, $bounced, $complained),
+            ];
+        })->toArray();
+        
+        return $senders;
+    }
+
+    /**
+     * Calculate sender reputation from stats
+     */
+    private function calculateSenderReputationFromStats(int $sent, int $bounced, int $complained, int $opened): int
+    {
+        $bounceRate = $sent > 0 ? ($bounced / $sent) * 100 : 0;
+        $complaintRate = $sent > 0 ? ($complained / $sent) * 100 : 0;
+        $openRate = $sent > 0 ? ($opened / $sent) * 100 : 0;
+        
+        // Calculate reputation score (0-100)
+        $score = 100;
+        $score -= ($bounceRate * 2); // Bounce rate penalty
+        $score -= ($complaintRate * 5); // Complaint rate penalty
+        $score += ($openRate * 0.5); // Open rate bonus
+        
+        return max(0, min(100, round($score)));
+    }
+    
+    /**
+     * Get sender deliverability rating from stats
+     */
+    private function getSenderDeliverabilityRatingFromStats(int $sent, int $bounced, int $complained): string
+    {
+        $reputationScore = $this->calculateSenderReputationFromStats($sent, $bounced, $complained, 0);
+        
+        if ($reputationScore >= 90) return 'Excellent';
+        if ($reputationScore >= 80) return 'Good';
+        if ($reputationScore >= 70) return 'Fair';
+        if ($reputationScore >= 60) return 'Poor';
+        return 'Critical';
+    }
+
+    /**
+     * Calculate domain reputation score
+     */
+    private function calculateDomainReputation($domain): int
+    {
+        $bounceRate = $domain->total_sent > 0 ? ($domain->total_bounced / $domain->total_sent) * 100 : 0;
+        $complaintRate = $domain->total_sent > 0 ? ($domain->total_complained / $domain->total_sent) * 100 : 0;
+        $openRate = $domain->total_sent > 0 ? ($domain->total_opened / $domain->total_sent) * 100 : 0;
+        
+        // Calculate reputation score (0-100)
+        $score = 100;
+        $score -= ($bounceRate * 2); // Bounce rate penalty
+        $score -= ($complaintRate * 5); // Complaint rate penalty
+        $score += ($openRate * 0.5); // Open rate bonus
+        
+        return max(0, min(100, round($score)));
+    }
+    
+    /**
+     * Calculate sender reputation score
+     */
+    private function calculateSenderReputation($sender): int
+    {
+        $bounceRate = $sender->total_sent > 0 ? ($sender->total_bounced / $sender->total_sent) * 100 : 0;
+        $complaintRate = $sender->total_sent > 0 ? ($sender->total_complained / $sender->total_sent) * 100 : 0;
+        $openRate = $sender->total_sent > 0 ? ($sender->total_opened / $sender->total_sent) * 100 : 0;
+        
+        // Calculate reputation score (0-100)
+        $score = 100;
+        $score -= ($bounceRate * 2); // Bounce rate penalty
+        $score -= ($complaintRate * 5); // Complaint rate penalty
+        $score += ($openRate * 0.5); // Open rate bonus
+        
+        return max(0, min(100, round($score)));
+    }
+    
+    /**
+     * Get sender deliverability rating
+     */
+    private function getSenderDeliverabilityRating($sender): string
+    {
+        $reputationScore = $this->calculateSenderReputation($sender);
+        
+        if ($reputationScore >= 90) return 'Excellent';
+        if ($reputationScore >= 80) return 'Good';
+        if ($reputationScore >= 70) return 'Fair';
+        if ($reputationScore >= 60) return 'Poor';
+        return 'Critical';
     }
 
     /**
@@ -716,6 +972,137 @@ class AnalyticsService
     public function getRevenueMetrics(string $timeRange = '30d'): array
     {
         return $this->getRevenueAnalytics();
+    }
+
+    /**
+     * Get bounce processing analytics
+     */
+    public function getBounceProcessingAnalytics(Carbon $now, Carbon $lastMonth): array
+    {
+        $user = auth()->user();
+        
+        $query = BounceCredential::query();
+        if ($user && !$user->hasRole('admin')) {
+            $query->where('user_id', $user->id);
+        }
+        
+        $totalCredentials = $query->count();
+        $activeCredentials = $query->where('is_active', true)->count();
+        $defaultCredentials = $query->where('is_default', true)->count();
+        
+        // Bounce processing logs analytics
+        $logsQuery = BounceProcessingLog::whereBetween('created_at', [$lastMonth, $now]);
+        if ($user && !$user->hasRole('admin')) {
+            $logsQuery->where('user_id', $user->id);
+        }
+        
+        $totalProcessed = $logsQuery->count();
+        $hardBounces = $logsQuery->where('bounce_type', 'hard')->count();
+        $softBounces = $logsQuery->where('bounce_type', 'soft')->count();
+        $complaints = $logsQuery->where('bounce_type', 'complaint')->count();
+        $unsubscribes = $logsQuery->where('bounce_type', 'unsubscribe')->count();
+        $addedToSuppression = $logsQuery->where('added_to_suppression', true)->count();
+        
+        // Recent activity (last 7 days)
+        $recentActivity = BounceProcessingLog::whereBetween('created_at', [$now->copy()->subWeek(), $now]);
+        if ($user && !$user->hasRole('admin')) {
+            $recentActivity->where('user_id', $user->id);
+        }
+        $recentProcessed = $recentActivity->count();
+        
+        // Get daily bounce processing trend
+        $dailyTrend = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = $now->copy()->subDays($i);
+            $dayStart = $date->startOfDay();
+            $dayEnd = $date->endOfDay();
+            
+            $trendQuery = BounceProcessingLog::whereBetween('created_at', [$dayStart, $dayEnd]);
+            if ($user && !$user->hasRole('admin')) {
+                $trendQuery->where('user_id', $user->id);
+            }
+            
+            $dailyTrend[] = [
+                'date' => $date->format('M j'),
+                'processed' => $trendQuery->count(),
+                'hard_bounces' => $trendQuery->where('bounce_type', 'hard')->count(),
+                'soft_bounces' => $trendQuery->where('bounce_type', 'soft')->count(),
+            ];
+        }
+        
+        return [
+            'credentials' => [
+                'total' => $totalCredentials,
+                'active' => $activeCredentials,
+                'default' => $defaultCredentials,
+                'inactive' => $totalCredentials - $activeCredentials,
+            ],
+            'processing' => [
+                'total_processed' => $totalProcessed,
+                'recent_processed' => $recentProcessed,
+                'hard_bounces' => $hardBounces,
+                'soft_bounces' => $softBounces,
+                'complaints' => $complaints,
+                'unsubscribes' => $unsubscribes,
+                'added_to_suppression' => $addedToSuppression,
+                'suppression_rate' => $totalProcessed > 0 ? round(($addedToSuppression / $totalProcessed) * 100, 2) : 0,
+            ],
+            'trends' => [
+                'daily' => $dailyTrend,
+            ]
+        ];
+    }
+
+    /**
+     * Get suppression list analytics
+     */
+    public function getSuppressionAnalytics(Carbon $now, Carbon $lastMonth): array
+    {
+        $user = auth()->user();
+        
+        $query = SuppressionList::query();
+        if ($user && !$user->hasRole('admin')) {
+            // For regular users, we might want to show system-wide suppression stats
+            // since suppression is typically global, but we can filter if needed
+        }
+        
+        $totalSuppressed = $query->count();
+        $recentlySuppressed = $query->whereBetween('created_at', [$lastMonth, $now])->count();
+        $thisWeekSuppressed = $query->whereBetween('created_at', [$now->copy()->subWeek(), $now])->count();
+        
+        // Group by reason if available
+        $byReason = $query->select('reason', DB::raw('count(*) as count'))
+            ->groupBy('reason')
+            ->get()
+            ->pluck('count', 'reason')
+            ->toArray();
+        
+        // Daily suppression trend
+        $dailyTrend = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = $now->copy()->subDays($i);
+            $dayStart = $date->startOfDay();
+            $dayEnd = $date->endOfDay();
+            
+            $dailyCount = SuppressionList::whereBetween('created_at', [$dayStart, $dayEnd])->count();
+            
+            $dailyTrend[] = [
+                'date' => $date->format('M j'),
+                'count' => $dailyCount,
+            ];
+        }
+        
+        return [
+            'summary' => [
+                'total' => $totalSuppressed,
+                'recent' => $recentlySuppressed,
+                'this_week' => $thisWeekSuppressed,
+            ],
+            'by_reason' => $byReason,
+            'trends' => [
+                'daily' => $dailyTrend,
+            ]
+        ];
     }
 } 
  

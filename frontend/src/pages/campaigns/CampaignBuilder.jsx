@@ -37,10 +37,15 @@ const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
 const CampaignBuilder = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { senders = [], isLoading: isSendersLoading } = useSelector((state) => state.senders || {});
-  const { domains = [], isLoading: isDomainsLoading } = useSelector((state) => state.domains || {});
-  const { contents = [], isLoading: isContentsLoading } = useSelector((state) => state.contents || {});
-  const { user, currentView } = useSelector((state) => state.auth || {});
+  const sendersState = useSelector((state) => state.senders);
+  const domainsState = useSelector((state) => state.domains);
+  const contentsState = useSelector((state) => state.contents);
+  const authState = useSelector((state) => state.auth);
+  
+  const { senders = [], isLoading: isSendersLoading } = sendersState || {};
+  const { domains = [], isLoading: isDomainsLoading } = domainsState || {};
+  const { contents = [], isLoading: isContentsLoading } = contentsState || {};
+  const { user, currentView } = authState || {};
 
   // Filter domains and senders based on current view
   const isAdminView = currentView === 'admin';
@@ -101,28 +106,13 @@ const CampaignBuilder = () => {
   };
 
   const handleFileUpload = (e) => {
-    console.log('handleFileUpload called');
-    console.log('Event:', e);
-    console.log('Event target:', e.target);
-    console.log('Event target files:', e.target.files);
-    console.log('Event target files length:', e.target.files.length);
-
     const file = e.target.files[0];
     if (file) {
-      console.log('File selected:', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: file.lastModified
-      });
       setSelectedFile(file);
       setFormData(prev => ({
         ...prev,
         recipient_file: file,
       }));
-      console.log('File state updated');
-    } else {
-      console.log('No file selected in handleFileUpload');
     }
   };
 
@@ -238,11 +228,7 @@ const CampaignBuilder = () => {
         campaignData.append('content_variations', JSON.stringify(contentVariations));
       }
 
-      // Debug log
-      console.log('Submitting campaign with file:', selectedFile);
-      for (let [key, value] of campaignData.entries()) {
-        console.log(`${key}:`, value instanceof File ? `File: ${value.name}` : value);
-      }
+
 
       const result = await dispatch(createCampaign(campaignData)).unwrap();
       toast.success('Campaign created successfully');
@@ -281,26 +267,7 @@ const CampaignBuilder = () => {
 
       // Add file if selected
       if (selectedFile) {
-        console.log('Attaching file to FormData (draft):', {
-          name: selectedFile.name,
-          size: selectedFile.size,
-          type: selectedFile.type
-        });
         campaignData.append('recipient_file', selectedFile);
-        console.log('File attached to FormData (draft)');
-      } else {
-        console.log('No selectedFile to attach (draft)');
-      }
-
-      // Debug: Check if file is in FormData
-      console.log('FormData has recipient_file (draft):', campaignData.has('recipient_file'));
-      if (campaignData.has('recipient_file')) {
-        const file = campaignData.get('recipient_file');
-        console.log('FormData get recipient_file (draft):', {
-          name: file.name,
-          size: file.size,
-          type: file.type
-        });
       }
 
       // Add content data
@@ -311,27 +278,7 @@ const CampaignBuilder = () => {
         campaignData.append('content', formData.email_content);
       }
 
-      // Debug: Log FormData contents
-      for (let [key, value] of campaignData.entries()) {
-        console.log(key, value);
-      }
 
-      // Debug: Check FormData type
-      console.log('FormData type:', typeof campaignData);
-      console.log('FormData instanceof FormData:', campaignData instanceof FormData);
-      console.log('FormData constructor:', campaignData.constructor.name);
-
-      // Debug: Log the actual request
-      console.log('About to send request with data:', {
-        name: formData.name.trim(),
-        enable_content_switching: enableContentSwitching ? '1' : '0',
-        has_file: !!selectedFile,
-        file_name: selectedFile?.name,
-        file_size: selectedFile?.size,
-        content_variations: enableContentSwitching ? contentVariations : null,
-        subject: !enableContentSwitching ? formData.subject.trim() : null,
-        content: !enableContentSwitching ? formData.email_content : null
-      });
 
       const result = await dispatch(createCampaign(campaignData)).unwrap();
       toast.success('Draft saved successfully');
@@ -599,15 +546,7 @@ const CampaignBuilder = () => {
                         <HiTrash className="h-4 w-4 mr-1" />
                         Remove
                       </button>
-                      <button
-                        onClick={() => {
-                          console.log('Test: selectedFile state:', selectedFile);
-                          console.log('Test: formData.recipient_file:', formData.recipient_file);
-                        }}
-                        className="btn btn-secondary btn-sm flex items-center"
-                      >
-                        Test File
-                      </button>
+
                     </div>
                   </div>
                 ) : (
@@ -623,12 +562,7 @@ const CampaignBuilder = () => {
                         name="recipient_file"
                         type="file"
                         accept=".txt,.csv,.xls,.xlsx"
-                        onChange={(e) => {
-                          console.log('File input change event triggered');
-                          console.log('Event target files:', e.target.files);
-                          console.log('Event target files length:', e.target.files.length);
-                          handleFileUpload(e);
-                        }}
+                        onChange={handleFileUpload}
                         className="hidden"
                       />
                     </div>

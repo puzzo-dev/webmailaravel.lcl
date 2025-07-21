@@ -19,9 +19,366 @@ import {
   HiMail,
   HiGlobe,
   HiCog,
+  HiSelector,
+  HiUserGroup,
+  HiChatAlt,
 } from 'react-icons/hi';
 import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
+
+// Create Notification Modal Component
+const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
+  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [formData, setFormData] = useState({
+    recipient_type: 'all',
+    role: 'user',
+    user_ids: [],
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [searchUsers, setSearchUsers] = useState('');
+
+  useEffect(() => {
+    if (formData.recipient_type === 'specific') {
+      loadUsers();
+    }
+  }, [formData.recipient_type]);
+
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await adminService.getUsers();
+      
+      // Handle different possible response structures
+      let userData = [];
+      if (response.data?.data) {
+        userData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        userData = response.data;
+      } else if (response.data?.users) {
+        userData = response.data.users;
+      }
+      
+      setAvailableUsers(userData);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      toast.error('Failed to load users');
+      setAvailableUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await adminService.sendBulkNotification(formData);
+      toast.success('Notification sent successfully');
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error('Failed to send notification:', error);
+      toast.error('Failed to send notification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUserSelect = (userId) => {
+    setFormData(prev => ({
+      ...prev,
+      user_ids: prev.user_ids.includes(userId) 
+        ? prev.user_ids.filter(id => id !== userId)
+        : [...prev.user_ids, userId]
+    }));
+  };
+
+  const filteredUsers = (Array.isArray(availableUsers) ? availableUsers : []).filter(user => 
+    user.name?.toLowerCase().includes(searchUsers.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchUsers.toLowerCase())
+  );
+
+  const getRecipientCount = () => {
+    switch (formData.recipient_type) {
+      case 'all':
+        return users;
+      case 'active':
+        return Math.floor(users * 0.8); // Estimate
+      case 'role':
+        return formData.role === 'admin' ? Math.floor(users * 0.1) : Math.floor(users * 0.9);
+      case 'specific':
+        return formData.user_ids.length;
+      default:
+        return 0;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-4 mx-auto p-5 border max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-medium text-gray-900">Send New Notification</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <HiX className="h-6 w-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Recipient Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Recipients</label>
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <input
+                  type="radio"
+                  id="all"
+                  name="recipient_type"
+                  value="all"
+                  checked={formData.recipient_type === 'all'}
+                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                />
+                <label htmlFor="all" className="ml-2 block text-sm text-gray-900">
+                  <div className="flex items-center">
+                    <HiUserGroup className="h-4 w-4 mr-2 text-blue-500" />
+                    All Users ({users})
+                  </div>
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="radio"
+                  id="active"
+                  name="recipient_type"
+                  value="active"
+                  checked={formData.recipient_type === 'active'}
+                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                />
+                <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+                  <div className="flex items-center">
+                    <HiCheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                    Active Users (Verified Email)
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="radio"
+                  id="role"
+                  name="recipient_type"
+                  value="role"
+                  checked={formData.recipient_type === 'role'}
+                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                />
+                <label htmlFor="role" className="ml-2 block text-sm text-gray-900">
+                  <div className="flex items-center">
+                    <HiUsers className="h-4 w-4 mr-2 text-purple-500" />
+                    By Role
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="radio"
+                  id="specific"
+                  name="recipient_type"
+                  value="specific"
+                  checked={formData.recipient_type === 'specific'}
+                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                />
+                <label htmlFor="specific" className="ml-2 block text-sm text-gray-900">
+                  <div className="flex items-center">
+                    <HiSelector className="h-4 w-4 mr-2 text-orange-500" />
+                    Specific Users
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Role Selection */}
+          {formData.recipient_type === 'role' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Role</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({...formData, role: e.target.value})}
+                className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="user">Users</option>
+                <option value="admin">Administrators</option>
+              </select>
+            </div>
+          )}
+
+          {/* Specific User Selection */}
+          {formData.recipient_type === 'specific' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Users ({formData.user_ids.length} selected)
+              </label>
+              <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-y-auto">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={searchUsers}
+                  onChange={(e) => setSearchUsers(e.target.value)}
+                  className="w-full border border-gray-200 rounded px-3 py-1 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  disabled={loadingUsers}
+                />
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-4">
+                    <HiCog className="animate-spin h-5 w-5 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-500">Loading users...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredUsers.map((user) => (
+                      <div key={user.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={formData.user_ids.includes(user.id)}
+                          onChange={() => handleUserSelect(user.id)}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <label className="ml-2 text-sm text-gray-900">
+                          {user.name} ({user.email})
+                        </label>
+                      </div>
+                    ))}
+                    {filteredUsers.length === 0 && !loadingUsers && (
+                      <div className="text-center py-2">
+                        <p className="text-sm text-gray-500">
+                          {availableUsers.length === 0 ? 'No users available' : 'No users found matching search'}
+                        </p>
+                        {availableUsers.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={loadUsers}
+                            className="mt-2 text-sm text-primary-600 hover:text-primary-700 underline"
+                          >
+                            Retry loading users
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notification Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Notification Type</label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({...formData, type: e.target.value})}
+              className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="info">Information</option>
+              <option value="success">Success</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Enter notification title..."
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+            <textarea
+              value={formData.message}
+              onChange={(e) => setFormData({...formData, message: e.target.value})}
+              rows={4}
+              className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Enter notification message..."
+              required
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="bg-gray-50 rounded-md p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
+            <div className="bg-white border rounded-md p-3">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  {formData.type === 'success' && <HiCheckCircle className="h-5 w-5 text-green-500" />}
+                  {formData.type === 'warning' && <HiExclamation className="h-5 w-5 text-yellow-500" />}
+                  {formData.type === 'error' && <HiExclamation className="h-5 w-5 text-red-500" />}
+                  {formData.type === 'info' && <HiInformationCircle className="h-5 w-5 text-blue-500" />}
+                </div>
+                <div>
+                  <h5 className="text-sm font-medium text-gray-900">
+                    {formData.title || 'Notification Title'}
+                  </h5>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {formData.message || 'Notification message will appear here...'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              Will be sent to approximately {getRecipientCount()} user(s) via email and Telegram (if enabled)
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !formData.title || !formData.message}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center">
+                  <HiCog className="animate-spin h-4 w-4 mr-2" />
+                  Sending...
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <HiChatAlt className="h-4 w-4 mr-2" />
+                  Send Notification
+                </div>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const AdminNotifications = () => {
   const { user } = useSelector((state) => state.auth);
@@ -58,9 +415,6 @@ const AdminNotifications = () => {
         }),
         adminService.getDashboard()
       ]);
-
-      console.log('Notifications API response:', notificationsResponse);
-      console.log('Notifications data structure:', notificationsResponse.data);
 
       setNotifications(notificationsResponse.data.data || []);
       setPagination({
@@ -526,30 +880,11 @@ const AdminNotifications = () => {
       )}
 
       {/* Create Notification Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Send New Notification</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <HiX className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="text-center py-8">
-              <HiCog className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
-              <p className="mt-2 text-sm text-gray-500">
-                Notification creation feature coming soon...
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                This will allow sending notifications to specific users or groups.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {showCreateModal && <CreateNotificationModal 
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleCreateNotification}
+        users={stats.total_users}
+      />}
     </div>
   );
 };
