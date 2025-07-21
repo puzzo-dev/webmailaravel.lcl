@@ -31,29 +31,34 @@ class AutomaticTrainingService
     }
 
     /**
-     * Run automatic training for all domains
+     * Run automatic training for all senders
      */
     public function runAutomaticTraining(): array
     {
         $this->logInfo('Starting automatic training process');
         
         $results = [
-            'domains_processed' => 0,
+            'senders_processed' => 0,
             'senders_updated' => 0,
             'errors' => []
         ];
 
         try {
-            // Get all active domains
-            $domains = Domain::with(['senders', 'user'])->where('is_active', true)->get();
+            // Get all active senders
+            $senders = Sender::with(['domain', 'user'])
+                ->where('is_active', true)
+                ->get();
             
-            foreach ($domains as $domain) {
+            foreach ($senders as $sender) {
                 try {
-                    $this->processDomain($domain);
-                    $results['domains_processed']++;
+                    $updated = $this->processSender($sender);
+                    $results['senders_processed']++;
+                    if ($updated) {
+                        $results['senders_updated']++;
+                    }
                 } catch (\Exception $e) {
-                    $this->logError('Error processing domain: ' . $domain->name, ['error' => $e->getMessage()]);
-                    $results['errors'][] = "Domain {$domain->name}: " . $e->getMessage();
+                    $this->logError('Error processing sender: ' . $sender->email, ['error' => $e->getMessage()]);
+                    $results['errors'][] = "Sender {$sender->email}: " . $e->getMessage();
                 }
             }
 
@@ -67,123 +72,244 @@ class AutomaticTrainingService
     }
 
     /**
-     * Process a single domain
+     * Process a single sender
      */
-    protected function processDomain(Domain $domain): void
+    public function processSender(Sender $sender): bool
     {
-        $this->logInfo("Processing domain: {$domain->name}");
+        $this->logInfo("Processing sender: {$sender->email}");
 
-        // Get PowerMTA data for this domain
-        $powerMtaData = $this->getPowerMtaData($domain);
+        // Get PowerMTA data for this sender
+        $senderData = $this->analyzeSenderFromPowerMTA($sender);
         
-        if (empty($powerMtaData)) {
-            $this->logWarning("No PowerMTA data found for domain: {$domain->name}");
-            return;
+        if (empty($senderData)) {
+            $this->logWarning("No PowerMTA data found for sender: {$sender->email}");
+            return false;
         }
 
-        // Analyze reputation and adjust sender limits
-        $this->analyzeAndAdjustSenders($domain, $powerMtaData);
+        // Calculate new reputation score
+        $newReputation = $this->calculateReputationScore($senderData);
         
-        // Update domain reputation
-        $this->updateDomainReputation($domain, $powerMtaData);
+        // Update sender reputation and limits
+        $oldLimit = $sender->daily_limit;
+        $oldReputation = $sender->reputation_score;
+        
+        $sender->update([
+            'reputation_score' => $newReputation,
+            'training_data' => $senderData,
+            'last_training_at' => now()
+        ]);
+        
+        // Update daily limit based on new reputation
+        $sender->updateDailyLimitFromReputation();
+        
+        $this->logInfo("Sender training completed", [
+            'email' => $sender->email,
+            'old_reputation' => $oldReputation,
+            'new_reputation' => $newReputation,
+            'old_limit' => $oldLimit,
+            'new_limit' => $sender->fresh()->daily_limit
+        ]);
+        
+        return $sender->daily_limit !== $oldLimit;
     }
 
     /**
-     * Get PowerMTA data for domain
+     * Analyze sender from PowerMTA CSV files
      */
-    protected function getPowerMtaData(Domain $domain): array
+    protected function analyzeSenderFromPowerMTA(Sender $sender): array
     {
-        $data = [];
+        $senderData = [
+            'total_sent' => 0,
+            'total_delivered' => 0,
+            'total_bounced' => 0,
+            'total_complaints' => 0,
+            'delivery_rate' => 0,
+            'bounce_rate' => 0,
+            'complaint_rate' => 0,
+            'analysis_date' => now()->toDateString()
+        ];
 
-        // Get account data (sending statistics)
-        $accountData = $this->getAccountData($domain);
-        if ($accountData) {
-            $data['account'] = $accountData;
-        }
-
-        // Get diagnostic data (delivery statistics)
-        $diagnosticData = $this->getDiagnosticData($domain);
-        if ($diagnosticData) {
-            $data['diagnostic'] = $diagnosticData;
-        }
-
-        // Get FBL data (feedback loop)
-        $fblData = $this->getFBLData($domain);
-        if ($fblData) {
-            $data['fbl'] = $fblData;
-        }
-
-        return $data;
-    }
-
-    /**
-     * Get account data from PowerMTA
-     */
-    protected function getAccountData(Domain $domain): ?array
-    {
         try {
-            $csvFile = $this->getPowerMtaCSVFile('account', $domain->name);
-            if (!$csvFile) {
-                return null;
+            // Analyze accounting CSV files
+            $accountingData = $this->analyzeAccountingCSV($sender);
+            if ($accountingData) {
+                $senderData = array_merge($senderData, $accountingData);
             }
 
-            return $this->parseCSVFile($csvFile);
+            // Analyze diagnostic CSV files
+            $diagnosticData = $this->analyzeDiagnosticCSV($sender);
+            if ($diagnosticData) {
+                $senderData['bounces'] = $diagnosticData;
+            }
+
+            // Analyze FBL CSV files
+            $fblData = $this->analyzeFBLCSV($sender);
+            if ($fblData) {
+                $senderData['complaints'] = $fblData;
+            }
+
+            // Calculate rates
+            if ($senderData['total_sent'] > 0) {
+                $senderData['delivery_rate'] = ($senderData['total_delivered'] / $senderData['total_sent']) * 100;
+                $senderData['bounce_rate'] = ($senderData['total_bounced'] / $senderData['total_sent']) * 100;
+                $senderData['complaint_rate'] = ($senderData['total_complaints'] / $senderData['total_sent']) * 100;
+            }
+
+            return $senderData;
+
         } catch (\Exception $e) {
-            $this->logError("Error getting account data for domain: {$domain->name}", ['error' => $e->getMessage()]);
+            $this->logError("Error analyzing PowerMTA data for sender: {$sender->email}", [
+                'error' => $e->getMessage()
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Analyze accounting CSV for sender
+     */
+    protected function analyzeAccountingCSV(Sender $sender): ?array
+    {
+        try {
+            $csvFiles = $this->getPowerMtaCSVFiles('acct');
+            $stats = ['total_sent' => 0, 'total_delivered' => 0];
+            
+            foreach ($csvFiles as $csvFile) {
+                $data = $this->parseCSVFile($csvFile);
+                
+                foreach ($data as $row) {
+                    // Check if this row is for our sender
+                    if ($this->matchesSender($row, $sender)) {
+                        $stats['total_sent'] += intval($row['sent'] ?? $row['messages'] ?? 0);
+                        $stats['total_delivered'] += intval($row['delivered'] ?? $row['success'] ?? 0);
+                    }
+                }
+            }
+            
+            return $stats['total_sent'] > 0 ? $stats : null;
+            
+        } catch (\Exception $e) {
+            $this->logError("Error analyzing accounting CSV for sender: {$sender->email}", [
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }
 
     /**
-     * Get diagnostic data from PowerMTA
+     * Analyze diagnostic CSV for sender
      */
-    protected function getDiagnosticData(Domain $domain): ?array
+    protected function analyzeDiagnosticCSV(Sender $sender): ?array
     {
         try {
-            $csvFile = $this->getPowerMtaCSVFile('diagnostic', $domain->name);
-            if (!$csvFile) {
-                return null;
+            $csvFiles = $this->getPowerMtaCSVFiles('diag');
+            $bounces = 0;
+            
+            foreach ($csvFiles as $csvFile) {
+                $data = $this->parseCSVFile($csvFile);
+                
+                foreach ($data as $row) {
+                    if ($this->matchesSender($row, $sender)) {
+                        // Count bounces (permanent failures)
+                        $status = strtolower($row['status'] ?? $row['result'] ?? '');
+                        if (strpos($status, 'bounce') !== false || strpos($status, 'failed') !== false) {
+                            $bounces++;
+                        }
+                    }
+                }
             }
-
-            return $this->parseCSVFile($csvFile);
+            
+            return $bounces > 0 ? ['total_bounced' => $bounces] : null;
+            
         } catch (\Exception $e) {
-            $this->logError("Error getting diagnostic data for domain: {$domain->name}", ['error' => $e->getMessage()]);
+            $this->logError("Error analyzing diagnostic CSV for sender: {$sender->email}", [
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }
 
     /**
-     * Get FBL data from PowerMTA
+     * Analyze FBL CSV for sender
      */
-    protected function getFBLData(Domain $domain): ?array
+    protected function analyzeFBLCSV(Sender $sender): ?array
     {
         try {
-            $csvFile = $this->getPowerMtaCSVFile('fbl', $domain->name);
-            if (!$csvFile) {
-                return null;
+            $csvFiles = $this->getPowerMtaCSVFiles('fbl');
+            $complaints = 0;
+            
+            foreach ($csvFiles as $csvFile) {
+                $data = $this->parseCSVFile($csvFile);
+                
+                foreach ($data as $row) {
+                    if ($this->matchesSender($row, $sender)) {
+                        $complaints++;
+                    }
+                }
             }
-
-            return $this->parseCSVFile($csvFile);
+            
+            return $complaints > 0 ? ['total_complaints' => $complaints] : null;
+            
         } catch (\Exception $e) {
-            $this->logError("Error getting FBL data for domain: {$domain->name}", ['error' => $e->getMessage()]);
+            $this->logError("Error analyzing FBL CSV for sender: {$sender->email}", [
+                'error' => $e->getMessage()
+            ]);
             return null;
         }
     }
 
     /**
-     * Get PowerMTA CSV file path
+     * Get PowerMTA CSV files by type
      */
-    protected function getPowerMtaCSVFile(string $type, string $domain): ?string
+    protected function getPowerMtaCSVFiles(string $type): array
     {
         $basePath = config('services.powermta.csv_path', '/var/log/powermta');
-        $fileName = "{$type}_{$domain}.csv";
-        $filePath = "{$basePath}/{$fileName}";
-
-        if (!file_exists($filePath)) {
-            return null;
+        $files = [];
+        
+        if (!is_dir($basePath)) {
+            $this->logWarning("PowerMTA CSV directory not found: {$basePath}");
+            return [];
         }
+        
+        // Look for files matching pattern: acct*.csv, diag*.csv, fbl*.csv
+        $pattern = $basePath . '/' . $type . '*.csv';
+        $matchedFiles = glob($pattern);
+        
+        foreach ($matchedFiles as $file) {
+            // Only include files modified in the last 7 days
+            if (filemtime($file) > strtotime('-7 days')) {
+                $files[] = $file;
+            }
+        }
+        
+        return $files;
+    }
 
-        return $filePath;
+    /**
+     * Check if CSV row matches sender
+     */
+    protected function matchesSender(array $row, Sender $sender): bool
+    {
+        $senderEmail = strtolower($sender->email);
+        $senderDomain = strtolower($sender->domain->name);
+        
+        // Check various possible column names for sender email/domain
+        $emailFields = ['from', 'sender', 'email', 'orig_from', 'envelope_from'];
+        $domainFields = ['domain', 'from_domain', 'sender_domain'];
+        
+        foreach ($emailFields as $field) {
+            if (isset($row[$field]) && strtolower($row[$field]) === $senderEmail) {
+                return true;
+            }
+        }
+        
+        foreach ($domainFields as $field) {
+            if (isset($row[$field]) && strtolower($row[$field]) === $senderDomain) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     /**
@@ -207,67 +333,56 @@ class AutomaticTrainingService
     }
 
     /**
-     * Analyze and adjust sender limits based on reputation
+     * Calculate reputation score from sender data
      */
-    protected function analyzeAndAdjustSenders(Domain $domain, array $powerMtaData): void
+    protected function calculateReputationScore(array $senderData): float
     {
-        $senders = $domain->senders()->where('is_active', true)->get();
+        $score = 50.0; // Start with neutral score
         
-        foreach ($senders as $sender) {
-            $reputationScore = $this->calculateSenderReputation($sender, $powerMtaData);
-            $newLimit = $this->calculateNewLimit($sender, $reputationScore);
-            
-            if ($newLimit !== $sender->daily_limit) {
-                $oldLimit = $sender->daily_limit;
-                $sender->update([
-                    'daily_limit' => $newLimit,
-                    'reputation_score' => $reputationScore,
-                    'last_training_at' => now()
-                ]);
-
-                $this->logInfo("Updated sender limit", [
-                    'domain' => $domain->name,
-                    'sender' => $sender->email,
-                    'old_limit' => $oldLimit,
-                    'new_limit' => $newLimit,
-                    'reputation_score' => $reputationScore
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Calculate sender reputation score
-     */
-    protected function calculateSenderReputation(Sender $sender, array $powerMtaData): float
-    {
-        $score = 100.0; // Start with perfect score
+        $deliveryRate = $senderData['delivery_rate'] ?? 0;
+        $bounceRate = $senderData['bounce_rate'] ?? 0;
+        $complaintRate = $senderData['complaint_rate'] ?? 0;
+        $totalSent = $senderData['total_sent'] ?? 0;
         
-        // Account data analysis
-        if (isset($powerMtaData['account'])) {
-            $accountData = $this->findSenderInAccountData($sender, $powerMtaData['account']);
-            if ($accountData) {
-                $score = $this->calculateAccountScore($accountData, $score);
-            }
+        // Base score on delivery rate
+        if ($deliveryRate >= 95) {
+            $score = 95;
+        } elseif ($deliveryRate >= 90) {
+            $score = 85;
+        } elseif ($deliveryRate >= 85) {
+            $score = 75;
+        } elseif ($deliveryRate >= 80) {
+            $score = 65;
+        } elseif ($deliveryRate >= 70) {
+            $score = 55;
+        } else {
+            $score = 30;
         }
-
-        // Diagnostic data analysis
-        if (isset($powerMtaData['diagnostic'])) {
-            $diagnosticData = $this->findSenderInDiagnosticData($sender, $powerMtaData['diagnostic']);
-            if ($diagnosticData) {
-                $score = $this->calculateDiagnosticScore($diagnosticData, $score);
-            }
+        
+        // Penalize high bounce rates
+        if ($bounceRate > 10) {
+            $score -= 30;
+        } elseif ($bounceRate > 5) {
+            $score -= 20;
+        } elseif ($bounceRate > 2) {
+            $score -= 10;
         }
-
-        // FBL data analysis
-        if (isset($powerMtaData['fbl'])) {
-            $fblData = $this->findSenderInFBLData($sender, $powerMtaData['fbl']);
-            if ($fblData) {
-                $score = $this->calculateFBLScore($fblData, $score);
-            }
+        
+        // Penalize high complaint rates
+        if ($complaintRate > 1) {
+            $score -= 40;
+        } elseif ($complaintRate > 0.5) {
+            $score -= 25;
+        } elseif ($complaintRate > 0.1) {
+            $score -= 10;
         }
-
-        return max(0, min(100, $score));
+        
+        // Bonus for high volume senders with good performance
+        if ($totalSent > 1000 && $deliveryRate > 90 && $bounceRate < 2) {
+            $score += 5;
+        }
+        
+        return max(1, min(100, $score));
     }
 
     /**

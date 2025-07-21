@@ -33,6 +33,17 @@ const AuthLayout = () => {
         <p className="text-xs text-gray-500">
           © 2024 {appName}. All rights reserved.
         </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Developed by{' '}
+          <a 
+            href="https://ivarsetech.com" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-indigo-500 hover:text-indigo-400 transition-colors"
+          >
+            I-Varse Technologies
+          </a>
+        </p>
       </div>
     </div>
   );

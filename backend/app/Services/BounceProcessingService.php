@@ -6,6 +6,7 @@ use App\Models\Domain;
 use App\Models\BounceCredential;
 use App\Models\BounceProcessingLog;
 use App\Models\SuppressionList;
+use App\Services\PowerMTAService;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
 use App\Traits\SuppressionListTrait;
@@ -17,8 +18,11 @@ class BounceProcessingService
 {
     use LoggingTrait, ValidationTrait, SuppressionListTrait, FileProcessingTrait;
 
-    public function __construct()
+    protected $powerMTAService;
+
+    public function __construct(PowerMTAService $powerMTAService)
     {
+        $this->powerMTAService = $powerMTAService;
     }
 
     /**
@@ -62,6 +66,10 @@ class BounceProcessingService
         }
 
         $this->logMethodExit(__METHOD__, ['results' => $results]);
+        // Also process PowerMTA files for all domains
+        $pmtaResults = $this->processPowerMTAFiles();
+        $results['powermta_processing'] = $pmtaResults;
+
         return $results;
     }
 
@@ -416,5 +424,273 @@ class BounceProcessingService
     public function getBounceStatistics(Domain $domain, int $days = 30): array
     {
         return BounceProcessingLog::getBounceStatistics($domain->id, $days);
+    }
+
+    /**
+     * Process PowerMTA files for bounce detection and suppression
+     */
+    public function processPowerMTAFiles(): array
+    {
+        $this->logInfo('Starting PowerMTA file processing for bounce detection');
+        
+        $results = [
+            'acct_files_processed' => 0,
+            'diag_files_processed' => 0,
+            'fbl_files_processed' => 0,
+            'total_bounces_added' => 0,
+            'total_complaints_added' => 0,
+            'total_failures_added' => 0,
+            'errors' => []
+        ];
+
+        try {
+            // Process Accounting files for failed deliveries
+            $acctResults = $this->processAccountingFiles();
+            $results['acct_files_processed'] = $acctResults['files_processed'];
+            $results['total_failures_added'] += $acctResults['emails_added'];
+            
+            // Process Diagnostic files for bounces
+            $diagResults = $this->processDiagnosticFiles();
+            $results['diag_files_processed'] = $diagResults['files_processed'];
+            $results['total_bounces_added'] += $diagResults['emails_added'];
+            
+            // Process FBL files for complaints
+            $fblResults = $this->processFBLFiles();
+            $results['fbl_files_processed'] = $fblResults['files_processed'];
+            $results['total_complaints_added'] += $fblResults['emails_added'];
+            
+            $results['errors'] = array_merge(
+                $acctResults['errors'] ?? [],
+                $diagResults['errors'] ?? [],
+                $fblResults['errors'] ?? []
+            );
+
+            $this->logInfo('PowerMTA file processing completed', $results);
+            
+        } catch (\Exception $e) {
+            $this->logError('PowerMTA file processing failed', ['error' => $e->getMessage()]);
+            $results['errors'][] = 'General processing error: ' . $e->getMessage();
+        }
+
+        return $results;
+    }
+
+    /**
+     * Process PowerMTA accounting files for failed deliveries
+     */
+    protected function processAccountingFiles(): array
+    {
+        $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
+        
+        try {
+            $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
+            $acctFiles = glob($csvPath . '/acct*.csv');
+            
+            foreach ($acctFiles as $file) {
+                // Only process files from last 24 hours
+                if (filemtime($file) < strtotime('-24 hours')) {
+                    continue;
+                }
+                
+                try {
+                    $processed = $this->processAccountingFile($file);
+                    $results['files_processed']++;
+                    $results['emails_added'] += $processed;
+                } catch (\Exception $e) {
+                    $results['errors'][] = "Accounting file {$file}: " . $e->getMessage();
+                }
+            }
+            
+        } catch (\Exception $e) {
+            $results['errors'][] = 'Accounting processing error: ' . $e->getMessage();
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Process single accounting CSV file
+     */
+    protected function processAccountingFile(string $filePath): int
+    {
+        $addedCount = 0;
+        
+        if (($handle = fopen($filePath, 'r')) !== false) {
+            $headers = fgetcsv($handle);
+            
+            while (($row = fgetcsv($handle)) !== false) {
+                if (count($row) >= count($headers)) {
+                    $data = array_combine($headers, $row);
+                    
+                    // Check for failed deliveries
+                    $status = strtolower($data['status'] ?? $data['result'] ?? '');
+                    $recipient = $data['recipient'] ?? $data['email'] ?? $data['to'] ?? '';
+                    
+                    if (!empty($recipient) && $this->validateEmail($recipient)) {
+                        // Add to suppression if delivery failed
+                        if (strpos($status, 'failed') !== false || 
+                            strpos($status, 'bounced') !== false ||
+                            strpos($status, 'rejected') !== false) {
+                            
+                            $this->addToSuppressionList(
+                                $recipient,
+                                'pmta_failure',
+                                'bounce',
+                                'PowerMTA delivery failure: ' . $status
+                            );
+                            $addedCount++;
+                        }
+                    }
+                }
+            }
+            fclose($handle);
+        }
+        
+        return $addedCount;
+    }
+
+    /**
+     * Process PowerMTA diagnostic files for bounces
+     */
+    protected function processDiagnosticFiles(): array
+    {
+        $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
+        
+        try {
+            $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
+            $diagFiles = glob($csvPath . '/diag*.csv');
+            
+            foreach ($diagFiles as $file) {
+                // Only process files from last 24 hours
+                if (filemtime($file) < strtotime('-24 hours')) {
+                    continue;
+                }
+                
+                try {
+                    $processed = $this->processDiagnosticFile($file);
+                    $results['files_processed']++;
+                    $results['emails_added'] += $processed;
+                } catch (\Exception $e) {
+                    $results['errors'][] = "Diagnostic file {$file}: " . $e->getMessage();
+                }
+            }
+            
+        } catch (\Exception $e) {
+            $results['errors'][] = 'Diagnostic processing error: ' . $e->getMessage();
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Process single diagnostic CSV file
+     */
+    protected function processDiagnosticFile(string $filePath): int
+    {
+        $addedCount = 0;
+        
+        if (($handle = fopen($filePath, 'r')) !== false) {
+            $headers = fgetcsv($handle);
+            
+            while (($row = fgetcsv($handle)) !== false) {
+                if (count($row) >= count($headers)) {
+                    $data = array_combine($headers, $row);
+                    
+                    $recipient = $data['recipient'] ?? $data['email'] ?? $data['to'] ?? '';
+                    $bounceType = $data['bounce_type'] ?? $data['type'] ?? '';
+                    $reason = $data['reason'] ?? $data['message'] ?? $data['status'] ?? '';
+                    
+                    if (!empty($recipient) && $this->validateEmail($recipient)) {
+                        // Add permanent bounces to suppression
+                        if (strpos(strtolower($bounceType), 'hard') !== false ||
+                            strpos(strtolower($reason), 'permanent') !== false ||
+                            strpos(strtolower($reason), '5.') !== false) {
+                            
+                            $this->addToSuppressionList(
+                                $recipient,
+                                'pmta_bounce',
+                                'bounce',
+                                'PowerMTA hard bounce: ' . $reason
+                            );
+                            $addedCount++;
+                        }
+                    }
+                }
+            }
+            fclose($handle);
+        }
+        
+        return $addedCount;
+    }
+
+    /**
+     * Process PowerMTA FBL files for complaints
+     */
+    protected function processFBLFiles(): array
+    {
+        $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
+        
+        try {
+            $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
+            $fblFiles = glob($csvPath . '/fbl*.csv');
+            
+            foreach ($fblFiles as $file) {
+                // Only process files from last 24 hours
+                if (filemtime($file) < strtotime('-24 hours')) {
+                    continue;
+                }
+                
+                try {
+                    $processed = $this->processFBLFile($file, 'pmta_auto');
+                    $results['files_processed']++;
+                    $results['emails_added'] += $processed['added'];
+                } catch (\Exception $e) {
+                    $results['errors'][] = "FBL file {$file}: " . $e->getMessage();
+                }
+            }
+            
+        } catch (\Exception $e) {
+            $results['errors'][] = 'FBL processing error: ' . $e->getMessage();
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Add email to suppression list with PowerMTA context
+     */
+    protected function addToSuppressionList(string $email, string $source, string $type, string $reason): bool
+    {
+        try {
+            // Check if already in suppression list
+            if (SuppressionList::where('email', $email)->exists()) {
+                return false;
+            }
+            
+            SuppressionList::create([
+                'email' => $email,
+                'type' => $type,
+                'source' => $source,
+                'reason' => $reason,
+                'added_at' => now(),
+                'is_active' => true
+            ]);
+            
+            $this->logInfo('Email added to suppression list from PowerMTA', [
+                'email' => $email,
+                'source' => $source,
+                'type' => $type,
+                'reason' => $reason
+            ]);
+            
+            return true;
+            
+        } catch (\Exception $e) {
+            $this->logError('Failed to add email to suppression list', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
     }
 } 

@@ -148,7 +148,7 @@ class BounceCredentialController extends Controller
                     ->count();
                 
                 if ($otherDefaults === 0) {
-                    return $this->errorResponse('Cannot delete the only default bounce credential', null, 400);
+                    return $this->errorResponse('Cannot delete the only default bounce credential', 400);
                 }
             }
 

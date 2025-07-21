@@ -107,6 +107,11 @@ export const campaignService = {
     async uploadContent(formData) {
         const response = await api.post('/campaigns/upload-content', formData);
         return response.data;
+    },
+
+    async sendSingle(emailData) {
+        const response = await api.post('/campaigns/send-single', emailData);
+        return response.data;
     }
 };
 

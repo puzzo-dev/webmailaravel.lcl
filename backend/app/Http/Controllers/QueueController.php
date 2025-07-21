@@ -189,7 +189,7 @@ class QueueController extends Controller
             $failedJob = DB::table('failed_jobs')->where('id', $id)->first();
             
             if (!$failedJob) {
-                return $this->errorResponse('Failed job not found', null, 404);
+                return $this->errorResponse('Failed job not found', 404);
             }
 
             try {
@@ -229,7 +229,7 @@ class QueueController extends Controller
             $deleted = DB::table('failed_jobs')->where('id', $id)->delete();
             
             if (!$deleted) {
-                return $this->errorResponse('Failed job not found', null, 404);
+                return $this->errorResponse('Failed job not found', 404);
             }
 
             return $this->successResponse(null, 'Failed job deleted successfully');
@@ -267,7 +267,7 @@ class QueueController extends Controller
             $deleted = DB::table('jobs')->where('id', $id)->delete();
             
             if (!$deleted) {
-                return $this->errorResponse('Job not found', null, 404);
+                return $this->errorResponse('Job not found', 404);
             }
 
             return $this->successResponse(null, 'Job deleted successfully');
@@ -306,7 +306,7 @@ class QueueController extends Controller
             $job = DB::table($table)->where('id', $id)->first();
             
             if (!$job) {
-                return $this->errorResponse('Job not found', null, 404);
+                return $this->errorResponse('Job not found', 404);
             }
 
             $payload = json_decode($job->payload, true);

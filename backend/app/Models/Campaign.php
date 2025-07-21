@@ -13,13 +13,17 @@ class Campaign extends Model
     protected $fillable = [
         'user_id',
         'name',
+        'type',
         'subject',
         'scheduled_at',
         'status',
         'job_id',
         'sender_ids',
+        'single_sender_id',
         'content_ids',
         'recipient_list_path',
+        'single_recipient_email',
+        'bcc_recipients',
         'sent_list_path',
         'unsubscribe_list_path',
         'unsubscribe_list_format',
@@ -105,6 +109,11 @@ class Campaign extends Model
     public function emailTracking(): HasMany
     {
         return $this->hasMany(EmailTracking::class);
+    }
+
+    public function singleSender()
+    {
+        return $this->belongsTo(Sender::class, 'single_sender_id');
     }
 
     // Accessor methods for frontend compatibility
@@ -205,6 +214,10 @@ class Campaign extends Model
      */
     public function getSenders()
     {
+        if ($this->isSingleSend() && $this->single_sender_id) {
+            return collect([$this->singleSender]);
+        }
+        
         return Sender::whereIn('id', $this->sender_ids ?? [])->get();
     }
 
@@ -282,6 +295,45 @@ class Campaign extends Model
     public function isTrackingEnabled(): bool
     {
         return $this->enable_open_tracking || $this->enable_click_tracking;
+    }
+
+    /**
+     * Check if this is a single send campaign
+     */
+    public function isSingleSend(): bool
+    {
+        return $this->type === 'single';
+    }
+
+    /**
+     * Get recipients for single send (including BCC)
+     */
+    public function getSingleSendRecipients(): array
+    {
+        if (!$this->isSingleSend()) {
+            return [];
+        }
+
+        $recipients = [$this->single_recipient_email];
+        
+        if ($this->bcc_recipients) {
+            $bccEmails = array_filter(array_map('trim', explode(',', $this->bcc_recipients)));
+            $recipients = array_merge($recipients, $bccEmails);
+        }
+
+        return array_filter($recipients);
+    }
+
+    /**
+     * Get sender for single send
+     */
+    public function getSingleSendSender()
+    {
+        if (!$this->isSingleSend()) {
+            return null;
+        }
+
+        return $this->singleSender;
     }
 
     /**

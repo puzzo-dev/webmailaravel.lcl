@@ -9,7 +9,13 @@ export const fetchSystemConfig = createAsyncThunk(
     try {
       // Try public config endpoint first (works for all users)
       const response = await api.get('/config');
-      return response.data;
+      
+      // Check if response has the expected structure
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data;
+      } else {
+        return response.data;
+      }
     } catch (error) {
       // Fallback to defaults if public config fails
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch system configuration';

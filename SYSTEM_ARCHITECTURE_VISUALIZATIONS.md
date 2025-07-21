@@ -2,6 +2,10 @@
 
 This document contains comprehensive system architecture diagrams for the WebMail Laravel project.
 
+**Developed by [I-Varse Technologies](https://ivarsetech.com)**
+
+*Last Updated: July 2025 - Includes Automatic Training, PowerMTA Integration, and Advanced Bounce Processing*
+
 ## 1. Complete System Architecture Overview
 
 ```mermaid
@@ -47,6 +51,9 @@ graph TB
         S5[Notification Service]
         S6[File Processing Service]
         S7[Suppression Service]
+        S8[Bounce Processing Service]
+        S9[Automatic Training Service]
+        S10[PowerMTA Service]
     end
 
     %% Job Queue System
@@ -56,6 +63,8 @@ graph TB
         Q3[Backup Job]
         Q4[Analytics Job]
         Q5[Cleanup Job]
+        Q6[Process Bounces Job]
+        Q7[Automatic Training Job]
     end
 
     %% Notification System
@@ -79,6 +88,9 @@ graph TB
         DB7[(Backups)]
         DB8[(Suppression Lists)]
         DB9[(Contents)]
+        DB10[(Bounce Credentials)]
+        DB11[(Bounce Processing Logs)]
+        DB12[(Sender Training Data)]
     end
 
     %% External Services
@@ -88,6 +100,8 @@ graph TB
         E3[📊 Pusher WebSockets]
         E4[☁️ File Storage]
         E5[📈 Analytics APIs]
+        E6[🔧 PowerMTA Server]
+        E7[📮 IMAP/POP3 Servers]
     end
 
     %% File System
@@ -96,6 +110,8 @@ graph TB
         FS2[Email Templates]
         FS3[Backup Files]
         FS4[Uploaded Assets]
+        FS5[PowerMTA CSV Files]
+        FS6[FBL Files]
     end
 
     %% User Interactions
@@ -141,6 +157,8 @@ graph TB
     S3 --> Q4
     S4 --> Q3
     S6 --> Q5
+    S8 --> Q6
+    S9 --> Q7
 
     %% Services to Notifications
     S1 --> N1
@@ -166,6 +184,12 @@ graph TB
     S4 --> DB7
     S5 --> DB6
     S7 --> DB8
+    S8 --> DB10
+    S8 --> DB11
+    S8 --> DB8
+    S9 --> DB4
+    S9 --> DB12
+    S10 --> DB4
 
     %% Services to External
     S1 --> E1
@@ -173,12 +197,18 @@ graph TB
     S1 --> E3
     S4 --> E4
     S3 --> E5
+    S8 --> E7
+    S9 --> E6
+    S10 --> E6
 
     %% Services to File System
     S1 --> FS1
     S1 --> FS2
     S4 --> FS3
     S6 --> FS4
+    S8 --> FS6
+    S9 --> FS5
+    S10 --> FS5
 
     %% Real-time Updates
     E3 --> F8
@@ -206,12 +236,12 @@ graph TB
     class U1,U2 userClass
     class F1,F2,F3,F4,F5,F6,F7,F8,F9,F10 frontendClass
     class A1,A2,A3,A4,A5,A6,A7,A8 apiClass
-    class S1,S2,S3,S4,S5,S6,S7 serviceClass
-    class Q1,Q2,Q3,Q4,Q5 jobClass
+    class S1,S2,S3,S4,S5,S6,S7,S8,S9,S10 serviceClass
+    class Q1,Q2,Q3,Q4,Q5,Q6,Q7 jobClass
     class N1,N2,N3,N4,N5,N6 notificationClass
-    class DB1,DB2,DB3,DB4,DB5,DB6,DB7,DB8,DB9 databaseClass
-    class E1,E2,E3,E4,E5 externalClass
-    class FS1,FS2,FS3,FS4 fileClass
+    class DB1,DB2,DB3,DB4,DB5,DB6,DB7,DB8,DB9,DB10,DB11,DB12 databaseClass
+    class E1,E2,E3,E4,E5,E6,E7 externalClass
+    class FS1,FS2,FS3,FS4,FS5,FS6 fileClass
 ```
 
 ## 2. System Features and Capabilities
@@ -227,6 +257,8 @@ graph TD
             CM5[Campaign Scheduling]
             CM6[Real-time Monitoring]
             CM7[Suppression Lists]
+            CM8[Single Email Send]
+            CM9[Sender Daily Limits]
         end
 
         subgraph "📈 Analytics & Tracking"
@@ -236,6 +268,8 @@ graph TD
             AT4[Domain Analytics]
             AT5[Geographic Insights]
             AT6[Real-time Statistics]
+            AT7[Sender Reputation Scoring]
+            AT8[PowerMTA Integration]
         end
 
         subgraph "🔐 Admin Features"
@@ -246,6 +280,9 @@ graph TD
             AF5[Domain Verification]
             AF6[Global Settings]
             AF7[Notification Management]
+            AF8[Bounce Credentials Management]
+            AF9[Training Statistics]
+            AF10[PowerMTA Configuration]
         end
 
         subgraph "🔔 Notification System"
@@ -265,6 +302,9 @@ graph TD
             TF5[Security Measures]
             TF6[API Rate Limiting]
             TF7[Automated Backups]
+            TF8[Automatic Training System]
+            TF9[CSV File Processing]
+            TF10[IMAP/POP3 Integration]
         end
     end
 
@@ -302,7 +342,104 @@ graph TD
     style L1 fill:#f1f8e9
 ```
 
-## 3. Campaign Lifecycle Sequence
+## 3. Advanced Features - Automatic Training & Bounce Processing
+
+```mermaid
+graph TB
+    subgraph "🎯 Automatic Training System"
+        AT1[PowerMTA CSV Analysis]
+        AT2[Sender Reputation Calculation] 
+        AT3[Daily Limit Adjustment]
+        AT4[Performance Monitoring]
+        
+        AT1 --> AT2
+        AT2 --> AT3
+        AT3 --> AT4
+        AT4 --> AT1
+    end
+    
+    subgraph "📊 Reputation Scoring"
+        RS1[Delivery Rate Analysis]
+        RS2[Bounce Rate Penalties]
+        RS3[Complaint Rate Impact]
+        RS4[Volume Bonuses]
+        
+        RS1 --> RS5[Final Score: 1-100]
+        RS2 --> RS5
+        RS3 --> RS5
+        RS4 --> RS5
+    end
+    
+    subgraph "📈 Dynamic Limit Scaling"
+        DL1[95%+ Reputation → 1000 emails/day]
+        DL2[90-94% Reputation → 500 emails/day]
+        DL3[80-89% Reputation → 150-250 emails/day]
+        DL4[50-79% Reputation → 10-75 emails/day]
+        DL5[<50% Reputation → 1-10 emails/day]
+    end
+    
+    subgraph "🔍 PowerMTA File Processing"
+        PF1[Accounting Files - acct*.csv]
+        PF2[Diagnostic Files - diag*.csv]
+        PF3[FBL Files - fbl*.csv]
+        
+        PF1 --> PF4[Failed Delivery Detection]
+        PF2 --> PF5[Hard Bounce Detection]
+        PF3 --> PF6[Spam Complaint Detection]
+        
+        PF4 --> PF7[Suppression List Update]
+        PF5 --> PF7
+        PF6 --> PF7
+    end
+    
+    subgraph "⚡ Bounce Processing Integration"
+        BP1[IMAP/POP3 Bounce Processing]
+        BP2[PowerMTA File Processing]
+        BP3[Unified Suppression List]
+        BP4[Real-time Email Blocking]
+        
+        BP1 --> BP3
+        BP2 --> BP3
+        BP3 --> BP4
+    end
+    
+    subgraph "⏰ Automated Scheduling"
+        AS1[Hourly: PowerMTA File Processing]
+        AS2[Every 30min: IMAP Bounce Processing]
+        AS3[Daily 2AM: Automatic Training]
+        AS4[Real-time: Email Sending Limits]
+    end
+    
+    %% Connections between systems
+    AT2 --> RS1
+    RS5 --> DL1
+    RS5 --> DL2
+    RS5 --> DL3
+    RS5 --> DL4
+    RS5 --> DL5
+    
+    PF1 --> AT1
+    PF2 --> AT1
+    PF3 --> AT1
+    
+    BP2 --> PF1
+    BP2 --> PF2
+    BP2 --> PF3
+    
+    AS3 --> AT1
+    AS1 --> BP2
+    AS2 --> BP1
+    AS4 --> DL1
+    
+    %% Styling
+    style AT1 fill:#e3f2fd
+    style RS5 fill:#e8f5e8
+    style PF7 fill:#fff3e0
+    style BP3 fill:#f3e5f5
+    style AS3 fill:#fce4ec
+```
+
+## 4. Enhanced Campaign Lifecycle with Sender Limits
 
 ```mermaid
 sequenceDiagram
@@ -338,8 +475,14 @@ sequenceDiagram
     
     loop Email Processing
         Q->>D: Get Next Batch
-        Q->>E: Send Emails via SMTP
-        Q->>D: Update Statistics
+        Q->>D: Check Sender Daily Limits
+        alt Sender Limit Exceeded
+            Q->>Q: Re-queue for Later
+        else Sender Available
+            Q->>E: Send Emails via SMTP
+            Q->>D: Increment Sender Count
+            Q->>D: Update Statistics
+        end
         Q->>S: Check Milestones
         alt Milestone Reached
             S->>N: Milestone Notification
@@ -371,7 +514,7 @@ sequenceDiagram
     Note over U,N: System provides continuous monitoring, alerts, and insights
 ```
 
-## 4. Campaign Notification System
+## 5. Campaign Notification System
 
 ```mermaid
 graph TD
@@ -426,38 +569,88 @@ graph TD
     style B6 fill:#fff3e0
 ```
 
-## System Strengths
+## System Strengths & Capabilities
 
 ### ✅ **Scalable Architecture**
 - Queue-based processing handles large campaigns
 - Microservice-style separation of concerns
 - Horizontal scaling capabilities
+- **NEW**: Automatic sender limit management prevents overload
 
 ### ✅ **Real-time Features**
 - WebSocket integration for live monitoring
 - Instant notifications across multiple channels
 - Live dashboard updates
+- **NEW**: Real-time sender reputation tracking
 
 ### ✅ **Comprehensive Monitoring**
 - Multi-channel notification system
 - Detailed analytics and performance insights
 - Proactive bounce rate monitoring
+- **NEW**: PowerMTA CSV file analysis and processing
 
 ### ✅ **Admin Control**
 - Complete system management capabilities
 - User management and access control
 - System-wide configuration management
+- **NEW**: Training statistics and bounce credentials management
 
 ### ✅ **Security & Reliability**
 - Proper authentication and authorization
 - Backup systems and data protection
 - Input validation and suppression lists
+- **NEW**: Automated bounce processing from multiple sources
 
 ### ✅ **Production Ready**
 - Error handling and logging
 - Queue management and monitoring
 - Performance optimization with caching
+- **NEW**: Scheduled automatic training and maintenance
+
+### ✅ **Advanced Email Management** *(New Features)*
+- **Automatic Training System**: Daily reputation analysis and limit adjustment
+- **PowerMTA Integration**: Complete CSV file processing (Acct, Diag, FBL)
+- **Intelligent Bounce Processing**: Unified IMAP/POP3 and PowerMTA bounce handling
+- **Dynamic Sender Limits**: Reputation-based daily sending limits (1-1000 emails)
+- **Real-time Limit Enforcement**: Highest priority checking during email sending
+- **Comprehensive Suppression**: Multi-source email suppression list management
+
+### ✅ **Automation & Intelligence**
+- **Scheduled Processing**: Hourly PowerMTA analysis, daily training
+- **Smart Reputation Scoring**: Delivery rate, bounce rate, and complaint analysis
+- **Adaptive Limits**: Automatic scaling based on sender performance
+- **Proactive Protection**: Real-time email blocking for poor performers
 
 ---
 
-*These visualizations represent the current state of the WebMail Laravel system as of the latest updates.*
+## 🏆 **Recent Major Updates (July 2025)**
+
+### 🎯 **Automatic Training Feature**
+- **PowerMTA CSV Analysis**: Automated processing of accounting, diagnostic, and FBL files
+- **Reputation Scoring**: Intelligent calculation based on delivery performance
+- **Dynamic Limits**: Automatic adjustment of sender daily limits (1-1000 emails)
+- **Scheduled Execution**: Daily training at 2:00 AM for optimal performance
+
+### 🔄 **Enhanced Bounce Processing**  
+- **Dual Processing**: Both IMAP/POP3 and PowerMTA file analysis
+- **Unified Suppression**: Single suppression list from multiple sources
+- **Real-time Protection**: Immediate blocking of problematic emails
+- **Hourly Processing**: Automated PowerMTA file analysis every hour
+
+### ⚡ **Priority Sender Limits**
+- **Highest Priority**: Sender limits checked before all other constraints
+- **Real-time Enforcement**: Immediate blocking when daily limits reached
+- **Smart Queuing**: Automatic re-queuing for limit-exceeded emails
+- **Default Protection**: All new senders start with 10 emails/day limit
+
+### 🎨 **Enhanced User Experience**
+- **I-Varse Technologies Branding**: Professional footer signatures across all pages
+- **Training Statistics**: Comprehensive admin dashboard for training insights
+- **Manual Controls**: API endpoints and commands for immediate training triggers
+- **Detailed Reporting**: Complete visibility into reputation and limit changes
+
+---
+
+**Developed by [I-Varse Technologies](https://ivarsetech.com)**
+
+*These visualizations represent the current state of the WebMail Laravel system including all latest features and enhancements as of July 2025.*

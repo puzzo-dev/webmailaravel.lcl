@@ -148,6 +148,26 @@ const Layout = () => {
             </div>
           )}
         </main>
+        
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 py-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <div className="text-center text-sm text-gray-500">
+              <p>© 2024 Email Campaign Manager. All rights reserved.</p>
+              <p className="mt-1">
+                Developed by{' '}
+                <a 
+                  href="https://ivarsetech.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-indigo-600 hover:text-indigo-500 transition-colors"
+                >
+                  I-Varse Technologies
+                </a>
+              </p>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

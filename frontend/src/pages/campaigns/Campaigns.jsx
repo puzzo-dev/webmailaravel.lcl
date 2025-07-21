@@ -310,6 +310,10 @@ const Campaigns = () => {
               <HiRefresh className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+            <Link to="/campaigns/single-send" className="btn btn-secondary flex items-center mr-3">
+              <HiMail className="h-5 w-5 mr-2" />
+              Send Single Email
+            </Link>
             <Link to="/campaigns/new" className="btn btn-primary flex items-center">
               <HiPlus className="h-5 w-5 mr-2" />
               New Campaign

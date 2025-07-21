@@ -46,12 +46,31 @@ class SendEmailJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            // PRIORITY CHECK: Verify sender daily limit (highest priority)
+            $sender = $this->sender->fresh(); // Get fresh data
+            if (!$sender->canSendToday()) {
+                Log::warning('Sender daily limit exceeded, email not sent', [
+                    'campaign_id' => $this->campaign->id,
+                    'recipient' => $this->recipient,
+                    'sender_id' => $sender->id,
+                    'sender_email' => $sender->email,
+                    'daily_limit' => $sender->daily_limit,
+                    'current_daily_sent' => $sender->current_daily_sent,
+                    'remaining_sends' => $sender->getRemainingDailySends()
+                ]);
+                
+                // Re-queue for later or assign to different sender
+                $this->release(3600); // Try again in 1 hour
+                return;
+            }
+
             Log::info('Sending campaign email', [
                 'campaign_id' => $this->campaign->id,
                 'recipient' => $this->recipient,
                 'sender_id' => $this->sender->id,
                 'sender_name' => $this->sender->name,
-                'sender_email' => $this->sender->email
+                'sender_email' => $this->sender->email,
+                'remaining_daily_sends' => $sender->getRemainingDailySends()
             ]);
 
             // Get recipient data for template variables
@@ -65,12 +84,16 @@ class SendEmailJob implements ShouldQueue
             Mail::to($this->recipient)
                 ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData));
 
+            // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND
+            $sender->incrementDailySent();
+
             Log::info('Campaign email sent successfully', [
                 'campaign_id' => $this->campaign->id,
                 'recipient' => $this->recipient,
                 'sender_id' => $this->sender->id,
                 'sender_name' => $this->sender->name,
-                'sender_email' => $this->sender->email
+                'sender_email' => $this->sender->email,
+                'remaining_daily_sends' => $sender->getRemainingDailySends()
             ]);
 
         } catch (\Exception $e) {

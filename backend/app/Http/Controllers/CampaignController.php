@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Campaign;
+use App\Models\Sender;
 use App\Services\CampaignService;
 use App\Traits\LoggingTrait;
 use App\Traits\ResponseTrait;
@@ -62,6 +63,122 @@ class CampaignController extends Controller
                 return $this->paginatedResponse($results, 'Campaigns retrieved successfully');
             }
         }, 'list_campaigns');
+    }
+
+    /**
+     * Send single email
+     */
+    public function sendSingle(Request $request): JsonResponse
+    {
+        return $this->validateAndExecute(
+            $request,
+            [
+                'to' => 'required|email',
+                'bcc' => 'nullable|string',
+                'sender_id' => 'required|exists:senders,id',
+                'subject' => 'required|string|max:255',
+                'content' => 'required|string',
+                'enable_open_tracking' => 'boolean',
+                'enable_click_tracking' => 'boolean',
+                'enable_unsubscribe_link' => 'boolean',
+            ],
+            function () use ($request) {
+                $data = $request->validated();
+                
+                // Verify sender belongs to user
+                $sender = Sender::where('id', $data['sender_id'])
+                    ->where('user_id', Auth::id())
+                    ->where('is_active', true)
+                    ->first();
+                    
+                if (!$sender) {
+                    throw new \Exception('Invalid sender selected');
+                }
+
+                // Check suppression list for recipient
+                $recipients = [$data['to']];
+                if (!empty($data['bcc'])) {
+                    $bccEmails = array_filter(array_map('trim', explode(',', $data['bcc'])));
+                    $recipients = array_merge($recipients, $bccEmails);
+                }
+
+                // Check suppression list for all recipients
+                $suppressedEmails = [];
+                foreach ($recipients as $email) {
+                    if ($this->isEmailSuppressed($email)) {
+                        $suppressedEmails[] = $email;
+                    }
+                }
+                
+                if (!empty($suppressedEmails)) {
+                    return $this->errorResponse(
+                        'The following recipients are in the suppression list: ' . implode(', ', $suppressedEmails),
+                        400
+                    );
+                }
+
+                // Create single send campaign
+                $campaign = Campaign::create([
+                    'user_id' => Auth::id(),
+                    'name' => 'Single Send: ' . $data['subject'] . ' - ' . now()->format('Y-m-d H:i:s'),
+                    'type' => 'single',
+                    'subject' => $data['subject'],
+                    'single_recipient_email' => $data['to'],
+                    'bcc_recipients' => $data['bcc'] ?? null,
+                    'single_sender_id' => $data['sender_id'],
+                    'recipient_count' => count($recipients),
+                    'status' => 'RUNNING',
+                    'enable_open_tracking' => $data['enable_open_tracking'] ?? true,
+                    'enable_click_tracking' => $data['enable_click_tracking'] ?? true,
+                    'enable_unsubscribe_link' => $data['enable_unsubscribe_link'] ?? true,
+                    'started_at' => now(),
+                ]);
+
+                // Create content for this single send
+                $content = \App\Models\Content::create([
+                    'user_id' => Auth::id(),
+                    'name' => 'Single Send Content - ' . now()->format('Y-m-d H:i:s'),
+                    'subject' => $data['subject'],
+                    'html_body' => $data['content'],
+                    'text_body' => strip_tags($data['content']),
+                    'is_active' => true,
+                ]);
+
+                // Associate content with campaign
+                $campaign->contents()->attach($content->id);
+                $campaign->update(['content_ids' => [$content->id]]);
+
+                // Send emails to all recipients
+                foreach ($recipients as $recipient) {
+                    \App\Jobs\SendEmailJob::dispatch(
+                        $recipient,
+                        $sender,
+                        $content,
+                        $campaign,
+                        ['email' => $recipient]
+                    );
+                }
+
+                // Update sent count
+                $campaign->update([
+                    'total_sent' => count($recipients),
+                    'status' => 'COMPLETED'
+                ]);
+
+                $this->logInfo('Single email sent', [
+                    'campaign_id' => $campaign->id,
+                    'sender_id' => $sender->id,
+                    'recipients' => $recipients,
+                    'subject' => $data['subject']
+                ]);
+
+                return $this->successResponse([
+                    'campaign' => $campaign,
+                    'message' => 'Email sent successfully to ' . count($recipients) . ' recipient(s)'
+                ], 'Single email sent successfully');
+            },
+            'send_single_email'
+        );
     }
 
     /**
@@ -147,7 +264,7 @@ class CampaignController extends Controller
             try {
                 $campaign = Campaign::with(['user'])->findOrFail($id);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                return $this->errorResponse('Campaign not found', null, 404);
+                return $this->errorResponse('Campaign not found', 404);
             }
             
             if (!$this->canAccessResource($campaign)) {
@@ -171,7 +288,7 @@ class CampaignController extends Controller
             try {
                 $campaign = Campaign::findOrFail($id);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                return $this->errorResponse('Campaign not found', null, 404);
+                return $this->errorResponse('Campaign not found', 404);
             }
             
             // Admin can update any campaign, regular users can only update their own
@@ -283,7 +400,7 @@ class CampaignController extends Controller
             try {
                 $campaign = Campaign::findOrFail($id);
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                return $this->errorResponse('Campaign not found', null, 404);
+                return $this->errorResponse('Campaign not found', 404);
             }
             
             if (!$this->canAccessResource($campaign)) {
@@ -589,6 +706,14 @@ class CampaignController extends Controller
     {
         // Implementation for hourly activity
         return [];
+    }
+
+    /**
+     * Check if email is in suppression list
+     */
+    private function isEmailSuppressed(string $email): bool
+    {
+        return \App\Models\SuppressionList::where('email', $email)->exists();
     }
 
     /**

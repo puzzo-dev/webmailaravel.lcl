@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAppName } from '../hooks/useSystemConfig';
 import {
   HiChartBar,
   HiShieldCheck,
@@ -19,6 +20,7 @@ import {
 import { billingService } from '../services/api';
 
 const Landing = () => {
+  const appName = useAppName();
   const [isVisible, setIsVisible] = useState(false);
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
@@ -165,7 +167,7 @@ const Landing = () => {
                 </div>
               </div>
               <div className="ml-3">
-                <h1 className="text-xl font-bold text-gray-900">EmailCampaign</h1>
+                <h1 className="text-xl font-bold text-gray-900">{appName}</h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -420,7 +422,7 @@ const Landing = () => {
                 <div className="h-8 w-8 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
                   <HiInbox className="h-5 w-5 text-white" />
                 </div>
-                <span className="ml-3 text-xl font-bold">EmailCampaign</span>
+                <span className="ml-3 text-xl font-bold">{appName}</span>
               </div>
               <p className="text-gray-400">
                 Powerful email marketing platform for modern businesses.
@@ -455,7 +457,18 @@ const Landing = () => {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 EmailCampaign. All rights reserved.</p>
+            <p>&copy; 2024 {appName}. All rights reserved.</p>
+            <p className="mt-2 text-sm">
+              Developed by{' '}
+              <a 
+                href="https://ivarsetech.com" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                I-Varse Technologies
+              </a>
+            </p>
           </div>
         </div>
       </footer>

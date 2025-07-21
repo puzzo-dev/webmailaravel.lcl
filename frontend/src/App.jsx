@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { initializeAuth } from './store/slices/authSlice';
 import { hideSubscriptionOverlay } from './store/slices/uiSlice';
 import { fetchSystemConfig } from './store/slices/systemConfigSlice';
+import { useAppName } from './hooks/useSystemConfig';
 
 // Auth Components
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -29,6 +30,7 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
 import CampaignBuilder from './pages/campaigns/CampaignBuilder';
 import CampaignDetail from './pages/campaigns/CampaignDetail';
+import SingleSend from './pages/campaigns/SingleSend';
 import Analytics from './pages/analytics/Analytics';
 import Notifications from './pages/Notifications';
 import Account from './pages/Account';
@@ -57,12 +59,20 @@ import AdminBilling from './pages/admin/AdminBilling';
 function App() {
   const { isAuthenticated, user, isLoading, currentView } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+  const appName = useAppName();
 
   useEffect(() => {
     dispatch(initializeAuth());
     // Fetch system config in parallel with auth initialization
     dispatch(fetchSystemConfig());
   }, []);
+
+  // Update document title when app name changes
+  useEffect(() => {
+    if (appName && appName !== 'WebMail Laravel') {
+      document.title = appName;
+    }
+  }, [appName]);
 
   // Show loading screen while initializing authentication
   // This prevents any routing decisions until auth is determined
@@ -122,6 +132,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/campaigns/new" element={<CampaignBuilder />} />
+              <Route path="/campaigns/single-send" element={<SingleSend />} />
               <Route path="/campaigns/:id" element={<CampaignDetail />} />
               <Route path="/campaigns/:id/edit" element={<CampaignBuilder />} />
               <Route path="/analytics" element={<Analytics />} />

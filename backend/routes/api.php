@@ -125,6 +125,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}/unsubscribe-list', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
+        Route::post('/send-single', [CampaignController::class, 'sendSingle']);
         
         // Admin campaign management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
@@ -342,6 +343,15 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::post('/analyze-reputation', [PowerMTAController::class, 'analyzeSenderReputation']);
             Route::get('/reputation-summary', [PowerMTAController::class, 'getReputationSummary']);
             Route::get('/diagnostic-files/{filename}/download', [PowerMTAController::class, 'downloadDiagnosticFile']);
+            Route::post('/process-bounces', [PowerMTAController::class, 'processBounceFiles']);
+        });
+        
+        // Automatic Training admin routes (admin only)
+        Route::prefix('training')->group(function () {
+            Route::get('/status', [PowerMTAController::class, 'getTrainingStatus']);
+            Route::get('/statistics', [PowerMTAController::class, 'getTrainingStatistics']);
+            Route::post('/run', [PowerMTAController::class, 'runTraining']);
+            Route::post('/run/{domain}', [PowerMTAController::class, 'runDomainTraining']);
         });
 
         // Admin billing management routes (admin only)
