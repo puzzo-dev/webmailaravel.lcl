@@ -6,8 +6,8 @@ pipeline {
         PROD_USER = credentials('prod-ssh-user')
         PROD_PASSWORD = credentials('prod-ssh-password')
         APP_NAME = 'campaignprox.msz-pl.com'
-        BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com/public_html/'
-        FRONTEND_PATH = '/home/campaignprox/public_html/'
+        BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com'
+        FRONTEND_PATH = '/home/campaignprox/public_html'
         BACKUP_PATH = '/home/campaignprox/backups'
         BUILD_TIMESTAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M%S').trim()
         RELEASE_NAME = "${APP_NAME}_${BUILD_TIMESTAMP}"
@@ -141,13 +141,19 @@ pipeline {
             }
         }
         
+        stage('🔍 Debug Scripts') {
+            steps {
+                sh 'ls -l scripts/'
+            }
+        }
+        
         stage('🚀 Deploy to Production') {
             parallel {
                 stage('🔧 Backend Deployment') {
                     steps {
                         script {
                             echo "🔧 Deploying backend to production..."
-                            sh "RELEASE_NAME=${RELEASE_NAME} scripts/deploy-backend.sh"
+                            sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/deploy-backend.sh"
                         }
                     }
                 }
@@ -156,7 +162,7 @@ pipeline {
                     steps {
                         script {
                             echo "🎨 Deploying frontend to production..."
-                            sh "RELEASE_NAME=${RELEASE_NAME} scripts/deploy-frontend.sh"
+                            sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/deploy-frontend.sh"
                         }
                     }
                 }
@@ -167,7 +173,7 @@ pipeline {
             steps {
                 script {
                     echo "🔍 Running post-deployment health checks..."
-                    sh "RELEASE_NAME=${RELEASE_NAME} scripts/health-check.sh"
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/health-check.sh"
                 }
             }
         }
@@ -176,7 +182,7 @@ pipeline {
             steps {
                 script {
                     echo "🧹 Cleaning up old deployments..."
-                    sh "RELEASE_NAME=${RELEASE_NAME} scripts/cleanup.sh"
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/cleanup.sh"
                 }
             }
         }
@@ -212,7 +218,7 @@ pipeline {
                 }
                 
                 if (fileExists('scripts/rollback.sh')) {
-                    sh "RELEASE_NAME=${RELEASE_NAME} scripts/rollback.sh || echo 'Rollback failed'"
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo 'Rollback failed'"
                 } else {
                     echo "Rollback script not found, skipping rollback"
                 }
