@@ -3,9 +3,28 @@ set -e
 
 echo "🔄 Starting rollback process..."
 
+# Configuration variables
+APP_NAME="campaignprox.msz-pl.com"
+APP_USER="campaignprox"
+PROD_SERVER="${PROD_SERVER}"
+PROD_USER="${PROD_USER}"
+PROD_PASSWORD="${PROD_PASSWORD}"
+BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com"
+FRONTEND_PATH="/home/campaignprox/public_html"
+BACKUP_PATH="/home/campaignprox/backups"
+DB_PATH="/home/campaignprox/domains/api.msz-pl.com/database/database.sqlite"
+
+# Check if required environment variables are set
+if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]; then
+    echo "ERROR: Missing required environment variables: PROD_SERVER, PROD_USER, PROD_PASSWORD"
+    exit 1
+fi
+
+# SSH command using sshpass
+SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
+
 # Rollback script
-sshpass -p "${PROD_PASSWORD}" ssh -o StrictHostKeyChecking=no \
-    ${PROD_USER}@${PROD_SERVER} << 'EOF'
+${SSH} << 'EOF'
 set -e
 
 echo "🔄 Executing rollback on production server..."
@@ -29,15 +48,33 @@ rollback_backend() {
         fi
         sudo mv ${BACKEND_PATH}_old ${BACKEND_PATH}
         
+        # Restore database if available
+        LATEST_DB=$(ls -t ${BACKUP_PATH}/db_backup_*.sqlite 2>/dev/null | head -n 1)
+        if [ -n "$LATEST_DB" ]; then
+            echo "📁 Restoring SQLite database: $LATEST_DB..."
+            sudo cp $LATEST_DB ${DB_PATH}
+            sudo chown ${APP_USER}:${APP_USER} ${DB_PATH}
+            sudo chmod 664 ${DB_PATH}
+        else
+            echo "⚠️ No database backup found, skipping database restore"
+        fi
+        
+        # Set permissions
+        sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
+        sudo chmod -R 755 ${BACKEND_PATH}
+        sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
+        [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
+        
         # Restart services
         sudo systemctl start php8.2-fpm || echo "PHP-FPM start failed"
         sudo systemctl reload apache2 || echo "Web server reload failed"
         
-        # Run Laravel commands to ensure everything works
+        # Run Laravel commands
         cd ${BACKEND_PATH}
         php artisan config:clear || echo "Config clear failed"
         php artisan config:cache || echo "Config cache failed"
         php artisan queue:restart || echo "Queue restart failed"
+        php artisan up || echo "Application up failed"
         
         # Test if backend is working
         if php artisan --version > /dev/null 2>&1; then
@@ -75,115 +112,7 @@ rollback_frontend() {
         sudo mv ${FRONTEND_PATH}_old ${FRONTEND_PATH}
         
         # Set proper permissions
-        sudo chown -R campaignprox:campaignprox ${FRONTEND_PATH}
-        sudo chmod -R 755 ${FRONTEND_PATH}
-        
-        # Test if frontend files exist
-        if [ -f "${FRONTEND_PATH}/index.html" ]; then
-            echo "✅ Frontend rollback successful"
-            ROLLBACK_SUCCESS=1
-            
-            # Clean up failed deployment
-            sudo rm -rf ${FRONTEND_PATH}_rollback_temp || echo "Frontend rollback temp cleanup failed"
-        else
-            echo "❌ Frontend rollback verification failed"
-            # Try to restore the failed deployment
-            if [ -d "${FRONTEND_PATH}_rollback_temp" ]; then
-                sudo rm -rf ${FRONTEND_PATH}
-                sudo mv ${FRONTEND_PATH}_rollback_temp ${FRONTEND_PATH}
-                echo " четвер
-
-System: ### **Completion of Response**
-
-It appears the response was cut off while generating the `rollback.sh` script. I’ll complete the response by providing the full, updated `rollback.sh` script, followed by the updated `cleanup.sh` and `health-check.sh` scripts, and then address any remaining points to ensure the deployment works for your Virtualmin-based VPS with `sshpass`. I’ll also summarize the setup steps and provide guidance for testing and deployment.
-
----
-
-#### **6. rollback.sh (Continued)**
-The `rollback.sh` script handles rolling back failed deployments by restoring previous versions or backups. Below is the complete updated script with:
-- Updated paths (`BACKEND_PATH`, `FRONTEND_PATH`, `BACKUP_PATH`) for Virtualmin.
-- Ownership set to `campaignprox:campaignprox`.
-- Retained `sshpass` for SSH access.
-
-<xaiArtifact artifact_id="edb03009-adbd-4d2c-9743-e65baad1c59d" artifact_version_id="a403c9ee-a70d-48ba-9b52-991e917b8ca7" title="rollback.sh" contentType="text/x-shellscript">
-#!/bin/bash
-set -e
-
-echo "🔄 Starting rollback process..."
-
-# Rollback script
-sshpass -p "${PROD_PASSWORD}" ssh -o StrictHostKeyChecking=no \
-    ${PROD_USER}@${PROD_SERVER} << 'EOF'
-set -e
-
-echo "🔄 Executing rollback on production server..."
-
-ROLLBACK_SUCCESS=0
-
-# Function to rollback backend
-rollback_backend() {
-    echo "🔧 Rolling back backend..."
-    
-    if [ -d "${BACKEND_PATH}_old" ]; then
-        echo "📋 Found previous backend version"
-        
-        # Stop any running processes that might lock files
-        sudo systemctl stop php8.2-fpm || echo "PHP-FPM stop failed"
-        
-        # Atomic rollback
-        sudo rm -rf ${BACKEND_PATH}_rollback_temp || echo "No temp rollback dir"
-        if [ -d "${BACKEND_PATH}" ]; then
-            sudo mv ${BACKEND_PATH} ${BACKEND_PATH}_rollback_temp
-        fi
-        sudo mv ${BACKEND_PATH}_old ${BACKEND_PATH}
-        
-        # Restart services
-        sudo systemctl start php8.2-fpm || echo "PHP-FPM start failed"
-        sudo systemctl reload apache2 || echo "Web server reload failed"
-        
-        # Run Laravel commands to ensure everything works
-        cd ${BACKEND_PATH}
-        php artisan config:clear || echo "Config clear failed"
-        php artisan config:cache || echo "Config cache failed"
-        php artisan queue:restart || echo "Queue restart failed"
-        
-        # Test if backend is working
-        if php artisan --version > /dev/null 2>&1; then
-            echo "✅ Backend rollback successful"
-            ROLLBACK_SUCCESS=1
-            
-            # Clean up failed deployment
-            sudo rm -rf ${BACKEND_PATH}_rollback_temp || echo "Rollback temp cleanup failed"
-        else
-            echo "❌ Backend rollback verification failed"
-            # Try to restore the failed deployment
-            if [ -d "${BACKEND_PATH}_rollback_temp" ]; then
-                sudo rm -rf ${BACKEND_PATH}
-                sudo mv ${BACKEND_PATH}_rollback_temp ${BACKEND_PATH}
-                echo "⚠️ Restored failed deployment, manual intervention required"
-            fi
-        fi
-    else
-        echo "❌ No previous backend version found for rollback"
-    fi
-}
-
-# Function to rollback frontend
-rollback_frontend() {
-    echo "🎨 Rolling back frontend..."
-    
-    if [ -d "${FRONTEND_PATH}_old" ]; then
-        echo "📋 Found previous frontend version"
-        
-        # Atomic rollback
-        sudo rm -rf ${FRONTEND_PATH}_rollback_temp || echo "No temp frontend rollback dir"
-        if [ -d "${FRONTEND_PATH}" ]; then
-            sudo mv ${FRONTEND_PATH} ${FRONTEND_PATH}_rollback_temp
-        fi
-        sudo mv ${FRONTEND_PATH}_old ${FRONTEND_PATH}
-        
-        # Set proper permissions
-        sudo chown -R campaignprox:campaignprox ${FRONTEND_PATH}
+        sudo chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH}
         sudo chmod -R 755 ${FRONTEND_PATH}
         
         # Test if frontend files exist
@@ -213,7 +142,7 @@ restore_from_backup() {
     
     if [ -d "${BACKUP_PATH}" ]; then
         # Find the most recent backup
-        LATEST_BACKUP=$(ls -t ${BACKUP_PATH}/backup_*.tar.gz 2>/dev/null | head -1)
+        LATEST_BACKUP=$(ls -t ${BACKUP_PATH}/backup_*.tar.gz 2>/dev/null | head -n 1)
         
         if [ -n "$LATEST_BACKUP" ]; then
             echo "📦 Found backup: $LATEST_BACKUP"
@@ -234,7 +163,22 @@ restore_from_backup() {
             if [ -d "${BACKEND_PATH}" ]; then
                 sudo mv ${BACKEND_PATH} ${BACKEND_PATH}_backup_restore
             fi
-            sudo mv $RESTORE_DIR ${BACKEND_PATH}
+            sudo mv $RESTORE_DIR/backend ${BACKEND_PATH}
+            
+            # Restore database if available
+            LATEST_DB=$(ls -t ${BACKUP_PATH}/db_backup_*.sqlite 2>/dev/null | head -n 1)
+            if [ -n "$LATEST_DB" ]; then
+                echo "📁 Restoring SQLite database: $LATEST_DB..."
+                sudo cp $LATEST_DB ${DB_PATH}
+                sudo chown ${APP_USER}:${APP_USER} ${DB_PATH}
+                sudo chmod 664 ${DB_PATH}
+            fi
+            
+            # Set permissions
+            sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
+            sudo chmod -R 755 ${BACKEND_PATH}
+            sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
+            [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
             
             # Restart services
             sudo systemctl start php8.2-fpm || echo "PHP-FPM start failed"
@@ -251,6 +195,7 @@ restore_from_backup() {
                 if [ -d "${BACKEND_PATH}_backup_restore" ]; then
                     sudo rm -rf ${BACKEND_PATH}
                     sudo mv ${BACKEND_PATH}_backup_restore ${BACKEND_PATH}
+                    echo "⚠️ Restored failed deployment, manual intervention required"
                 fi
             fi
         else

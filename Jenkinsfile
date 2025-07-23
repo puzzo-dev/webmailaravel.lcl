@@ -2,18 +2,13 @@ pipeline {
     agent { label 'docker-agent-php' }
     
     environment {
-        // Production server details
         PROD_SERVER = credentials('prod-server-host')
-        PROD_USER = credentials('prod-ssh-user') // Set to 'campaignprox'
+        PROD_USER = credentials('prod-ssh-user')
         PROD_PASSWORD = credentials('prod-ssh-password')
-        
-        // Application details
         APP_NAME = 'campaignprox.msz-pl.com'
         BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com'
         FRONTEND_PATH = '/home/campaignprox/public_html'
         BACKUP_PATH = '/home/campaignprox/backups'
-        
-        // Build info
         BUILD_TIMESTAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M%S').trim()
         RELEASE_NAME = "${APP_NAME}_${BUILD_TIMESTAMP}"
     }
@@ -32,13 +27,9 @@ pipeline {
                     echo "📅 Build timestamp: ${BUILD_TIMESTAMP}"
                     echo "🏷️ Release name: ${RELEASE_NAME}"
                     
-                    // Clean workspace
                     cleanWs()
-                    
-                    // Checkout code
                     checkout scm
                     
-                    // Determine build user
                     def deployer = 'Jenkins'
                     try {
                         wrap([$class: 'BuildUser']) {
@@ -53,7 +44,6 @@ pipeline {
                         echo "⚠️ Failed to get BUILD_USER: ${e.message}. Using default: ${deployer}"
                     }
                     
-                    // Create build info file
                     writeFile file: 'build-info.json', text: """
 {
     "build_number": "${BUILD_NUMBER}",
@@ -122,35 +112,23 @@ pipeline {
                 script {
                     echo "📦 Creating deployment packages..."
                     
-                    // Create backend package
                     sh '''
                         mkdir -p deployment/backend
                         cp -r backend/* deployment/backend/
-                        
-                        # Remove development files
                         rm -rf deployment/backend/tests
                         rm -rf deployment/backend/storage/logs/*
                         rm -rf deployment/backend/.git*
                         rm -f deployment/backend/.env*
                         rm -f deployment/backend/phpunit.xml
-                        
-                        # Add build info
                         cp build-info.json deployment/backend/
-                        
-                        # Create backend archive
                         cd deployment
                         tar -czf ${RELEASE_NAME}_backend.tar.gz backend/
                     '''
                     
-                    // Create frontend package
                     sh '''
                         mkdir -p deployment/frontend
                         cp -r frontend/dist/* deployment/frontend/
-                        
-                        # Add build info
                         cp build-info.json deployment/frontend/
-                        
-                        # Create frontend archive
                         cd deployment
                         tar -czf ${RELEASE_NAME}_frontend.tar.gz frontend/
                     '''
@@ -169,7 +147,7 @@ pipeline {
                     steps {
                         script {
                             echo "🔧 Deploying backend to production..."
-                            sh './scripts/deploy-backend.sh'
+                            sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/deploy-backend.sh"
                         }
                     }
                 }
@@ -178,7 +156,7 @@ pipeline {
                     steps {
                         script {
                             echo "🎨 Deploying frontend to production..."
-                            sh './scripts/deploy-frontend.sh'
+                            sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/deploy-frontend.sh"
                         }
                     }
                 }
@@ -189,7 +167,7 @@ pipeline {
             steps {
                 script {
                     echo "🔍 Running post-deployment health checks..."
-                    sh './scripts/health-check.sh'
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/health-check.sh"
                 }
             }
         }
@@ -198,7 +176,7 @@ pipeline {
             steps {
                 script {
                     echo "🧹 Cleaning up old deployments..."
-                    sh './scripts/cleanup.sh'
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/cleanup.sh"
                 }
             }
         }
@@ -208,8 +186,6 @@ pipeline {
         success {
             script {
                 echo "✅ Deployment completed successfully!"
-                
-                // Send success notification if SLACK_WEBHOOK_URL is set
                 if (env.SLACK_WEBHOOK_URL) {
                     sh """
                         curl -X POST -H 'Content-type: application/json' \
@@ -225,8 +201,6 @@ pipeline {
         failure {
             script {
                 echo "❌ Deployment failed!"
-                
-                // Send failure notification if SLACK_WEBHOOK_URL is set
                 if (env.SLACK_WEBHOOK_URL) {
                     sh """
                         curl -X POST -H 'Content-type: application/json' \
@@ -237,9 +211,8 @@ pipeline {
                     echo "SLACK_WEBHOOK_URL not set, skipping notification"
                 }
                 
-                // Attempt rollback if rollback.sh exists
                 if (fileExists('scripts/rollback.sh')) {
-                    sh './scripts/rollback.sh || echo "Rollback failed"'
+                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo 'Rollback failed'"
                 } else {
                     echo "Rollback script not found, skipping rollback"
                 }
