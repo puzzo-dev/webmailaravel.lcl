@@ -143,7 +143,16 @@ pipeline {
         
         stage('🔍 Debug Scripts') {
             steps {
-                sh 'ls -l scripts/'
+                sh '''
+                    echo "Listing scripts directory:"
+                    ls -l scripts/
+                    echo "Checking rollback.sh existence:"
+                    if [ -f scripts/rollback.sh ]; then
+                        echo "rollback.sh exists"
+                    else
+                        echo "rollback.sh does not exist"
+                    fi
+                '''
             }
         }
         
@@ -217,11 +226,16 @@ pipeline {
                     echo "SLACK_WEBHOOK_URL not set, skipping notification"
                 }
                 
-                if (fileExists('scripts/rollback.sh')) {
-                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo 'Rollback failed'"
-                } else {
-                    echo "Rollback script not found, skipping rollback"
-                }
+                sh '''
+                    echo "Checking rollback.sh in post block:"
+                    ls -l scripts/ || echo "scripts/ directory not found"
+                    if [ -f scripts/rollback.sh ]; then
+                        echo "Executing rollback.sh"
+                        RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo "Rollback failed"
+                    else
+                        echo "Rollback script not found in post block"
+                    fi
+                '''
             }
         }
         
