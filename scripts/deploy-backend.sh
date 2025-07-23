@@ -31,11 +31,11 @@ fi
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
 SCP="sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no"
 
-# Verify SQLite extension
+# Verify SQLite extension for PHP 8.3
 echo "🔍 Checking SQLite extension..."
 ${SSH} bash -s << EOF
-if ! php -m | grep -q pdo_sqlite; then
-    echo "ERROR: php8.2-sqlite3 extension not installed"
+if ! php8.3 -m | grep -q pdo_sqlite; then
+    echo "ERROR: php8.3-sqlite3 extension not installed"
     exit 1
 fi
 EOF
@@ -57,6 +57,9 @@ if [ -d "${BACKEND_PATH}" ]; then
     mkdir -p ${BACKUP_PATH}
     DB_BACKUP="${BACKUP_PATH}/db_backup_\$(date +%Y%m%d_%H%M%S).sqlite"
     [ -f "${DB_PATH}" ] && cp ${DB_PATH} \${DB_BACKUP} || echo "WARNING: Database backup failed"
+    if [ -d "${BACKEND_PATH}_old" ]; then
+        rm -rf ${BACKEND_PATH}_old
+    fi
     mv ${BACKEND_PATH} ${BACKEND_PATH}_old || true
 fi
 
@@ -87,15 +90,15 @@ fi
 # Restart services
 echo "🔄 Restarting services..."
 cd ${BACKEND_PATH}
-php artisan down || true
-php artisan migrate --force || { echo "Migration failed"; exit 1; }
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan queue:restart
-php artisan up
+php8.3 artisan down || true
+php8.3 artisan migrate --force || { echo "Migration failed"; exit 1; }
+php8.3 artisan config:cache
+php8.3 artisan route:cache
+php8.3 artisan view:cache
+php8.3 artisan queue:restart
+php8.3 artisan up
 sudo systemctl reload apache2 || echo "Web server reload failed"
-sudo systemctl restart php8.2-fpm || echo "PHP-FPM restart failed"
+sudo systemctl restart php8.3-fpm || echo "PHP-FPM restart failed"
 
 echo "✅ Backend deployment completed!"
 EOF
