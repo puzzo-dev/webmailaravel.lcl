@@ -3,17 +3,40 @@ set -e
 
 echo "🔧 Starting backend deployment..."
 
+# Configuration variables
+APP_NAME="campaignprox.msz-pl.com"
+APP_USER="campaignprox"
+PROD_SERVER="${PROD_SERVER}"
+PROD_USER="${PROD_USER}"
+PROD_PASSWORD="${PROD_PASSWORD}"
+BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com"
+BACKUP_PATH="/home/campaignprox/backups"
+RELEASE_NAME="${RELEASE_NAME}"
+BUILD_TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+DB_PATH="/home/campaignprox/domains/api.msz-pl.com/database/database.sqlite"
+
 # Install sshpass if not available
 if ! which sshpass > /dev/null; then
     echo "Installing sshpass..."
     sudo apt-get update && sudo apt-get install -y sshpass
 fi
 
+# Check if required environment variables are set
+if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ] || [ -z "${RELEASE_NAME}" ]; then
+    echo "ERROR: Missing required environment variables: PROD_SERVER, PROD_USER, PROD_PASSWORD, RELEASE_NAME"
+    exit 1
+fi
+
 # Upload backend package
 echo "📤 Uploading backend package..."
-sshpass -p "${PROD_PASSWORD}" scp -o StrictHostKeyChecking=no \
-    deployment/${RELEASE_NAME}_backend.tar.gz \
-    ${PROD_USER}@${PROD_SERVER}:/tmp/
+if [ -f "deployment/${RELEASE_NAME}_backend.tar.gz" ]; then
+    sshpass -p "${PROD_PASSWORD}" scp -o StrictHostKeyChecking=no \
+        deployment/${RELEASE_NAME}_backend.tar.gz \
+        ${PROD_USER}@${PROD_SERVER}:/tmp/
+else
+    echo "ERROR: Backend package deployment/${RELEASE_NAME}_backend.tar.gz not found"
+    exit 1
+fi
 
 # Deploy backend via SSH
 echo "🚀 Deploying backend..."
@@ -24,14 +47,11 @@ set -e
 echo "🔄 Starting backend deployment on server..."
 
 # Create backup of current installation
-# BACKEND_PATH="/home/campaignprox/public_html/api"
-# BACKUP_PATH="/home/campaignprox/backups"
-# DB_PATH="/home/campaignprox/public_html/api/database/database.sqlite"
 if [ -d "${BACKEND_PATH}" ]; then
     echo "📋 Creating backup..."
     sudo mkdir -p ${BACKUP_PATH}
     sudo tar -czf ${BACKUP_PATH}/backend_backup_${BUILD_TIMESTAMP}.tar.gz -C ${BACKEND_PATH} . || echo "Backup failed, continuing..."
-    [ -f "${DB_PATH}" ] && sudo cp ${DB_PATH} ${BACKUP_PATH}/db_backup_${BUILD_TIMESTAMP}.sqlite || echo "SQLite3 database not found, skipping backup..."
+    [ -f "${DB_PATH}" ] && sudo cp ${DB_PATH} ${BACKUP_PATH}/db_backup_${BUILD_TIMESTAMP}.sqlite || echo "SQLite database not found, skipping backup..."
 fi
 
 # Create release directory
@@ -41,14 +61,21 @@ mkdir -p $RELEASE_DIR
 # Extract new release
 echo "📦 Extracting release..."
 cd $RELEASE_DIR
-tar -xzf /tmp/${RELEASE_NAME}_backend.tar.gz
+if [ -f "/tmp/${RELEASE_NAME}_backend.tar.gz" ]; then
+    tar -xzf /tmp/${RELEASE_NAME}_backend.tar.gz
+else
+    echo "ERROR: Release package /tmp/${RELEASE_NAME}_backend.tar.gz not found"
+    exit 1
+fi
 
 # Prepare production environment
 cd $RELEASE_DIR/backend
 
-# Create production .env file
-cat > .env << ENVEOF
-APP_NAME="WebMail Laravel"
+# Create production .env file if it doesn't exist
+if [ ! -f ".env" ]; then
+    echo "📝 Creating production .env file..."
+    cat > .env << ENVEOF
+APP_NAME="WebMail"
 APP_ENV=production
 APP_KEY=base64:16PGCTiBJS2IasiE/L67lpkYOFkP6m4uMfnv21Nm7gg=
 APP_DEBUG=false
@@ -88,8 +115,8 @@ MAIL_PORT=25
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
 MAIL_ENCRYPTION=null
-MAIL_FROM_ADDRESS="hello@yourdomain.com"
-MAIL_FROM_NAME="WebMail Laravel"
+MAIL_FROM_ADDRESS="hello@msz-pl.com"
+MAIL_FROM_NAME="WebMail"
 
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
@@ -97,28 +124,41 @@ AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=
 AWS_USE_PATH_STYLE_ENDPOINT=false
 
-VITE_APP_NAME="WebMail Laravel"
+VITE_APP_NAME="WebMail"
 CORS_ALLOWED_ORIGINS=https://campaignprox.msz-pl.com
 SANCTUM_STATEFUL_DOMAINS=campaignprox.msz-pl.com
 
 JWT_SECRET=bC4VVwO1gmLFANCbujQoZlxI5wmsy8f7Zh5XHQ0Z4XPG4tUz6fiyU2aokksHBa17
-JWT_TTL=60
 JWT_ALGO=HS256
-
-# PowerMTA Configuration
-POWERMTA_CSV_PATH=/var/log/powermta
-
-# System Configuration
-SYSTEM_ADMIN_EMAIL=admin@yourdomain.com
 ENVEOF
+else
+    echo "📝 .env file already exists, skipping creation"
+fi
+
+# Ensure database directory exists
+DB_DIR=$(dirname "${DB_PATH}")
+if [ ! -d "${DB_DIR}" ]; then
+    echo "📁 Creating database directory: ${DB_DIR}"
+    sudo mkdir -p "${DB_DIR}"
+    sudo chown ${APP_USER}:${APP_USER} "${DB_DIR}"
+    sudo chmod 775 "${DB_DIR}"
+fi
+
+# Create SQLite database file if it doesn't exist
+if [ ! -f "${DB_PATH}" ]; then
+    echo "📁 Creating SQLite database file: ${DB_PATH}"
+    sudo touch "${DB_PATH}"
+    sudo chown ${APP_USER}:${APP_USER} "${DB_PATH}"
+    sudo chmod 664 "${DB_PATH}"
+fi
 
 # Install production dependencies
 echo "📦 Installing dependencies..."
 composer install --no-dev --optimize-autoloader --no-interaction
 
-# Generate application key if needed
-echo "🔑 Generating application key..."
-if [ -z "$(grep '^APP_KEY=base64:' .env)" ]; then
+# Generate application key if .env has no APP_KEY
+if ! grep -q "^APP_KEY=.\+" .env; then
+    echo "🔑 Generating application key..."
     php artisan key:generate --force
 fi
 
@@ -134,7 +174,11 @@ php artisan migrate --force
 
 # Create symbolic links
 echo "🔗 Creating symbolic links..."
-php artisan storage:link
+if [ ! -L "${BACKEND_PATH}/storage/app/public" ]; then
+    php artisan storage:link
+else
+    echo "🔗 Storage link already exists"
+fi
 
 # Clear any existing caches
 php artisan cache:clear
@@ -142,11 +186,10 @@ php artisan config:clear
 
 # Set proper permissions
 echo "🔒 Setting permissions..."
-sudo chown -R campaignprox:campaignprox .
+sudo chown -R ${APP_USER}:${APP_USER} .
 sudo chmod -R 755 .
 sudo chmod -R 775 storage bootstrap/cache
-[ -f "${DB_PATH}" ] || sudo touch ${DB_PATH}
-sudo chmod 664 ${DB_PATH}
+[ -f "${DB_PATH}" ] && sudo chmod 664 "${DB_PATH}"
 
 # Atomic deployment - switch to new version
 echo "🔄 Switching to new version..."

@@ -1,10 +1,10 @@
 pipeline {
-    agent any
+    agent { label 'docker-agent-php' }
     
     environment {
         // Production server details
         PROD_SERVER = credentials('prod-server-host')
-        PROD_USER = credentials('prod-ssh-user') // Set to 'yourdomain'
+        PROD_USER = credentials('prod-ssh-user') // Set to 'campaignprox'
         PROD_PASSWORD = credentials('prod-ssh-password')
         
         // Application details
@@ -12,12 +12,6 @@ pipeline {
         BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com'
         FRONTEND_PATH = '/home/campaignprox/public_html'
         BACKUP_PATH = '/home/campaignprox/backups'
-        
-        // Database details
-        DB_HOST = credentials('prod-db-host')
-        DB_NAME = credentials('prod-db-name') // Set to 'yourdomain_webmailaravel_prod'
-        DB_USER = credentials('prod-db-user') // Set to 'yourdomain_webmail_user'
-        DB_PASSWORD = credentials('prod-db-password')
         
         // Build info
         BUILD_TIMESTAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M%S').trim()
@@ -68,6 +62,8 @@ pipeline {
                         sh '''
                             composer install --no-dev --optimize-autoloader --no-interaction
                             cp .env.example .env.testing
+                            sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env.testing
+                            sed -i 's/DB_DATABASE=.*/DB_DATABASE=:memory:/' .env.testing
                         '''
                         
                         echo "🧪 Running backend tests..."
