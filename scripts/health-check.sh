@@ -43,7 +43,7 @@ echo "📋 Checking Laravel configuration..."
 php artisan config:show app.name > /dev/null 2>&1
 check_status "Laravel configuration is accessible"
 
-# Check if web server is serving files
+# Check if frontend files are accessible
 echo "📋 Checking frontend files..."
 if [ -f "${FRONTEND_PATH}/index.html" ]; then
     check_status "Frontend files are accessible"
@@ -52,9 +52,22 @@ else
     HEALTH_STATUS=1
 fi
 
+# Check API endpoint
+echo "📋 Checking API endpoint..."
+if command -v curl > /dev/null 2>&1; then
+    if curl -s -o /dev/null -w "%{http_code}" http://api.yourdomain.com | grep -q "200\|301\|302"; then
+        check_status "API endpoint is responding"
+    else
+        echo "❌ API endpoint is not responding"
+        HEALTH_STATUS=1
+    fi
+else
+    echo "⚠️ curl not available, skipping API test"
+fi
+
 # Check key services
 echo "📋 Checking web server..."
-if sudo systemctl is-active apache2 >/dev/null 2>&1 || sudo systemctl is-active nginx >/dev/null 2>&1; then
+if sudo systemctl is-active apache2 >/dev/null 2>&1; then
     check_status "Web server is running"
 else
     echo "❌ Web server is not running"
@@ -63,7 +76,7 @@ fi
 
 # Check PHP-FPM
 echo "📋 Checking PHP-FPM..."
-if sudo systemctl is-active php8.2-fpm >/dev/null 2>&1 || sudo systemctl is-active php-fpm >/dev/null 2>&1; then
+if sudo systemctl is-active php8.2-fpm >/dev/null 2>&1; then
     check_status "PHP-FPM is running"
 else
     echo "❌ PHP-FPM is not running"
@@ -77,18 +90,6 @@ if [ -w "${BACKEND_PATH}/storage/logs" ]; then
 else
     echo "❌ Storage directory is not writable"
     HEALTH_STATUS=1
-fi
-
-# Test basic HTTP response (if domain is configured)
-echo "📋 Testing HTTP response..."
-if command -v curl > /dev/null 2>&1; then
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost | grep -q "200\|301\|302"; then
-        check_status "HTTP server is responding"
-    else
-        echo "⚠️ HTTP response test inconclusive"
-    fi
-else
-    echo "⚠️ curl not available, skipping HTTP test"
 fi
 
 # Check disk space

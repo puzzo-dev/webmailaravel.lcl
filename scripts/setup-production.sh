@@ -1,177 +1,160 @@
 #!/bin/bash
 
-# WebMail Laravel Production Setup Script
-# Developed by I-Varse Technologies (https://ivarsetech.com)
+# Minimal WebMail Laravel Helper Setup for Virtualmin VPS
+# Checks for existing directories, permissions, packages, log rotation, scripts, and cron job
+# Configures for SQLite3 instead of MySQL
+# Assumes Virtualmin has configured Apache and virtual hosts
 
 set -e
 
-echo "🚀 WebMail Laravel Production Setup"
-echo "Developed by I-Varse Technologies"
+echo "🚀 WebMail Laravel Helper Setup (SQLite3)"
 echo "======================================"
 
 # Configuration variables
-APP_NAME="webmailaravel"
-APP_USER="webmailaravel"
-APP_PATH="/home/${APP_USER}/public_html"
-BACKUP_PATH="/home/${APP_USER}/backups"
-DB_NAME="${APP_NAME}_prod"
-DB_USER="${APP_NAME}_user"
+APP_NAME="CampaignProX"
+APP_USER="campaignprox"
+APP_PATH="/home/campaignprox/public_html"
+API_PATH="/home/campaignprox/domains/api.msz-pl.com"
+BACKUP_PATH="/home/campaignprox/backups"
+LOG_PATH="/home/campaignprox/logs"
+DB_PATH="${API_PATH}/database/database.sqlite"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
-print_status() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+print_status() { echo -e "${GREEN}[INFO]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-print_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
-
-# Check if running as root
+# Check root
 if [ "$EUID" -ne 0 ]; then
-    print_error "Please run this script as root (use sudo)"
+    print_error "Please run as root (use sudo)"
     exit 1
 fi
 
-print_step "1. Updating system packages..."
-apt update && apt upgrade -y
-
-print_step "2. Installing required packages..."
-apt install -y \
-    apache2 \
-    mysql-server \
-    php8.2 \
-    php8.2-fpm \
-    php8.2-mysql \
-    php8.2-xml \
-    php8.2-gd \
-    php8.2-curl \
-    php8.2-mbstring \
-    php8.2-zip \
-    php8.2-bcmath \
-    composer \
-    curl \
-    git \
-    unzip \
-    sshpass
-
-print_step "3. Installing Node.js and npm..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-apt-get install -y nodejs
-
-print_step "4. Configuring Apache..."
-a2enmod rewrite
-a2enmod ssl
-a2enmod headers
-
-# Create Apache virtual host
-cat > /etc/apache2/sites-available/${APP_NAME}.conf << EOF
-<VirtualHost *:80>
-    ServerName ${APP_NAME}.local
-    DocumentRoot ${APP_PATH}/public
-    
-    <Directory ${APP_PATH}/public>
-        AllowOverride All
-        Require all granted
-        
-        RewriteEngine On
-        RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteCond %{REQUEST_FILENAME} !-d
-        RewriteRule ^(.*)$ index.php [QSA,L]
-    </Directory>
-    
-    ErrorLog \${APACHE_LOG_DIR}/${APP_NAME}_error.log
-    CustomLog \${APACHE_LOG_DIR}/${APP_NAME}_access.log combined
-</VirtualHost>
-EOF
-
-a2ensite ${APP_NAME}.conf
-a2dissite 000-default.conf
-systemctl restart apache2
-
-print_step "5. Setting up application directories..."
-mkdir -p ${APP_PATH}
-mkdir -p ${BACKUP_PATH}
-mkdir -p /tmp/releases
-
-# Create application user if not exists
+# Verify user
+print_step "1. Verifying Virtualmin user..."
 if ! id "${APP_USER}" &>/dev/null; then
-    useradd -m -s /bin/bash ${APP_USER}
-    print_status "Created user: ${APP_USER}"
+    print_error "Virtualmin user ${APP_USER} does not exist."
+    exit 1
 fi
 
-chown -R www-data:www-data /home/${APP_USER}/
-chmod -R 755 /home/${APP_USER}/
+# Create and configure directories if they don't exist
+print_step "2. Checking and configuring directories..."
+for dir in "${APP_PATH}" "${API_PATH}" "${BACKUP_PATH}" "${LOG_PATH}" "/tmp/releases"; do
+    if [ ! -d "${dir}" ]; then
+        print_status "Creating directory: ${dir}"
+        mkdir -p "${dir}"
+    else
+        print_status "Directory exists: ${dir}"
+    fi
+done
 
-print_step "6. Configuring MySQL..."
-mysql_secure_installation
+# Create database directory if it doesn't exist
+DB_DIR=$(dirname "${DB_PATH}")
+if [ ! -d "${DB_DIR}" ]; then
+    print_status "Creating database directory: ${DB_DIR}"
+    mkdir -p "${DB_DIR}"
+fi
 
-print_warning "Please run the following MySQL commands manually:"
-echo "mysql -u root -p"
-echo "CREATE DATABASE ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-echo "CREATE USER '${DB_USER}'@'localhost' IDENTIFIED BY 'secure_password';"
-echo "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
-echo "FLUSH PRIVILEGES;"
-echo "EXIT;"
+# Set ownership and permissions
+print_status "Setting ownership to ${APP_USER}:${APP_USER}"
+chown -R campaignprox:campaignprox /home/campaignprox/
 
-print_step "7. Configuring PHP..."
-# Configure PHP settings for production
-sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.2/fpm/php.ini
-sed -i 's/upload_max_filesize = .*/upload_max_filesize = 10M/' /etc/php/8.2/fpm/php.ini
-sed -i 's/post_max_size = .*/post_max_size = 10M/' /etc/php/8.2/fpm/php.ini
-sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/fpm/php.ini
+# Check and set permissions
+if [ "$(stat -c %a "${APP_PATH}")" != "755" ]; then
+    print_status "Setting permissions 755 for ${APP_PATH}"
+    chmod -R 755 "${APP_PATH}"
+else
+    print_status "Permissions correct for ${APP_PATH}"
+fi
+if [ "$(stat -c %a "${BACKUP_PATH}")" != "755" ]; then
+    print_status "Setting permissions 755 for ${BACKUP_PATH}"
+    chmod -R 755 "${BACKUP_PATH}"
+else
+    print_status "Permissions correct for ${BACKUP_PATH}"
+fi
+if [ "$(stat -c %a "${LOG_PATH}")" != "755" ]; then
+    print_status "Setting permissions 755 for ${LOG_PATH}"
+    chmod -R 755 "${LOG_PATH}"
+else
+    print_status "Permissions correct for ${LOG_PATH}"
+fi
+if [ "$(stat -c %a "${API_PATH}")" != "775" ]; then
+    print_status "Setting permissions 775 for ${API_PATH}"
+    chmod -R 775 "${API_PATH}"
+else
+    print_status "Permissions correct for ${API_PATH}"
+fi
+if [ -f "${DB_PATH}" ] && [ "$(stat -c %a "${DB_PATH}")" != "664" ]; then
+    print_status "Setting permissions 664 for ${DB_PATH}"
+    chmod 664 "${DB_PATH}"
+elif [ -f "${DB_PATH}" ]; then
+    print_status "Permissions correct for ${DB_PATH}"
+fi
 
-systemctl restart php8.2-fpm
+# Install SQLite3 and PHP SQLite3 extension
+print_step "3. Checking and installing SQLite3 and PHP SQLite3..."
+if ! command -v sqlite3 &>/dev/null; then
+    print_status "Installing sqlite3..."
+    apt install -y sqlite3
+else
+    print_status "sqlite3 already installed"
+fi
+if ! dpkg -l | grep -q php8.2-sqlite3; then
+    print_status "Installing php8.2-sqlite3..."
+    apt install -y php8.2-sqlite3
+else
+    print_status "php8.2-sqlite3 already installed"
+fi
 
-print_step "8. Setting up SSL (Let's Encrypt)..."
-apt install -y certbot python3-certbot-apache
-
-print_warning "To enable SSL, run after setting up your domain:"
-echo "certbot --apache -d yourdomain.com"
-
-print_step "9. Configuring firewall..."
-ufw allow 22
-ufw allow 80
-ufw allow 443
-ufw --force enable
-
-print_step "10. Setting up log rotation..."
-cat > /etc/logrotate.d/${APP_NAME} << EOF
-${APP_PATH}/storage/logs/*.log {
+# Log rotation
+print_step "4. Setting up log rotation..."
+if [ ! -f "/etc/logrotate.d/${APP_NAME}" ]; then
+    print_status "Creating log rotation config..."
+    cat > /etc/logrotate.d/${APP_NAME} << EOF
+${API_PATH}/storage/logs/*.log {
     daily
     missingok
     rotate 52
     compress
     delaycompress
     notifempty
-    create 644 www-data www-data
+    create 644 campaignprox campaignprox
     postrotate
         systemctl reload php8.2-fpm
     endscript
 }
+${LOG_PATH}/*.log {
+    daily
+    missingok
+    rotate 52
+    compress
+    delaycompress
+    notifempty
+    create 644 campaignprox campaignprox
+    postrotate
+        systemctl reload apache2
+    endscript
+}
 EOF
+    print_status "Log rotation config created"
+else
+    print_status "Log rotation config already exists"
+fi
 
-print_step "11. Creating deployment helper scripts..."
-mkdir -p /usr/local/bin
-
-cat > /usr/local/bin/${APP_NAME}-deploy << 'EOF'
+# Deployment helper
+print_step "5. Creating deployment helper..."
+if [ ! -f "/usr/local/bin/${APP_NAME}-deploy" ]; then
+    print_status "Creating deployment helper script..."
+    cat > /usr/local/bin/${APP_NAME}-deploy << 'EOF'
 #!/bin/bash
-# WebMail Laravel Deployment Helper
-cd /home/webmailaravel/public_html
+cd /home/campaignprox/public_html/api
 php artisan down
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
@@ -183,56 +166,66 @@ php artisan up
 systemctl restart php8.2-fpm
 echo "Deployment completed!"
 EOF
+    chmod +x /usr/local/bin/${APP_NAME}-deploy
+    print_status "Deployment helper created"
+else
+    print_status "Deployment helper already exists"
+fi
 
-chmod +x /usr/local/bin/${APP_NAME}-deploy
-
-print_step "12. Setting up monitoring..."
-apt install -y htop iotop
-
-# Create simple monitoring script
-cat > /usr/local/bin/${APP_NAME}-monitor << 'EOF'
+# Monitoring script
+print_step "6. Setting up monitoring..."
+if ! command -v htop &>/dev/null || ! command -v iotop &>/dev/null; then
+    print_status "Installing htop and iotop..."
+    apt install -y htop iotop
+else
+    print_status "htop and iotop already installed"
+fi
+if [ ! -f "/usr/local/bin/${APP_NAME}-monitor" ]; then
+    print_status "Creating monitoring script..."
+    cat > /usr/local/bin/${APP_NAME}-monitor << 'EOF'
 #!/bin/bash
 echo "=== WebMail Laravel System Status ==="
 echo "Date: $(date)"
-echo ""
 echo "=== System Load ==="
 uptime
-echo ""
 echo "=== Disk Usage ==="
-df -h /home/webmailaravel/
-echo ""
+df -h /home/campaignprox/
 echo "=== Memory Usage ==="
 free -h
-echo ""
 echo "=== PHP-FPM Status ==="
 systemctl is-active php8.2-fpm
-echo ""
 echo "=== Apache Status ==="
 systemctl is-active apache2
-echo ""
-echo "=== MySQL Status ==="
-systemctl is-active mysql
-echo ""
+echo "=== SQLite3 Database ==="
+if [ -f "/home/campaignprox/domains/api.msz-pl.com/database/database.sqlite" ]; then
+    echo "✅ SQLite3 database exists"
+else
+    echo "⚠️ SQLite3 database not found"
+fi
 echo "=== Application Status ==="
-if [ -f "/home/webmailaravel/public_html/artisan" ]; then
-    cd /home/webmailaravel/public_html
+if [ -f "/home/campaignprox/domains/api.msz-pl.com/artisan" ]; then
+    cd "/home/campaignprox/domains/api.msz-pl.com
     php artisan --version 2>/dev/null && echo "✅ Laravel is responding" || echo "❌ Laravel is not responding"
 else
     echo "⚠️ Application not deployed yet"
 fi
 EOF
+    chmod +x /usr/local/bin/${APP_NAME}-monitor
+    print_status "Monitoring script created"
+else
+    print_status "Monitoring script already exists"
+fi
 
-chmod +x /usr/local/bin/${APP_NAME}-monitor
-
-print_step "13. Setting up automated backups..."
-cat > /usr/local/bin/${APP_NAME}-backup << EOF
+# Backup script
+print_step "7. Setting up automated backups..."
+if [ ! -f "/usr/local/bin/${APP_NAME}-backup" ]; then
+    print_status "Creating backup script..."
+    cat > /usr/local/bin/${APP_NAME}-backup << EOF
 #!/bin/bash
 TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="${BACKUP_PATH}/backup_\${TIMESTAMP}.tar.gz"
-
+DB_BACKUP="${BACKUP_PATH}/db_backup_\${TIMESTAMP}.sqlite"
 echo "Creating backup: \$BACKUP_FILE"
-
-# Backup application files
 if [ -d "${APP_PATH}" ]; then
     tar -czf \$BACKUP_FILE -C ${APP_PATH} .
     echo "✅ Application backup created"
@@ -240,55 +233,42 @@ else
     echo "❌ Application directory not found"
     exit 1
 fi
-
-# Backup database
-mysqldump ${DB_NAME} > ${BACKUP_PATH}/db_backup_\${TIMESTAMP}.sql
-gzip ${BACKUP_PATH}/db_backup_\${TIMESTAMP}.sql
-echo "✅ Database backup created"
-
-# Keep only last 10 backups
+if [ -f "${DB_PATH}" ]; then
+    cp ${DB_PATH} \$DB_BACKUP
+    gzip \$DB_BACKUP
+    echo "✅ SQLite3 database backup created"
+else
+    echo "⚠️ SQLite3 database not found, skipping database backup"
+fi
 cd ${BACKUP_PATH}
 ls -t backup_*.tar.gz | tail -n +11 | xargs -r rm
-ls -t db_backup_*.sql.gz | tail -n +11 | xargs -r rm
-
+ls -t db_backup_*.sqlite.gz | tail -n +11 | xargs -r rm
 echo "✅ Backup completed: \$BACKUP_FILE"
 EOF
+    chmod +x /usr/local/bin/${APP_NAME}-backup
+    print_status "Backup script created"
+else
+    print_status "Backup script already exists"
+fi
 
-chmod +x /usr/local/bin/${APP_NAME}-backup
+# Check and add cron job
+print_step "8. Setting up backup cron job..."
+if ! crontab -l 2>/dev/null | grep -q "/usr/local/bin/${APP_NAME}-backup"; then
+    print_status "Adding daily backup cron job..."
+    crontab -l 2>/dev/null | { cat; echo "0 2 * * * /usr/local/bin/${APP_NAME}-backup"; } | crontab -
+    print_status "Cron job added"
+else
+    print_status "Backup cron job already exists"
+fi
 
-# Add to crontab for daily backups
-crontab -l 2>/dev/null | { cat; echo "0 2 * * * /usr/local/bin/${APP_NAME}-backup"; } | crontab -
-
-print_step "14. Final system configuration..."
-systemctl enable apache2
-systemctl enable mysql
-systemctl enable php8.2-fpm
-
-print_status "🎉 Production server setup completed!"
-echo ""
-print_status "Next steps:"
-echo "1. Configure your domain DNS to point to this server"
-echo "2. Set up SSL certificate with: certbot --apache -d yourdomain.com"
-echo "3. Configure the database with the MySQL commands shown above"
-echo "4. Set up Jenkins with the credentials for this server"
-echo "5. Run your first deployment!"
-echo ""
-print_status "Useful commands:"
-echo "• Monitor system: ${APP_NAME}-monitor"
-echo "• Create backup: ${APP_NAME}-backup"
-echo "• Deploy application: ${APP_NAME}-deploy"
-echo ""
-print_status "Important paths:"
-echo "• Application: ${APP_PATH}"
+print_status "🎉 Helper setup completed!"
+print_status "Commands:"
+echo "• Monitor: ${APP_NAME}-monitor"
+echo "• Backup: ${APP_NAME}-backup"
+echo "• Deploy: ${APP_NAME}-deploy"
+print_status "Paths:"
+echo "• App: ${APP_PATH}"
+echo "• API: ${API_PATH}"
 echo "• Backups: ${BACKUP_PATH}"
-echo "• Logs: ${APP_PATH}/storage/logs/"
-echo "• Apache config: /etc/apache2/sites-available/${APP_NAME}.conf"
-echo ""
-print_warning "Remember to:"
-echo "• Change default passwords"
-echo "• Configure firewall rules"
-echo "• Set up monitoring alerts"
-echo "• Test backup restoration"
-echo ""
-echo "🏢 Developed by I-Varse Technologies"
-echo "🌐 https://ivarsetech.com"
+echo "• Logs: ${LOG_PATH}"
+echo "• SQLite3 DB: ${DB_PATH}"

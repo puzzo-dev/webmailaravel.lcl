@@ -48,7 +48,7 @@ APP_NAME="WebMail Laravel"
 APP_ENV=production
 APP_KEY=
 APP_DEBUG=false
-APP_URL=https://yourdomain.com
+APP_URL=https://api.yourdomain.com
 
 LOG_CHANNEL=stack
 LOG_DEPRECATIONS_CHANNEL=null
@@ -80,7 +80,7 @@ MAIL_PORT=1025
 MAIL_USERNAME=null
 MAIL_PASSWORD=null
 MAIL_ENCRYPTION=null
-MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_ADDRESS="hello@yourdomain.com"
 MAIL_FROM_NAME="${APP_NAME}"
 
 AWS_ACCESS_KEY_ID=
@@ -142,7 +142,7 @@ php artisan config:clear
 
 # Set proper permissions
 echo "🔒 Setting permissions..."
-sudo chown -R www-data:www-data .
+sudo chown -R yourdomain:yourdomain .
 sudo chmod -R 755 .
 sudo chmod -R 775 storage bootstrap/cache
 
@@ -158,8 +158,8 @@ echo "✅ Backend deployment completed!"
 
 # Restart services
 echo "🔄 Restarting services..."
-sudo systemctl reload apache2 || sudo systemctl reload nginx || echo "Web server reload failed"
-sudo systemctl restart php8.2-fpm || sudo systemctl restart php-fpm || echo "PHP-FPM restart failed"
+sudo systemctl reload apache2 || echo "Web server reload failed"
+sudo systemctl restart php8.2-fpm || echo "PHP-FPM restart failed"
 
 # Run Laravel optimization commands
 cd ${BACKEND_PATH}

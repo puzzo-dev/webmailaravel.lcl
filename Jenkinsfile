@@ -4,19 +4,19 @@ pipeline {
     environment {
         // Production server details
         PROD_SERVER = credentials('prod-server-host')
-        PROD_USER = credentials('prod-ssh-user')
+        PROD_USER = credentials('prod-ssh-user') // Set to 'yourdomain'
         PROD_PASSWORD = credentials('prod-ssh-password')
         
         // Application details
-        APP_NAME = 'webmailaravel'
-        BACKEND_PATH = '/home/webmailaravel/public_html'
-        FRONTEND_PATH = '/home/webmailaravel/public_html/public'
-        BACKUP_PATH = '/home/webmailaravel/backups'
+        APP_NAME = 'yourdomain'
+        BACKEND_PATH = '/home/yourdomain/public_html/api'
+        FRONTEND_PATH = '/home/yourdomain/public_html'
+        BACKUP_PATH = '/home/yourdomain/backups'
         
         // Database details
         DB_HOST = credentials('prod-db-host')
-        DB_NAME = credentials('prod-db-name')
-        DB_USER = credentials('prod-db-user')
+        DB_NAME = credentials('prod-db-name') // Set to 'yourdomain_webmailaravel_prod'
+        DB_USER = credentials('prod-db-user') // Set to 'yourdomain_webmail_user'
         DB_PASSWORD = credentials('prod-db-password')
         
         // Build info
@@ -74,7 +74,6 @@ pipeline {
                         sh '''
                             php artisan key:generate --env=testing
                             php artisan config:cache --env=testing
-                            # Run basic checks instead of full test suite for faster deployment
                             php artisan config:clear
                             php artisan route:list > /dev/null
                         '''

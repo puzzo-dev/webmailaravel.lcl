@@ -46,6 +46,8 @@ cat > $RELEASE_DIR/frontend/.htaccess << 'HTACCESS'
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
+    # Skip API routes
+    RewriteCond %{REQUEST_URI} !^/api
     # Handle client-side routing
     RewriteBase /
     RewriteRule ^index\.html$ - [L]
@@ -104,7 +106,7 @@ sudo mv $RELEASE_DIR/frontend ${FRONTEND_PATH}
 
 # Set proper permissions
 echo "🔒 Setting frontend permissions..."
-sudo chown -R www-data:www-data ${FRONTEND_PATH}
+sudo chown -R yourdomain:yourdomain ${FRONTEND_PATH}
 sudo chmod -R 755 ${FRONTEND_PATH}
 
 # Verify deployment
