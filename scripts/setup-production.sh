@@ -14,7 +14,7 @@ echo "======================================"
 APP_NAME="CampaignProX"
 APP_USER="campaignprox"
 APP_PATH="/home/campaignprox/public_html"
-API_PATH="/home/campaignprox/domains/api.msz-pl.com"
+API_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 BACKUP_PATH="/home/campaignprox/backups"
 LOG_PATH="/home/campaignprox/logs"
 DB_PATH="${API_PATH}/database/database.sqlite"
@@ -154,7 +154,7 @@ if [ ! -f "/usr/local/bin/${APP_NAME}-deploy" ]; then
     print_status "Creating deployment helper script..."
     cat > /usr/local/bin/${APP_NAME}-deploy << 'EOF'
 #!/bin/bash
-cd /home/campaignprox/public_html/api
+cd /home/campaignprox/domains/api.msz-pl.com/public_html
 php artisan down
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
@@ -197,14 +197,14 @@ systemctl is-active php8.2-fpm
 echo "=== Apache Status ==="
 systemctl is-active apache2
 echo "=== SQLite3 Database ==="
-if [ -f "/home/campaignprox/domains/api.msz-pl.com/database/database.sqlite" ]; then
+if [ -f "/home/campaignprox/domains/api.msz-pl.com/public_html/database/database.sqlite" ]; then
     echo "✅ SQLite3 database exists"
 else
     echo "⚠️ SQLite3 database not found"
 fi
 echo "=== Application Status ==="
-if [ -f "/home/campaignprox/domains/api.msz-pl.com/artisan" ]; then
-    cd "/home/campaignprox/domains/api.msz-pl.com
+if [ -f "/home/campaignprox/domains/api.msz-pl.com/public_html/artisan" ]; then
+    cd "/home/campaignprox/domains/api.msz-pl.com/public_html
     php artisan --version 2>/dev/null && echo "✅ Laravel is responding" || echo "❌ Laravel is not responding"
 else
     echo "⚠️ Application not deployed yet"

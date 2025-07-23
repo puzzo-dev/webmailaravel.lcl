@@ -9,10 +9,10 @@ APP_USER="campaignprox"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
-BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com"
+BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
 BACKUP_PATH="/home/campaignprox/backups"
-DB_PATH="/home/campaignprox/domains/api.msz-pl.com/database/database.sqlite"
+DB_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/database/database.sqlite"
 
 # Check if required environment variables are set
 if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]; then

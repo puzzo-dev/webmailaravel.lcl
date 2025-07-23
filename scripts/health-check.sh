@@ -8,7 +8,7 @@ APP_NAME="campaignprox.msz-pl.com"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
-BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com"
+BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
 
 # Check if required environment variables are set
