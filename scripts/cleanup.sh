@@ -71,8 +71,8 @@ find storage/framework/cache -type f -mtime +7 -delete 2>/dev/null || echo "Cach
 
 # Update file permissions
 echo "📋 Updating file permissions..."
-sudo chown -R yourdomain:yourdomain ${BACKEND_PATH}
-sudo chown -R yourdomain:yourdomain ${FRONTEND_PATH}
+sudo chown -R campaignprox:campaignprox ${BACKEND_PATH}
+sudo chown -R campaignprox:campaignprox ${FRONTEND_PATH}
 sudo chmod -R 755 ${BACKEND_PATH}
 sudo chmod -R 755 ${FRONTEND_PATH}
 sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache

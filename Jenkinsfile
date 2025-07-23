@@ -8,10 +8,10 @@ pipeline {
         PROD_PASSWORD = credentials('prod-ssh-password')
         
         // Application details
-        APP_NAME = 'yourdomain'
-        BACKEND_PATH = '/home/yourdomain/public_html/api'
-        FRONTEND_PATH = '/home/yourdomain/public_html'
-        BACKUP_PATH = '/home/yourdomain/backups'
+        APP_NAME = 'campaignprox.msz-pl.com'
+        BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com'
+        FRONTEND_PATH = '/home/campaignprox/public_html'
+        BACKUP_PATH = '/home/campaignprox/backups'
         
         // Database details
         DB_HOST = credentials('prod-db-host')

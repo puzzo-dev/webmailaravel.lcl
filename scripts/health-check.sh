@@ -55,7 +55,7 @@ fi
 # Check API endpoint
 echo "📋 Checking API endpoint..."
 if command -v curl > /dev/null 2>&1; then
-    if curl -s -o /dev/null -w "%{http_code}" http://api.yourdomain.com | grep -q "200\|301\|302"; then
+    if curl -s -o /dev/null -w "%{http_code}" http://api.msz-pl.com | grep -q "200\|301\|302"; then
         check_status "API endpoint is responding"
     else
         echo "❌ API endpoint is not responding"

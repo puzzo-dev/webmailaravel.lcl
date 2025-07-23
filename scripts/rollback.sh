@@ -75,7 +75,7 @@ rollback_frontend() {
         sudo mv ${FRONTEND_PATH}_old ${FRONTEND_PATH}
         
         # Set proper permissions
-        sudo chown -R yourdomain:yourdomain ${FRONTEND_PATH}
+        sudo chown -R campaignprox:campaignprox ${FRONTEND_PATH}
         sudo chmod -R 755 ${FRONTEND_PATH}
         
         # Test if frontend files exist
@@ -102,7 +102,7 @@ It appears the response was cut off while generating the `rollback.sh` script. I
 #### **6. rollback.sh (Continued)**
 The `rollback.sh` script handles rolling back failed deployments by restoring previous versions or backups. Below is the complete updated script with:
 - Updated paths (`BACKEND_PATH`, `FRONTEND_PATH`, `BACKUP_PATH`) for Virtualmin.
-- Ownership set to `yourdomain:yourdomain`.
+- Ownership set to `campaignprox:campaignprox`.
 - Retained `sshpass` for SSH access.
 
 <xaiArtifact artifact_id="edb03009-adbd-4d2c-9743-e65baad1c59d" artifact_version_id="a403c9ee-a70d-48ba-9b52-991e917b8ca7" title="rollback.sh" contentType="text/x-shellscript">
@@ -183,7 +183,7 @@ rollback_frontend() {
         sudo mv ${FRONTEND_PATH}_old ${FRONTEND_PATH}
         
         # Set proper permissions
-        sudo chown -R yourdomain:yourdomain ${FRONTEND_PATH}
+        sudo chown -R campaignprox:campaignprox ${FRONTEND_PATH}
         sudo chmod -R 755 ${FRONTEND_PATH}
         
         # Test if frontend files exist
