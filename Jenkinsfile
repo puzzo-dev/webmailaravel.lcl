@@ -212,7 +212,7 @@ pipeline {
                 }
                 
                 if (fileExists('scripts/rollback.sh')) {
-                    sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo 'Rollback failed'"
+                    sh "RELEASE_NAME=${RELEASE_NAME} scripts/rollback.sh || echo 'Rollback failed'"
                 } else {
                     echo "Rollback script not found, skipping rollback"
                 }
