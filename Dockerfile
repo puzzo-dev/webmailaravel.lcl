@@ -10,9 +10,7 @@ RUN apt-get update && \
     curl \
     gnupg \
     lsb-release && \
-    # Add Ondřej Surý's PHP repository for PHP 8.2
     add-apt-repository ppa:ondrej/php -y && \
-    # Add Node.js 22.x repository
     curl -sL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get update && \
     apt-get install -y \
@@ -32,10 +30,9 @@ RUN apt-get update && \
     openssh-server \
     rsync \
     nano \
-    jq && \
-    # Install Composer manually
+    jq \
+    unzip && \
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer && \
-    # Clean up
     apt-get -y autoremove && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \

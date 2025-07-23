@@ -31,6 +31,15 @@ fi
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
 SCP="sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no"
 
+# Verify SQLite extension
+echo "🔍 Checking SQLite extension..."
+${SSH} bash -s << EOF
+if ! php -m | grep -q pdo_sqlite; then
+    echo "ERROR: php8.2-sqlite3 extension not installed"
+    exit 1
+fi
+EOF
+
 # Upload release package
 echo "📤 Uploading backend package..."
 ${SCP} ${RELEASE_PACKAGE} ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend.tar.gz
@@ -79,7 +88,7 @@ fi
 echo "🔄 Restarting services..."
 cd ${BACKEND_PATH}
 php artisan down || true
-php artisan migrate --force
+php artisan migrate --force || { echo "Migration failed"; exit 1; }
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
