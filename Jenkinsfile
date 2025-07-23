@@ -38,6 +38,21 @@ pipeline {
                     // Checkout code
                     checkout scm
                     
+                    // Determine build user
+                    def deployer = 'Jenkins'
+                    try {
+                        wrap([$class: 'BuildUser']) {
+                            if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')) {
+                                deployer = env.BUILD_USER ?: 'Jenkins'
+                                echo "👤 Build triggered by user: ${deployer}"
+                            } else {
+                                echo "👤 Build triggered by SCM or timer, using default deployer: ${deployer}"
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Failed to get BUILD_USER: ${e.message}. Using default: ${deployer}"
+                    }
+                    
                     // Create build info file
                     writeFile file: 'build-info.json', text: """
 {
@@ -46,7 +61,7 @@ pipeline {
     "git_commit": "${GIT_COMMIT}",
     "git_branch": "${GIT_BRANCH}",
     "release_name": "${RELEASE_NAME}",
-    "deployed_by": "${BUILD_USER ?: 'Jenkins'}",
+    "deployed_by": "${deployer}",
     "deployment_date": "${BUILD_TIMESTAMP}"
 }
 """
@@ -194,12 +209,16 @@ pipeline {
             script {
                 echo "✅ Deployment completed successfully!"
                 
-                // Send success notification
-                sh '''
-                    curl -X POST -H 'Content-type: application/json' \
-                    --data "{\\"text\\":\\"✅ WebMail Laravel deployment successful!\\\\n🚀 Release: ${RELEASE_NAME}\\\\n📅 Time: ${BUILD_TIMESTAMP}\\\\n🔗 Build: ${BUILD_URL}\\"}" \
-                    "${SLACK_WEBHOOK_URL}" || echo "Notification failed"
-                '''
+                // Send success notification if SLACK_WEBHOOK_URL is set
+                if (env.SLACK_WEBHOOK_URL) {
+                    sh """
+                        curl -X POST -H 'Content-type: application/json' \
+                        --data '{\"text\":\"✅ WebMail Laravel deployment successful!\\n🚀 Release: ${RELEASE_NAME}\\n📅 Time: ${BUILD_TIMESTAMP}\\n🔗 Build: ${BUILD_URL}\"}' \
+                        \"${SLACK_WEBHOOK_URL}\" || echo 'Notification failed'
+                    """
+                } else {
+                    echo "SLACK_WEBHOOK_URL not set, skipping notification"
+                }
             }
         }
         
@@ -207,15 +226,23 @@ pipeline {
             script {
                 echo "❌ Deployment failed!"
                 
-                // Send failure notification and attempt rollback
-                sh '''
-                    curl -X POST -H 'Content-type: application/json' \
-                    --data "{\\"text\\":\\"❌ WebMail Laravel deployment FAILED!\\\\n🚨 Release: ${RELEASE_NAME}\\\\n📅 Time: ${BUILD_TIMESTAMP}\\\\n🔗 Build: ${BUILD_URL}\\"}" \
-                    "${SLACK_WEBHOOK_URL}" || echo "Notification failed"
-                '''
+                // Send failure notification if SLACK_WEBHOOK_URL is set
+                if (env.SLACK_WEBHOOK_URL) {
+                    sh """
+                        curl -X POST -H 'Content-type: application/json' \
+                        --data '{\"text\":\"❌ WebMail Laravel deployment FAILED!\\n🚨 Release: ${RELEASE_NAME}\\n📅 Time: ${BUILD_TIMESTAMP}\\n🔗 Build: ${BUILD_URL}\"}' \
+                        \"${SLACK_WEBHOOK_URL}\" || echo 'Notification failed'
+                    """
+                } else {
+                    echo "SLACK_WEBHOOK_URL not set, skipping notification"
+                }
                 
-                // Attempt automatic rollback
-                sh './scripts/rollback.sh || echo "Rollback failed"'
+                // Attempt rollback if rollback.sh exists
+                if (fileExists('scripts/rollback.sh')) {
+                    sh './scripts/rollback.sh || echo "Rollback failed"'
+                } else {
+                    echo "Rollback script not found, skipping rollback"
+                }
             }
         }
         
