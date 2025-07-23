@@ -6,9 +6,9 @@ pipeline {
         PROD_USER = credentials('prod-ssh-user')
         PROD_PASSWORD = credentials('prod-ssh-password')
         APP_NAME = 'campaignprox.msz-pl.com'
-        BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com'
+        BACKEND_PATH = '/home/campaignprox/domains/api.msz-pl.com/public_html'
         FRONTEND_PATH = '/home/campaignprox/public_html'
-        BACKUP_PATH = '/home/campaignprox/backups'
+        BACKUP_PATH = '/home/campaignprox/domains/api.msz-pl.com/backups'
         BUILD_TIMESTAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M%S').trim()
         RELEASE_NAME = "${APP_NAME}_${BUILD_TIMESTAMP}"
     }

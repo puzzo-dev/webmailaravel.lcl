@@ -15,7 +15,7 @@ APP_NAME="CampaignProX"
 APP_USER="campaignprox"
 APP_PATH="/home/campaignprox/public_html"
 API_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
-BACKUP_PATH="/home/campaignprox/backups"
+BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/backups"
 LOG_PATH="/home/campaignprox/logs"
 DB_PATH="${API_PATH}/database/database.sqlite"
 
