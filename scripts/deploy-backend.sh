@@ -81,8 +81,8 @@ sudo cp -r ${BACKEND_PATH}/public/* ${BACKEND_PATH}/
 echo "🔧 Updating index.php paths..."
 INDEX_PHP="${BACKEND_PATH}/index.php"
 if [ -f "\${INDEX_PHP}" ]; then
-    sed -i "s|require __DIR__.'/../vendor/autoload.php';|require '${BACKEND_PATH}/vendor/autoload.php';|" \${INDEX_PHP}
-    sed -i "s|\$app = require_once __DIR__.'/../bootstrap/app.php';|\$app = require_once '${BACKEND_PATH}/bootstrap/app.php';|" \${INDEX_PHP}
+    sed -i "s|require __DIR__.'/../vendor/autoload.php';|require '__DIR__.'/vendor/autoload.php';|" \${INDEX_PHP}
+    sed -i "s|\$app = require_once __DIR__.'/../bootstrap/app.php';|\$app = require_once __DIR__.'/bootstrap/app.php';|" \${INDEX_PHP}
 else
     echo "ERROR: index.php not found in ${BACKEND_PATH}"
     exit 1

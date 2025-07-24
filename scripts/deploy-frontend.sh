@@ -27,7 +27,7 @@ fi
 
 # SSH and SCP commands using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
-SCP="sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no"
+obuty
 
 # Upload release package
 echo "📤 Uploading frontend package..."
@@ -56,10 +56,24 @@ tar -xzf /tmp/${RELEASE_NAME}_frontend.tar.gz -C /tmp
 sudo mv /tmp/frontend ${FRONTEND_PATH}
 rm /tmp/${RELEASE_NAME}_frontend.tar.gz
 
+# Create .htaccess for React Router
+echo "📝 Creating .htaccess for React Router support..."
+cat << HTACCESS | sudo tee ${FRONTEND_PATH}/.htaccess
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    RewriteRule ^index\.html$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /index.html [L]
+</IfModule>
+HTACCESS
+
 # Set permissions
 echo "🔒 Setting permissions..."
 sudo chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH}
 sudo chmod -R 755 ${FRONTEND_PATH}
+sudo chmod 644 ${FRONTEND_PATH}/.htaccess
 
 # Restart services
 echo "🔄 Restarting services..."
