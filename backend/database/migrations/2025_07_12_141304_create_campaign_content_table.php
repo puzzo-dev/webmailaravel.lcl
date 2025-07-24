@@ -28,4 +28,4 @@
 //     {
 //         Schema::dropIfExists('campaign_content');
 //     }
-};
+// };
