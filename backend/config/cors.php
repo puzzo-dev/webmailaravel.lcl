@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*','https://campaignprox.msz-pl.com','https://api.msz-pl.com'],
+    'allowed_origins' => ['*','https://campaignprox.msz-pl.com','https://api.msz-pl.com','http://campaignprox.msz-pl.com'],
 
     'allowed_origins_patterns' => [],
 
