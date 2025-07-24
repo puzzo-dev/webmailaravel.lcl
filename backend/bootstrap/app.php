@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             'subscription' => CheckActiveSubscription::class,
         ]);
+        
+		 $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

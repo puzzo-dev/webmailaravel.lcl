@@ -21,9 +21,6 @@ formDataAxios.interceptors.request.use((config) => {
   if (axios.defaults.headers.common['Authorization']) {
     config.headers.Authorization = axios.defaults.headers.common['Authorization'];
   }
-
-
-
   return config;
 });
 
