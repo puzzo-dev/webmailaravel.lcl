@@ -92,6 +92,16 @@ pipeline {
                             npm ci --silent
                         '''
                         
+                        echo "🔧 Backing up existing .env to .env.example.dev..."
+                        sh '''
+                            if [ -f .env ]; then cp .env .env.example.dev; fi
+                        '''
+                        
+                        echo "🔧 Copying production environment file..."
+                        sh '''
+                            cp .env.example.production .env
+                        '''
+                        
                         echo "🏗️ Building frontend for production..."
                         sh '''
                             npm run build
