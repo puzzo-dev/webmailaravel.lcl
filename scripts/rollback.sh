@@ -4,13 +4,14 @@ set -e
 echo "🔄 Starting rollback process..."
 
 # Configuration variables
-APP_NAME="campaignprox.msz-pl.com"
+APP_NAME="Campaign Pro X"
 APP_USER="campaignprox"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
-FRONTEND_PATH="/home/campaignprox/public_html"
+FRONTEND_PATH="/home/campaignprox/public_html/"
+PUBLIC_HTML="/home/campaignprox/public_html"
 BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/backups"
 DB_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/database/database.sqlite"
 
@@ -39,14 +40,21 @@ rollback_backend() {
         echo "📋 Found previous backend version"
         
         # Stop any running processes that might lock files
-        sudo systemctl stop php8.2-fpm || echo "PHP-FPM stop failed"
+        sudo systemctl stop php8.3-fpm || echo "PHP-FPM stop failed"
         
-        # Atomic rollback
+        # Atomic rollback for backend
         sudo rm -rf ${BACKEND_PATH}_rollback_temp || echo "No temp rollback dir"
         if [ -d "${BACKEND_PATH}" ]; then
             sudo mv ${BACKEND_PATH} ${BACKEND_PATH}_rollback_temp
         fi
         sudo mv ${BACKEND_PATH}_old ${BACKEND_PATH}
+        
+        # Atomic rollback for public_html (Laravel public files)
+        sudo rm -rf ${PUBLIC_HTML}_rollback_temp || echo "No temp public_html rollback dir"
+        if [ -d "${PUBLIC_HTML}_old" ]; then
+            sudo mv ${PUBLIC_HTML} ${PUBLIC_HTML}_rollback_temp || true
+            sudo mv ${PUBLIC_HTML}_old ${PUBLIC_HTML}
+        fi
         
         # Restore database if available
         LATEST_DB=$(ls -t ${BACKUP_PATH}/db_backup_*.sqlite 2>/dev/null | head -n 1)
@@ -60,13 +68,13 @@ rollback_backend() {
         fi
         
         # Set permissions
-        sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
-        sudo chmod -R 755 ${BACKEND_PATH}
+        sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH} ${PUBLIC_HTML}
+        sudo chmod -R 755 ${BACKEND_PATH} ${PUBLIC_HTML}
         sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
         [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
         
         # Restart services
-        sudo systemctl start php8.2-fpm || echo "PHP-FPM start failed"
+        sudo systemctl start php8.3-fpm || echo "PHP-FPM start failed"
         sudo systemctl reload apache2 || echo "Web server reload failed"
         
         # Run Laravel commands
@@ -82,15 +90,19 @@ rollback_backend() {
             ROLLBACK_SUCCESS=1
             
             # Clean up failed deployment
-            sudo rm -rf ${BACKEND_PATH}_rollback_temp || echo "Rollback temp cleanup failed"
+            sudo rm -rf ${BACKEND_PATH}_rollback_temp ${PUBLIC_HTML}_rollback_temp || echo "Rollback temp cleanup failed"
         else
             echo "❌ Backend rollback verification failed"
             # Try to restore the failed deployment
             if [ -d "${BACKEND_PATH}_rollback_temp" ]; then
                 sudo rm -rf ${BACKEND_PATH}
                 sudo mv ${BACKEND_PATH}_rollback_temp ${BACKEND_PATH}
-                echo "⚠️ Restored failed deployment, manual intervention required"
             fi
+            if [ -d "${PUBLIC_HTML}_rollback_temp" ]; then
+                sudo rm -rf ${PUBLIC_HTML}
+                sudo mv ${PUBLIC_HTML}_rollback_temp ${PUBLIC_HTML}
+            fi
+            echo "⚠️ Restored failed deployment, manual intervention required"
         fi
     else
         echo "❌ No previous backend version found for rollback"
@@ -156,7 +168,7 @@ restore_from_backup() {
             tar -xzf $LATEST_BACKUP
             
             # Stop services
-            sudo systemctl stop php8.2-fpm || echo "PHP-FPM stop failed"
+            sudo systemctl stop php8.3-fpm || echo "PHP-FPM stop failed"
             
             # Replace current installation with backup
             sudo rm -rf ${BACKEND_PATH}_backup_restore || echo "No backup restore dir"
@@ -164,6 +176,15 @@ restore_from_backup() {
                 sudo mv ${BACKEND_PATH} ${BACKEND_PATH}_backup_restore
             fi
             sudo mv $RESTORE_DIR/backend ${BACKEND_PATH}
+            
+            # Restore public_html from backup if available
+            if [ -d "$RESTORE_DIR/public_html" ]; then
+                sudo rm -rf ${PUBLIC_HTML}_backup_restore || echo "No public_html backup restore dir"
+                if [ -d "${PUBLIC_HTML}" ]; then
+                    sudo mv ${PUBLIC_HTML} ${PUBLIC_HTML}_backup_restore
+                fi
+                sudo mv $RESTORE_DIR/public_html ${PUBLIC_HTML}
+            fi
             
             # Restore database if available
             LATEST_DB=$(ls -t ${BACKUP_PATH}/db_backup_*.sqlite 2>/dev/null | head -n 1)
@@ -175,13 +196,13 @@ restore_from_backup() {
             fi
             
             # Set permissions
-            sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
-            sudo chmod -R 755 ${BACKEND_PATH}
+            sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH} ${PUBLIC_HTML}
+            sudo chmod -R 755 ${BACKEND_PATH} ${PUBLIC_HTML}
             sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
             [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
             
             # Restart services
-            sudo systemctl start php8.2-fpm || echo "PHP-FPM start failed"
+            sudo systemctl start php8.3-fpm || echo "PHP-FPM start failed"
             sudo systemctl reload apache2 || echo "Web server reload failed"
             
             # Test restoration
@@ -189,14 +210,18 @@ restore_from_backup() {
             if php artisan --version > /dev/null 2>&1; then
                 echo "✅ Backup restoration successful"
                 ROLLBACK_SUCCESS=1
-                sudo rm -rf ${BACKEND_PATH}_backup_restore || echo "Backup restore cleanup failed"
+                sudo rm -rf ${BACKEND_PATH}_backup_restore ${PUBLIC_HTML}_backup_restore || echo "Backup restore cleanup failed"
             else
                 echo "❌ Backup restoration failed"
                 if [ -d "${BACKEND_PATH}_backup_restore" ]; then
                     sudo rm -rf ${BACKEND_PATH}
                     sudo mv ${BACKEND_PATH}_backup_restore ${BACKEND_PATH}
-                    echo "⚠️ Restored failed deployment, manual intervention required"
                 fi
+                if [ -d "${PUBLIC_HTML}_backup_restore" ]; then
+                    sudo rm -rf ${PUBLIC_HTML}
+                    sudo mv ${PUBLIC_HTML}_backup_restore ${PUBLIC_HTML}
+                fi
+                echo "⚠️ Restored failed deployment, manual intervention required"
             fi
         else
             echo "❌ No backup files found"
@@ -225,6 +250,7 @@ if [ $ROLLBACK_SUCCESS -eq 1 ]; then
     echo "📊 Current status:"
     echo "🏠 Backend: $(ls -la ${BACKEND_PATH} | head -1)"
     echo "🎨 Frontend: $(ls -la ${FRONTEND_PATH} | head -1)"
+    echo "🌐 Public HTML: $(ls -la ${PUBLIC_HTML} | head -1)"
     
     # Run a quick health check
     cd ${BACKEND_PATH}
@@ -238,6 +264,7 @@ else
     echo "🆘 Please check the following:"
     echo "   - Backend path: ${BACKEND_PATH}"
     echo "   - Frontend path: ${FRONTEND_PATH}"
+    echo "   - Public HTML path: ${PUBLIC_HTML}"
     echo "   - Backup path: ${BACKUP_PATH}"
     echo "   - Check system logs for more details"
     exit 1

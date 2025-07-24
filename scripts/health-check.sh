@@ -10,6 +10,7 @@ PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
+PUBLIC_HTML="/home/campaignprox/public_html"
 
 # Check if required environment variables are set
 if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]; then
@@ -41,6 +42,14 @@ else
     exit 1
 fi
 
+echo "🔍 Checking public HTML health..."
+if [ -f "${PUBLIC_HTML}/index.php" ]; then
+    echo "✅ Public HTML index.php exists"
+else
+    echo "❌ Public HTML health check failed: index.php not found"
+    exit 1
+fi
+
 echo "🔍 Checking Apache status..."
 if systemctl is-active apache2 > /dev/null 2>&1; then
     echo "✅ Apache is running"
@@ -50,7 +59,7 @@ else
 fi
 
 echo "🔍 Checking PHP-FPM status..."
-if systemctl is-active php8.2-fpm > /dev/null 2>&1; then
+if systemctl is-active php8.3-fpm > /dev/null 2>&1; then
     echo "✅ PHP-FPM is running"
 else
     echo "❌ PHP-FPM is not running"
