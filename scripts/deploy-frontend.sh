@@ -6,6 +6,7 @@ echo "🎨 Starting frontend deployment..."
 # Configuration variables
 APP_NAME="Campaign Pro X"
 APP_USER="campaignprox"
+# WEB_GROUP="www-data"  # Adjust if web server uses a different group (e.g., apache, nginx)
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
@@ -27,7 +28,7 @@ fi
 
 # SSH and SCP commands using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
-obuty
+SCP="sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no"
 
 # Upload release package
 echo "📤 Uploading frontend package..."
@@ -39,6 +40,12 @@ ${SSH} bash -s << EOF
 set -e
 
 echo "🎨 Starting frontend deployment on server..."
+
+# Check if mod_rewrite is enabled
+if ! apache2ctl -M | grep -q rewrite_module; then
+    echo "WARNING: mod_rewrite not enabled. Enabling it now..."
+    sudo a2enmod rewrite || echo "Failed to enable mod_rewrite"
+fi
 
 # Create backup
 echo "📁 Creating backup..."
@@ -72,8 +79,8 @@ HTACCESS
 # Set permissions
 echo "🔒 Setting permissions..."
 sudo chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH}
-sudo chmod -R 755 ${FRONTEND_PATH}
-sudo chmod 644 ${FRONTEND_PATH}/.htaccess
+sudo chmod -R 775 ${FRONTEND_PATH}
+sudo chmod 664 ${FRONTEND_PATH}/.htaccess
 
 # Restart services
 echo "🔄 Restarting services..."
