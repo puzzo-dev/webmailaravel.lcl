@@ -10,7 +10,6 @@ PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
-FRONTEND_PATH="/home/campaignprox/public_html"
 BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/backups"
 DB_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/database/database.sqlite"
 RELEASE_NAME="${RELEASE_NAME}"
@@ -63,10 +62,6 @@ if [ -d "${BACKEND_PATH}" ]; then
     fi
     mv ${BACKEND_PATH} ${BACKEND_PATH}_old || true
 fi
-if [ -d "${FRONTEND_PATH}_old" ]; then
-    rm -rf ${FRONTEND_PATH}_old
-fi
-mv ${FRONTEND_PATH} ${FRONTEND_PATH}_old || true
 
 # Extract release
 echo "📦 Extracting release..."
@@ -79,26 +74,24 @@ sudo mv /tmp/backend ${BACKEND_PATH}
 rm /tmp/${RELEASE_NAME}_backend.tar.gz
 
 # Move public folder contents to public_html
-echo "📂 Moving public folder contents to ${FRONTEND_PATH}..."
-mkdir -p ${FRONTEND_PATH}
-sudo cp -r ${BACKEND_PATH}/public/* ${FRONTEND_PATH}/
-sudo rm -rf ${BACKEND_PATH}/public
+echo "📂 Moving public folder contents to ${BACKEND_PATH}..."
+sudo cp -r ${BACKEND_PATH}/public/* ${BACKEND_PATH}/
 
 # Update index.php paths
 echo "🔧 Updating index.php paths..."
-INDEX_PHP="${FRONTEND_PATH}/index.php"
+INDEX_PHP="${BACKEND_PATH}/index.php"
 if [ -f "\${INDEX_PHP}" ]; then
     sed -i "s|require __DIR__.'/../vendor/autoload.php';|require '${BACKEND_PATH}/vendor/autoload.php';|" \${INDEX_PHP}
     sed -i "s|\$app = require_once __DIR__.'/../bootstrap/app.php';|\$app = require_once '${BACKEND_PATH}/bootstrap/app.php';|" \${INDEX_PHP}
 else
-    echo "ERROR: index.php not found in ${FRONTEND_PATH}"
+    echo "ERROR: index.php not found in ${BACKEND_PATH}"
     exit 1
 fi
 
 # Set permissions
 echo "🔒 Setting permissions..."
-sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH} ${FRONTEND_PATH}
-sudo chmod -R 755 ${BACKEND_PATH} ${FRONTEND_PATH}
+sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
+sudo chmod -R 755 ${BACKEND_PATH}
 sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
 [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
 
