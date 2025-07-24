@@ -115,12 +115,12 @@ pipeline {
                     sh '''
                         mkdir -p deployment/backend
                         cp -r backend/* deployment/backend/
+                        cp backend/.env.production.example deployment/backend/.env
+                        cp build-info.json deployment/backend/
                         rm -rf deployment/backend/tests
                         rm -rf deployment/backend/storage/logs/*
                         rm -rf deployment/backend/.git*
-                        rm -f deployment/backend/.env*
                         rm -f deployment/backend/phpunit.xml
-                        cp build-info.json deployment/backend/
                         cd deployment
                         tar -czf ${RELEASE_NAME}_backend.tar.gz backend/
                     '''

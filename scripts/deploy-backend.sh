@@ -4,7 +4,7 @@ set -e
 echo "🔧 Starting backend deployment..."
 
 # Configuration variables
-APP_NAME="campaignprox.msz-pl.com"
+APP_NAME="Campaign Pro X"
 APP_USER="campaignprox"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
@@ -80,18 +80,45 @@ sudo chmod -R 755 ${BACKEND_PATH}
 sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
 [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
 
-# Copy environment file
-if [ -f "${BACKEND_PATH}_old/.env" ]; then
+# Copy and configure environment file
+echo "🔧 Configuring .env file..."
+if [ -f "${BACKEND_PATH}/.env" ]; then
+    echo "Using provided .env file from deployment package"
+elif [ -f "${BACKEND_PATH}_old/.env" ]; then
+    echo "Copying .env from previous deployment"
     cp ${BACKEND_PATH}_old/.env ${BACKEND_PATH}/.env
 else
-    echo "WARNING: No .env file found in previous deployment, manual configuration required"
+    echo "WARNING: No .env file found, using .env.example as template"
+    cp ${BACKEND_PATH}/.env.example ${BACKEND_PATH}/.env
 fi
 
-# Restart services
-echo "🔄 Restarting services..."
+# Ensure database path is set correctly
+sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_PATH}|" ${BACKEND_PATH}/.env
+
+# Generate application key if not set
+if ! grep -q "APP_KEY=.\+" ${BACKEND_PATH}/.env; then
+    echo "Generating new application key..."
+    php8.3 artisan key:generate --force
+fi
+
+# Reset database for fresh migration
+echo "🧹 Resetting database for fresh migration..."
+if [ -f "${DB_PATH}" ]; then
+    echo "Backing up existing database..."
+    DB_BACKUP="${BACKUP_PATH}/db_backup_\$(date +%Y%m%d_%H%M%S).sqlite"
+    cp ${DB_PATH} \${DB_BACKUP} || echo "WARNING: Database backup failed"
+    rm -f ${DB_PATH}
+fi
+touch ${DB_PATH}
+sudo chown ${APP_USER}:${APP_USER} ${DB_PATH}
+sudo chmod 664 ${DB_PATH}
+
+# Restart services and run fresh migrations
+echo "🔄 Restarting services and running fresh migrations..."
 cd ${BACKEND_PATH}
 php8.3 artisan down || true
-php8.3 artisan migrate --force || { echo "Migration failed"; exit 1; }
+php8.3 artisan migrate:fresh --force || { echo "Fresh migration failed"; exit 1; }
+php8.3 artisan db:seed --force || echo "Database seeding failed, continuing..."
 php8.3 artisan config:cache
 php8.3 artisan route:cache
 php8.3 artisan view:cache

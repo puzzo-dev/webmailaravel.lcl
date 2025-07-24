@@ -4,7 +4,7 @@ set -e
 echo "🎨 Starting frontend deployment..."
 
 # Configuration variables
-APP_NAME="campaignprox.msz-pl.com"
+APP_NAME="Campaign Pro X"
 APP_USER="campaignprox"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
