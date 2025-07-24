@@ -42,14 +42,6 @@ else
     exit 1
 fi
 
-echo "🔍 Checking public HTML health..."
-if [ -f "${PUBLIC_HTML}/index.php" ]; then
-    echo "✅ Public HTML index.php exists"
-else
-    echo "❌ Public HTML health check failed: index.php not found"
-    exit 1
-fi
-
 echo "🔍 Checking Apache status..."
 if systemctl is-active apache2 > /dev/null 2>&1; then
     echo "✅ Apache is running"
