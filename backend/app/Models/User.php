@@ -39,6 +39,10 @@ class User extends Authenticatable implements JWTSubject
         'last_password_change',
         'billing_status',
         'last_payment_at',
+        'training_enabled',
+        'training_mode',
+        'manual_training_percentage',
+        'last_manual_training_at',
     ];
 
     /**
@@ -167,6 +171,9 @@ class User extends Authenticatable implements JWTSubject
             'last_password_change' => 'datetime',
             'last_payment_at' => 'datetime',
             'password' => 'hashed',
+            'training_enabled' => 'boolean',
+            'manual_training_percentage' => 'decimal:2',
+            'last_manual_training_at' => 'datetime',
         ];
     }
 
@@ -246,5 +253,61 @@ class User extends Authenticatable implements JWTSubject
         }
 
         return min($score, 100);
+    }
+
+    /**
+     * Check if user has training enabled
+     */
+    public function hasTrainingEnabled(): bool
+    {
+        return $this->training_enabled ?? false;
+    }
+
+    /**
+     * Check if user uses manual training mode
+     */
+    public function usesManualTraining(): bool
+    {
+        return $this->training_mode === 'manual';
+    }
+
+    /**
+     * Check if user uses automatic training mode
+     */
+    public function usesAutomaticTraining(): bool
+    {
+        return $this->training_mode === 'automatic';
+    }
+
+    /**
+     * Get manual training percentage (default 10%)
+     */
+    public function getManualTrainingPercentage(): float
+    {
+        return $this->manual_training_percentage ?? 10.0;
+    }
+
+    /**
+     * Check if manual training is due (daily)
+     */
+    public function isManualTrainingDue(): bool
+    {
+        if (!$this->hasTrainingEnabled() || !$this->usesManualTraining()) {
+            return false;
+        }
+
+        if (!$this->last_manual_training_at) {
+            return true;
+        }
+
+        return $this->last_manual_training_at->diffInDays(now()) >= 1;
+    }
+
+    /**
+     * Update last manual training timestamp
+     */
+    public function updateManualTrainingTimestamp(): void
+    {
+        $this->update(['last_manual_training_at' => now()]);
     }
 }

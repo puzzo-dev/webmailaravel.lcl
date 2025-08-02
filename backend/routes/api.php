@@ -114,9 +114,9 @@ Route::middleware(['auth:api'])->group(function () {
         Route::put('/{campaign}', [CampaignController::class, 'update']);
         Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
         Route::post('/{campaign}/duplicate', [CampaignController::class, 'duplicateCampaign']);
-        Route::post('/{campaign}/start', [CampaignController::class, 'startCampaign']);
+        Route::post('/{campaign}/start', [CampaignController::class, 'startCampaign'])->middleware('training.check');
         Route::post('/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
-        Route::post('/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
+        Route::post('/{campaign}/resume', [CampaignController::class, 'resumeCampaign'])->middleware('training.check');
         Route::post('/{campaign}/stop', [CampaignController::class, 'stopCampaign']);
         Route::get('/{campaign}/stats', [CampaignController::class, 'getCampaignStatistics']);
         Route::get('/{campaign}/tracking', [CampaignController::class, 'trackingStats']);
@@ -125,7 +125,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}/unsubscribe-list', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
-        Route::post('/send-single', [CampaignController::class, 'sendSingle']);
+        Route::post('/send-single', [CampaignController::class, 'sendSingle'])->middleware('training.check');
         
         // Admin campaign management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
@@ -192,7 +192,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/{content}/preview', [ContentController::class, 'preview']);
     });
 
-
+    // Training routes removed - training is now internal/automatic only
 
     // Billing & Subscription routes (authenticated users only)
     Route::prefix('billing')->group(function () {
@@ -352,6 +352,11 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::get('/statistics', [PowerMTAController::class, 'getTrainingStatistics']);
             Route::post('/run', [PowerMTAController::class, 'runTraining']);
             Route::post('/run/{domain}', [PowerMTAController::class, 'runDomainTraining']);
+            
+            // Per-user training activation (admin only)
+            Route::get('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingSettings']);
+            Route::put('/users/{user}/activation', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
+            Route::get('/users/{user}/stats', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingStats']);
         });
 
         // Admin billing management routes (admin only)

@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => CheckRole::class,
             'subscription' => CheckActiveSubscription::class,
+            'training.check' => \App\Http\Middleware\TrainingCheckMiddleware::class,
         ]);
         
 		 $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);

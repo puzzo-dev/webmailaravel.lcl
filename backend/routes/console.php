@@ -15,6 +15,9 @@ Schedule::job(new ProcessBouncesJob())->everyThirtyMinutes()->name('process-boun
 // Schedule automatic training daily at 2 AM
 Schedule::command('training:run-automatic')->dailyAt('02:00')->name('automatic-training');
 
+// Schedule manual training daily at 3 AM (after automatic training)
+Schedule::command('training:run-manual')->dailyAt('03:00')->name('manual-training');
+
 // Schedule PowerMTA file processing every hour for bounce detection
 Schedule::call(function () {
     $bounceService = app(\App\Services\BounceProcessingService::class);
