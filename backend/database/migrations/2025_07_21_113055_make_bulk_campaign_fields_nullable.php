@@ -24,6 +24,23 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Update NULL values to empty strings before making fields non-nullable
+        \DB::table('campaigns')
+            ->whereNull('recipient_list_path')
+            ->update(['recipient_list_path' => '']);
+            
+        \DB::table('campaigns')
+            ->whereNull('sent_list_path')
+            ->update(['sent_list_path' => '']);
+            
+        \DB::table('campaigns')
+            ->whereNull('unsubscribe_list_path')
+            ->update(['unsubscribe_list_path' => '']);
+            
+        \DB::table('campaigns')
+            ->whereNull('unsubscribe_list_format')
+            ->update(['unsubscribe_list_format' => '']);
+
         Schema::table('campaigns', function (Blueprint $table) {
             $table->string('recipient_list_path')->nullable(false)->change();
             $table->string('sent_list_path')->nullable(false)->change();

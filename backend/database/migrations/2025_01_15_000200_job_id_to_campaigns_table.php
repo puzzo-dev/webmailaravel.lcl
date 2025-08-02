@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('campaigns', function (Blueprint $table) {
-            $table->string('job_id')->nullable()->after('status')->index();
+            if (!Schema::hasColumn('campaigns', 'job_id')) {
+                $table->string('job_id')->nullable()->after('status')->index();
+            }
         });
     }
 
