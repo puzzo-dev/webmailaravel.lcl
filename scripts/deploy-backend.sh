@@ -9,9 +9,10 @@ APP_USER="campaignprox"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
+APP_PATH="/home/campaignprox/domains/api.msz-pl.com/app"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/backups"
-DB_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/database/database.sqlite"
+DB_PATH="/home/campaignprox/domains/api.msz-pl.com/app/database/database.sqlite"
 RELEASE_NAME="${RELEASE_NAME}"
 RELEASE_PACKAGE="deployment/${RELEASE_NAME}_backend.tar.gz"
 
@@ -53,10 +54,18 @@ echo "🔄 Starting backend deployment on server..."
 
 # Create backup
 echo "📁 Creating backup..."
-if [ -d "${BACKEND_PATH}" ]; then
+if [ -d "${APP_PATH}" ]; then
     mkdir -p ${BACKUP_PATH}
     DB_BACKUP="${BACKUP_PATH}/db_backup_\$(date +%Y%m%d_%H%M%S).sqlite"
     [ -f "${DB_PATH}" ] && cp ${DB_PATH} \${DB_BACKUP} || echo "WARNING: Database backup failed"
+    if [ -d "${APP_PATH}_old" ]; then
+        rm -rf ${APP_PATH}_old
+    fi
+    mv ${APP_PATH} ${APP_PATH}_old || true
+fi
+
+# Backup public_html if it exists
+if [ -d "${BACKEND_PATH}" ]; then
     if [ -d "${BACKEND_PATH}_old" ]; then
         rm -rf ${BACKEND_PATH}_old
     fi
@@ -70,19 +79,21 @@ if [ ! -f "/tmp/${RELEASE_NAME}_backend.tar.gz" ]; then
     exit 1
 fi
 tar -xzf /tmp/${RELEASE_NAME}_backend.tar.gz -C /tmp
-sudo mv /tmp/backend ${BACKEND_PATH}
+sudo mv /tmp/backend ${APP_PATH}
 rm /tmp/${RELEASE_NAME}_backend.tar.gz
 
-# Move public folder contents to public_html
-echo "📂 Moving public folder contents to ${BACKEND_PATH}..."
-sudo cp -r ${BACKEND_PATH}/public/* ${BACKEND_PATH}/
+# Create public_html directory and copy public folder contents
+echo "📂 Setting up public directory structure..."
+sudo mkdir -p ${BACKEND_PATH}
+sudo cp -r ${APP_PATH}/public/* ${BACKEND_PATH}/
 
-# Update index.php paths
+# Update index.php paths to point to the app directory
 echo "🔧 Updating index.php paths..."
 INDEX_PHP="${BACKEND_PATH}/index.php"
 if [ -f "\${INDEX_PHP}" ]; then
-    sed -i "s|require __DIR__.'/../vendor/autoload.php';|require __DIR__.'/vendor/autoload.php';|" \${INDEX_PHP}
-    sed -i "s|\$app = require_once __DIR__.'/../bootstrap/app.php';|\$app = require_once __DIR__.'/bootstrap/app.php';|" \${INDEX_PHP}
+    sed -i "s|__DIR__.'/../storage/framework/maintenance.php'|'${APP_PATH}/storage/framework/maintenance.php'|" \${INDEX_PHP}
+    sed -i "s|__DIR__.'/../vendor/autoload.php'|'${APP_PATH}/vendor/autoload.php'|" \${INDEX_PHP}
+    sed -i "s|__DIR__.'/../bootstrap/app.php'|'${APP_PATH}/bootstrap/app.php'|" \${INDEX_PHP}
 else
     echo "ERROR: index.php not found in ${BACKEND_PATH}"
     exit 1
@@ -90,30 +101,30 @@ fi
 
 # Set permissions
 echo "🔒 Setting permissions..."
-sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
-sudo chmod -R 755 ${BACKEND_PATH}
-sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache
+sudo chown -R ${APP_USER}:${APP_USER} ${APP_PATH} ${BACKEND_PATH}
+sudo chmod -R 755 ${APP_PATH} ${BACKEND_PATH}
+sudo chmod -R 775 ${APP_PATH}/storage ${APP_PATH}/bootstrap/cache
 [ -f "${DB_PATH}" ] && sudo chmod 664 ${DB_PATH}
 
 # Copy and configure environment file
 echo "🔧 Configuring .env file..."
-if [ -f "${BACKEND_PATH}/.env" ]; then
+if [ -f "${APP_PATH}/.env" ]; then
     echo "Using provided .env file from deployment package"
-elif [ -f "${BACKEND_PATH}_old/.env" ]; then
+elif [ -f "${APP_PATH}_old/.env" ]; then
     echo "Copying .env from previous deployment"
-    cp ${BACKEND_PATH}_old/.env ${BACKEND_PATH}/.env
+    cp ${APP_PATH}_old/.env ${APP_PATH}/.env
 else
     echo "WARNING: No .env file found, using .env.example as template"
-    cp ${BACKEND_PATH}/.env.example ${BACKEND_PATH}/.env
+    cp ${APP_PATH}/.env.example ${APP_PATH}/.env
 fi
 
 # Ensure database path is set correctly
-sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_PATH}|" ${BACKEND_PATH}/.env
+sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_PATH}|" ${APP_PATH}/.env
 
 # Generate application key if not set
-if ! grep -q "APP_KEY=.\+" ${BACKEND_PATH}/.env; then
+if ! grep -q "APP_KEY=.\+" ${APP_PATH}/.env; then
     echo "Generating new application key..."
-    cd ${BACKEND_PATH}
+    cd ${APP_PATH}
     php8.3 artisan key:generate --force
 fi
 
@@ -132,7 +143,7 @@ sudo chmod 664 ${DB_PATH}
 
 # Restart services and run fresh migrations
 echo "🔄 Restarting services and running fresh migrations..."
-cd ${BACKEND_PATH}
+cd ${APP_PATH}
 php8.3 artisan down || true
 php8.3 artisan migrate:fresh --force || { echo "Fresh migration failed"; exit 1; }
 php8.3 artisan db:seed --force || echo "Database seeding failed, continuing..."
