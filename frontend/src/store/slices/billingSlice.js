@@ -181,6 +181,14 @@ const initialState = {
   billingStats: {},
   allSubscriptions: [],
   isLoading: false,
+  loading: {
+    subscriptions: false,
+    paymentHistory: false,
+    paymentRates: false,
+    plans: false,
+    billingStats: false,
+    allSubscriptions: false,
+  },
   error: null,
   pagination: {
     page: 1,
@@ -205,18 +213,28 @@ const billingSlice = createSlice({
     // Fetch subscriptions
     builder
       .addCase(fetchSubscriptions.pending, (state) => {
-        state.isLoading = true;
+        state.loading.subscriptions = true;
         state.error = null;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchSubscriptions.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.loading.subscriptions = false;
         // Handle nested data structure: action.payload.data
-        state.subscriptions = action.payload.data || action.payload || [];
+        const subscriptions = action.payload.data || action.payload || [];
+        state.subscriptions = subscriptions;
         state.pagination = action.payload.pagination || state.pagination;
+        
+        // Set current subscription (active subscription)
+        const activeSubscription = subscriptions.find(sub => sub.status === 'active');
+        if (activeSubscription) {
+          state.currentSubscription = activeSubscription;
+        }
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchSubscriptions.rejected, (state, action) => {
-        state.isLoading = false;
+        state.loading.subscriptions = false;
         state.error = action.payload;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       });
 
     // Create subscription
@@ -316,16 +334,19 @@ const billingSlice = createSlice({
     // Fetch plans
     builder
       .addCase(fetchPlans.pending, (state) => {
-        state.isLoading = true;
+        state.loading.plans = true;
         state.error = null;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchPlans.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.loading.plans = false;
         state.plans = action.payload || [];
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchPlans.rejected, (state, action) => {
-        state.isLoading = false;
+        state.loading.plans = false;
         state.error = action.payload;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       });
 
     // Create plan
@@ -379,31 +400,37 @@ const billingSlice = createSlice({
     // Fetch billing stats
     builder
       .addCase(fetchBillingStats.pending, (state) => {
-        state.isLoading = true;
+        state.loading.billingStats = true;
         state.error = null;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchBillingStats.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.loading.billingStats = false;
         state.billingStats = action.payload || {};
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchBillingStats.rejected, (state, action) => {
-        state.isLoading = false;
+        state.loading.billingStats = false;
         state.error = action.payload;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       });
 
     // Fetch all subscriptions
     builder
       .addCase(fetchAllSubscriptions.pending, (state) => {
-        state.isLoading = true;
+        state.loading.allSubscriptions = true;
         state.error = null;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchAllSubscriptions.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.loading.allSubscriptions = false;
         state.allSubscriptions = action.payload || [];
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchAllSubscriptions.rejected, (state, action) => {
-        state.isLoading = false;
+        state.loading.allSubscriptions = false;
         state.error = action.payload;
+        state.isLoading = Object.values(state.loading).some(loading => loading);
       });
 
     // Process manual payment

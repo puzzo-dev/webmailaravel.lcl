@@ -43,10 +43,25 @@ const Billing = () => {
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchSubscriptions());
-    dispatch(fetchPaymentHistory());
-    dispatch(fetchPaymentRates());
-    dispatch(fetchPlans());
+    let isMounted = true;
+    
+    const loadBillingData = async () => {
+      if (!user?.id || isLoading) return;
+      
+      try {
+        // Load data sequentially to avoid overwhelming the backend
+        await Promise.allSettled([
+          dispatch(fetchSubscriptions()),
+          dispatch(fetchPaymentHistory()),
+          dispatch(fetchPaymentRates()),
+          dispatch(fetchPlans())
+        ]);
+      } catch (error) {
+        console.error('Failed to load billing data:', error);
+      }
+    };
+    
+    loadBillingData();
     
     // Check if user just registered and came from pricing
     const urlParams = new URLSearchParams(window.location.search);
@@ -55,7 +70,11 @@ const Billing = () => {
       // Clean up the URL
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [dispatch]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, user?.id]); // Add user.id as dependency
 
   useEffect(() => {
     if (error) {

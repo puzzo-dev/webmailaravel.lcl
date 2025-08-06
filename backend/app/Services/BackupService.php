@@ -256,6 +256,90 @@ class BackupService
     }
     
     /**
+     * Get backup statistics
+     */
+    public function getBackupStats(): array
+    {
+        try {
+            // Get backup statistics from database
+            $totalBackups = DB::table('backups')->count();
+            $totalSize = DB::table('backups')->sum('size') ?: 0;
+            $lastBackup = DB::table('backups')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            // Calculate storage usage
+            $storageUsed = $this->calculateStorageUsage();
+            
+            // Get backup frequency and retention settings
+            $backupFrequency = config('backup.frequency', 'daily');
+            $retentionDays = config('backup.retention_days', 30);
+            
+            return [
+                'total_backups' => $totalBackups,
+                'total_size' => $totalSize,
+                'total_size_formatted' => $this->formatBytes($totalSize),
+                'storage_used' => $storageUsed,
+                'storage_used_formatted' => $this->formatBytes($storageUsed),
+                'last_backup' => $lastBackup ? [
+                    'id' => $lastBackup->id,
+                    'name' => $lastBackup->name,
+                    'created_at' => $lastBackup->created_at,
+                    'size' => $lastBackup->size,
+                    'size_formatted' => $this->formatBytes($lastBackup->size)
+                ] : null,
+                'backup_frequency' => $backupFrequency,
+                'retention_days' => $retentionDays,
+                'oldest_backup' => DB::table('backups')
+                    ->orderBy('created_at', 'asc')
+                    ->first()?->created_at,
+                'average_backup_size' => $totalBackups > 0 ? round($totalSize / $totalBackups) : 0,
+                'average_backup_size_formatted' => $totalBackups > 0 ? 
+                    $this->formatBytes(round($totalSize / $totalBackups)) : '0 B',
+            ];
+        } catch (\Exception $e) {
+            \Log::error('Failed to get backup statistics: ' . $e->getMessage());
+            
+            // Return default stats on error
+            return [
+                'total_backups' => 0,
+                'total_size' => 0,
+                'total_size_formatted' => '0 B',
+                'storage_used' => 0,
+                'storage_used_formatted' => '0 B',
+                'last_backup' => null,
+                'backup_frequency' => 'daily',
+                'retention_days' => 30,
+                'oldest_backup' => null,
+                'average_backup_size' => 0,
+                'average_backup_size_formatted' => '0 B',
+            ];
+        }
+    }
+    
+    /**
+     * Calculate total storage usage for backups
+     */
+    private function calculateStorageUsage(): int
+    {
+        try {
+            $totalSize = 0;
+            $backupFiles = Storage::disk($this->backupDisk)->files($this->backupPath);
+            
+            foreach ($backupFiles as $file) {
+                if (Storage::disk($this->backupDisk)->exists($file)) {
+                    $totalSize += Storage::disk($this->backupDisk)->size($file);
+                }
+            }
+            
+            return $totalSize;
+        } catch (\Exception $e) {
+            \Log::warning('Failed to calculate storage usage: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * Format bytes to human readable format
      */
     private function formatBytes(int $bytes): string

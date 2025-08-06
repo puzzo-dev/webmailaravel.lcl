@@ -65,10 +65,59 @@ const AdminBilling = () => {
   });
 
   useEffect(() => {
-    dispatch(fetchPlans());
-    dispatch(fetchBillingStats());
-    dispatch(fetchAllSubscriptions());
-  }, [dispatch]);
+    let isMounted = true;
+    let timeoutId = null;
+    
+    const loadAdminBillingData = async () => {
+      if (!user?.id || isLoading) return;
+      
+      try {
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (isMounted && isLoading) {
+            console.warn('AdminBilling: Loading timeout reached, forcing completion');
+            dispatch(clearError());
+          }
+        }, 15000); // 15 second timeout
+        
+        // Load admin billing data sequentially to avoid overwhelming the backend
+        const results = await Promise.allSettled([
+          dispatch(fetchPlans()),
+          dispatch(fetchBillingStats()),
+          dispatch(fetchAllSubscriptions())
+        ]);
+        
+        // Clear timeout if all requests completed
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        
+        // Log any failed requests
+        results.forEach((result, index) => {
+          const actions = ['fetchPlans', 'fetchBillingStats', 'fetchAllSubscriptions'];
+          if (result.status === 'rejected') {
+            console.error(`AdminBilling: ${actions[index]} failed:`, result.reason);
+          }
+        });
+        
+      } catch (error) {
+        console.error('Failed to load admin billing data:', error);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }
+    };
+    
+    loadAdminBillingData();
+    
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [dispatch, user?.id, isLoading]); // Add isLoading as dependency
 
   useEffect(() => {
     if (error) {

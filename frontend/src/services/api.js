@@ -934,5 +934,76 @@ export const adminService = {
     async markNotificationAsRead(notificationId) {
         const response = await api.put(`/admin/notifications/${notificationId}/read`);
         return response.data;
-    }
-}; 
+    },
+
+    // PowerMTA Status and Management
+    async getPowerMTAStatus() {
+        const response = await api.get('/admin/powermta/status');
+        return response.data;
+    },
+
+    async getPowerMTAFBLAccounts() {
+        const response = await api.get('/admin/powermta/fbl-accounts');
+        return response.data;
+    },
+
+    async getPowerMTADiagnosticFiles() {
+        const response = await api.get('/admin/powermta/diagnostic-files');
+        return response.data;
+    },
+
+    async getPowerMTAReputationSummary() {
+        const response = await api.get('/admin/powermta/reputation-summary');
+        return response.data;
+    },
+
+    async analyzePowerMTAReputation(domain) {
+        const response = await api.post('/admin/powermta/analyze-reputation', { domain });
+        return response.data;
+    },
+
+    async parsePowerMTADiagnosticFile(filename) {
+        const response = await api.post('/admin/powermta/parse-diagnostic', { filename });
+        return response.data;
+    },
+
+    async downloadPowerMTADiagnosticFile(filename) {
+        const response = await api.get(`/admin/powermta/diagnostic-files/${filename}/download`, {
+            responseType: 'blob'
+        });
+        return response.data;
+    },
+
+    // Backup Management
+    async getBackups() {
+        const response = await api.get('/admin/backups');
+        return response.data;
+    },
+
+    async getBackupStatistics() {
+        const response = await api.get('/admin/backups/statistics');
+        return response.data;
+    },
+
+    async createBackup(backupData) {
+        const response = await api.post('/admin/backups', backupData);
+        return response.data;
+    },
+
+    async deleteBackup(backupId) {
+        const response = await api.delete(`/admin/backups/${backupId}`);
+        return response.data;
+    },
+
+    async downloadBackup(backupId) {
+        const response = await api.get(`/admin/backups/${backupId}/download`, {
+            responseType: 'blob'
+        });
+        return response.data;
+    },
+
+    async restoreBackup(backupId) {
+        const response = await api.post(`/admin/backups/${backupId}/restore`);
+        return response.data;
+    },
+};
