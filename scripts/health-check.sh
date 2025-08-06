@@ -8,6 +8,7 @@ APP_NAME="campaignprox.msz-pl.com"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
+APP_PATH="/home/campaignprox/domains/api.msz-pl.com/app"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
 PUBLIC_HTML="/home/campaignprox/public_html"
@@ -26,11 +27,19 @@ ${SSH} bash -s << EOF
 set -e
 
 echo "🔍 Checking backend health..."
-cd ${BACKEND_PATH}
-if php artisan --version > /dev/null 2>&1; then
-    echo "✅ Backend is responding (Laravel version: \$(php artisan --version))"
+cd ${APP_PATH}
+if php8.3 artisan --version > /dev/null 2>&1; then
+    echo "✅ Backend is responding (Laravel version: \$(php8.3 artisan --version))"
 else
     echo "❌ Backend health check failed"
+    exit 1
+fi
+
+echo "🔍 Checking backend public directory..."
+if [ -f "${BACKEND_PATH}/index.php" ]; then
+    echo "✅ Backend public directory is properly set up"
+else
+    echo "❌ Backend public directory check failed: index.php not found"
     exit 1
 fi
 
