@@ -125,12 +125,17 @@ class AdminService
                 ];
             }
 
+            // Generate username from email if not provided
+            $username = $additionalData['username'] ?? explode('@', $email)[0];
+
             // Create user
             $user = User::create([
                 'email' => $email,
+                'username' => $username,
+                'name' => $additionalData['name'] ?? null,
                 'password' => Hash::make($password),
                 'role' => 'admin',
-                'is_active' => true,
+                'status' => 'active',
                 'country' => $additionalData['country'] ?? null,
                 'city' => $additionalData['city'] ?? null
             ]);
@@ -444,5 +449,58 @@ class AdminService
         $bytes /= pow(1024, $pow);
 
         return round($bytes, 2) . ' ' . $units[$pow];
+    }
+
+    /**
+     * Assign admin permissions to user
+     */
+    protected function assignAdminPermissions(User $user): void
+    {
+        $this->logMethodEntry(__METHOD__, ['user_id' => $user->id]);
+
+        try {
+            // Ensure admin role exists
+            $adminRole = Role::firstOrCreate(['name' => 'admin']);
+
+            // Define admin permissions
+            $adminPermissions = [
+                'manage_users',
+                'manage_campaigns',
+                'manage_domains',
+                'manage_senders',
+                'manage_system_config',
+                'view_analytics',
+                'manage_permissions',
+                'manage_roles',
+                'system_administration'
+            ];
+
+            // Create permissions if they don't exist
+            foreach ($adminPermissions as $permissionName) {
+                Permission::firstOrCreate(['name' => $permissionName]);
+            }
+
+            // Assign all permissions to admin role
+            $adminRole->syncPermissions($adminPermissions);
+
+            // Ensure user has admin role
+            if (!$user->hasRole('admin')) {
+                $user->assignRole('admin');
+            }
+
+            $this->logInfo('Admin permissions assigned successfully', [
+                'user_id' => $user->id,
+                'permissions_count' => count($adminPermissions)
+            ]);
+
+        } catch (\Exception $e) {
+            $this->logError('Failed to assign admin permissions', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            // Don't throw exception, just log the error
+            // The user creation should still succeed even if permissions fail
+        }
     }
 } 
