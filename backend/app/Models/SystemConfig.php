@@ -30,7 +30,7 @@ class SystemConfig extends Model
     /**
      * Set config value with cache invalidation
      */
-    public static function setValue(string $key, $value, string $description = null): void
+    public static function setValue(string $key, $value, ?string $description = null): void
     {
         $config = static::updateOrCreate(
             ['key' => $key],
@@ -255,7 +255,7 @@ class SystemConfig extends Model
     /**
      * Helper method for setting config values (alias for setValue)
      */
-    public static function set(string $key, $value, string $description = null): void
+    public static function set(string $key, $value, ?string $description = null): void
     {
         static::setValue($key, $value, $description);
     }

@@ -183,7 +183,7 @@ trait CacheManagementTrait
     /**
      * Get cached user data
      */
-    protected function getCachedUserData(int $userId, string $key, callable $callback = null, int $ttl = 3600): mixed
+    protected function getCachedUserData(int $userId, string $key, ?callable $callback = null, int $ttl = 3600): mixed
     {
         $cacheKey = "user:{$userId}:{$key}";
         
@@ -215,7 +215,7 @@ trait CacheManagementTrait
     /**
      * Get cached model data
      */
-    protected function getCachedModelData(string $model, int $id, string $key, callable $callback = null, int $ttl = 3600): mixed
+    protected function getCachedModelData(string $model, int $id, string $key, ?callable $callback = null, int $ttl = 3600): mixed
     {
         $cacheKey = "model:{$model}:{$id}:{$key}";
         
@@ -229,7 +229,7 @@ trait CacheManagementTrait
     /**
      * Forget cached model data
      */
-    protected function forgetCachedModelData(string $model, int $id, string $key = null): bool
+    protected function forgetCachedModelData(string $model, int $id, ?string $key = null): bool
     {
         if ($key) {
             $cacheKey = "model:{$model}:{$id}:{$key}";
