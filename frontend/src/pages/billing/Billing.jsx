@@ -271,9 +271,9 @@ const Billing = () => {
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {Array.isArray(plans) && plans.length > 0 ? (
-                      plans.map((plan) => (
+                      plans.map((plan, index) => (
                     <div
-                          key={plan.id}
+                          key={plan.id || `plan-${index}`}
                       className={`border rounded-lg p-6 ${
                             currentSubscription?.plan?.id === plan.id
                           ? 'border-primary-500 bg-primary-50'
@@ -395,8 +395,8 @@ const Billing = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {Array.isArray(paymentHistory) && paymentHistory.length > 0 ? (
-                        paymentHistory.map((payment) => (
-                          <tr key={payment.id}>
+                        paymentHistory.map((payment, index) => (
+                          <tr key={payment.id || `payment-${index}`}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {formatDate(payment.date)}
                             </td>
@@ -486,8 +486,8 @@ const Billing = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {Array.isArray(invoices) && invoices.length > 0 ? (
-                        invoices.map((invoice) => (
-                          <tr key={invoice.id}>
+                        invoices.map((invoice, index) => (
+                          <tr key={invoice.id || `invoice-${index}`}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {invoice.id}
                             </td>
