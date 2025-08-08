@@ -8,6 +8,7 @@ use Illuminate\Auth\AuthenticationException;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\JWTFromCookie;
 use App\Http\Middleware\CheckActiveSubscription;
+use App\Http\Middleware\ApiKeyAuth;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => CheckRole::class,
             'subscription' => CheckActiveSubscription::class,
             'training.check' => \App\Http\Middleware\TrainingCheckMiddleware::class,
+            'api.key' => ApiKeyAuth::class,
         ]);
         
 		 $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);

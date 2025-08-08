@@ -178,12 +178,39 @@ const hasStoredAuth = () => {
   }
 };
 
+// Get persisted view from localStorage
+const getPersistedView = () => {
+  try {
+    return localStorage.getItem('currentView') || 'user';
+  } catch {
+    return 'user';
+  }
+};
+
+// Check if there's a persisted view preference
+const hasPersistedView = () => {
+  try {
+    return localStorage.getItem('currentView') !== null;
+  } catch {
+    return false;
+  }
+};
+
+// Set persisted view to localStorage
+const setPersistedView = (view) => {
+  try {
+    localStorage.setItem('currentView', view);
+  } catch {
+    // Ignore localStorage errors
+  }
+};
+
 const initialState = {
   user: null, // Will be initialized by initializeAuth
   isAuthenticated: false, // Will be determined by API call
   isLoading: true, // Always start with loading to prevent premature redirects
   error: null,
-  currentView: 'user', // 'user' or 'admin' - for admin users to switch between views
+  currentView: getPersistedView(), // 'user' or 'admin' - for admin users to switch between views
 };
 
 const authSlice = createSlice({
@@ -202,15 +229,35 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
       state.currentView = 'user';
+      // Clear persisted view on logout
+      try {
+        localStorage.removeItem('currentView');
+      } catch {
+        // Ignore localStorage errors
+      }
     },
     switchToAdminView: (state) => {
       if (state.user?.role === 'admin') {
         state.currentView = 'admin';
+        setPersistedView('admin');
       }
     },
     switchToUserView: (state) => {
       if (state.user?.role === 'admin') {
         state.currentView = 'user';
+        setPersistedView('user');
+      }
+    },
+    setDefaultViewForUser: (state) => {
+      // Set default view based on user role if no preference exists
+      if (state.user) {
+        if (state.user.role === 'admin' && !hasPersistedView()) {
+          state.currentView = 'admin';
+          setPersistedView('admin');
+        } else if (state.user.role !== 'admin') {
+          state.currentView = 'user';
+          setPersistedView('user');
+        }
       }
     },
   },
@@ -226,8 +273,12 @@ const authSlice = createSlice({
         const user = action.payload.user;
         state.user = user;
         state.isAuthenticated = !!user;
-        // Admin users start in user view by default
-        state.currentView = 'user';
+        // If no persisted view preference, admin users default to admin view
+        if (user?.role === 'admin' && !hasPersistedView()) {
+          state.currentView = 'admin';
+          setPersistedView('admin');
+        }
+        // Otherwise keep the current persisted view
       })
       .addCase(initializeAuth.rejected, (state, action) => {
         state.isLoading = false;
@@ -245,8 +296,14 @@ const authSlice = createSlice({
         const user = action.payload.data?.user || action.payload.user;
         state.user = user;
         state.isAuthenticated = !!user;
-        // Admin users start in user view by default
-        state.currentView = 'user';
+        // Admin users default to admin view on fresh login
+        if (user?.role === 'admin') {
+          state.currentView = 'admin';
+          setPersistedView('admin');
+        } else {
+          state.currentView = 'user';
+          setPersistedView('user');
+        }
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -263,8 +320,14 @@ const authSlice = createSlice({
         const user = action.payload.data?.user || action.payload.user;
         state.user = user;
         state.isAuthenticated = !!user;
-        // Admin users start in user view by default
-        state.currentView = 'user';
+        // Admin users default to admin view on fresh registration
+        if (user?.role === 'admin') {
+          state.currentView = 'admin';
+          setPersistedView('admin');
+        } else {
+          state.currentView = 'user';
+          setPersistedView('user');
+        }
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
@@ -279,12 +342,26 @@ const authSlice = createSlice({
         state.user = null;
         state.isAuthenticated = false;
         state.error = null;
+        state.currentView = 'user';
+        // Clear persisted view on logout
+        try {
+          localStorage.removeItem('currentView');
+        } catch {
+          // Ignore localStorage errors
+        }
       })
       .addCase(logout.rejected, (state) => {
         state.isLoading = false;
         state.user = null;
         state.isAuthenticated = false;
         state.error = null;
+        state.currentView = 'user';
+        // Clear persisted view on logout
+        try {
+          localStorage.removeItem('currentView');
+        } catch {
+          // Ignore localStorage errors
+        }
       })
       // Refresh Token
       .addCase(refreshToken.pending, (state) => {
@@ -373,5 +450,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUser, clearAuth, switchToAdminView, switchToUserView } = authSlice.actions;
+export const { clearError, setUser, clearAuth, switchToAdminView, switchToUserView, setDefaultViewForUser } = authSlice.actions;
 export default authSlice.reducer; 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   HiCreditCard,
@@ -48,6 +48,9 @@ const AdminBilling = () => {
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   
+  // Track if data has been loaded to prevent infinite loops
+  const hasLoadedData = useRef(false);
+  
   // Form states
   const [planForm, setPlanForm] = useState({
     name: '',
@@ -69,12 +72,18 @@ const AdminBilling = () => {
     let timeoutId = null;
     
     const loadAdminBillingData = async () => {
-      if (!user?.id || isLoading) return;
+      // Only proceed if we have a user ID and haven't already loaded data
+      if (!user?.id || hasLoadedData.current) return;
+      
+      // Prevent concurrent loading attempts
+      if (isLoading) return;
       
       try {
+        hasLoadedData.current = true;
+        
         // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
-          if (isMounted && isLoading) {
+          if (isMounted) {
             console.warn('AdminBilling: Loading timeout reached, forcing completion');
             dispatch(clearError());
           }
@@ -103,6 +112,7 @@ const AdminBilling = () => {
         
       } catch (error) {
         console.error('Failed to load admin billing data:', error);
+        hasLoadedData.current = false; // Reset on error to allow retry
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -117,11 +127,13 @@ const AdminBilling = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, [dispatch, user?.id, isLoading]); // Add isLoading as dependency
+  }, [dispatch, user?.id]); // Only depend on dispatch and user.id
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      toast.error(errorMessage);
       dispatch(clearError());
     }
   }, [error, dispatch]);
@@ -221,14 +233,6 @@ const AdminBilling = () => {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
   return (
     <>
       <PageSubscriptionOverlay 
@@ -236,6 +240,12 @@ const AdminBilling = () => {
         adminOnly={true}
         customMessage="Admin privileges required to access billing management features."
       />
+      
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>
+      ) : (
       <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -726,6 +736,8 @@ const AdminBilling = () => {
           </div>
         </div>
       )}
+      </div>
+      )}
 
       {/* Subscription Modal */}
       {showSubscriptionModal && selectedPlan && (
@@ -810,7 +822,6 @@ const AdminBilling = () => {
           </div>
         </div>
       )}
-      </div>
     </>
   );
 };

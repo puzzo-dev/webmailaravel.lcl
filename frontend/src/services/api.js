@@ -996,7 +996,7 @@ export const adminService = {
     },
 
     async downloadBackup(backupId) {
-        const response = await api.get(`/admin/backups/${backupId}/download`, {
+        const response = await api.get(`/admin/backups/${backupId}/download`, {}, {
             responseType: 'blob'
         });
         return response.data;

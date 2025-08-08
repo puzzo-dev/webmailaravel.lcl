@@ -8,6 +8,7 @@ import { HiCreditCard, HiX, HiStar, HiCheckCircle } from 'react-icons/hi';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import MobileMenu from './MobileMenu';
+import ViewGuard from '../routing/ViewGuard';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -38,6 +39,9 @@ const Layout = () => {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
+      {/* View Guard for automatic redirection */}
+      <ViewGuard />
+      
       {/* Sidebar */}
       <Sidebar 
         user={user} 

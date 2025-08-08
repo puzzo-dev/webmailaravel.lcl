@@ -7,27 +7,28 @@ import QuickActions from '../components/QuickActions';
 import UserDashboard from '../components/UserDashboard';
 
 const Dashboard = () => {
-  const { user } = useSelector((state) => state.auth);
+  const { user, currentView } = useSelector((state) => state.auth);
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      // If user is admin, redirect to admin dashboard
-      if (user.role === 'admin') {
+      // If user is admin and in admin view, redirect to admin dashboard
+      // But if they're in user view, let them stay on user dashboard
+      if (user.role === 'admin' && currentView === 'admin') {
         navigate('/admin', { replace: true });
         return;
       }
       fetchDashboardData();
     }
-  }, [user, navigate]);
+  }, [user, currentView, navigate]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       // Use the dedicated dashboard endpoint that provides role-appropriate data
-      const response = await analyticsService.getDashboard();
+      const response = await analyticsService.getDashboardData();
       
       // Ensure we have the expected data structure
       if (response.success && response.data) {

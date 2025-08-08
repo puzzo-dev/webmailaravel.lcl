@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { adminService } from '../services/api';
+import toast from 'react-hot-toast';
 import {
   HiPlus,
   HiInbox,
@@ -11,10 +13,42 @@ import {
   HiBell,
   HiShieldCheck,
   HiDocumentText,
+  HiAtSymbol,
 } from 'react-icons/hi';
 
 const QuickActions = ({ user }) => {
   const navigate = useNavigate();
+  const [webmailUrl, setWebmailUrl] = useState(null);
+
+  // Fetch system settings to get webmail URL
+  useEffect(() => {
+    const fetchWebmailSettings = async () => {
+      try {
+        const response = await adminService.getSystemSettings();
+        if (response.success && response.data?.webmail) {
+          const { url, enabled } = response.data.webmail;
+          // Only set URL if webmail is enabled and URL is provided
+          if (enabled && url && url.trim()) {
+            setWebmailUrl(url.trim());
+          }
+        }
+      } catch (error) {
+        // Silently fail - webmail button won't show if URL not available
+        console.log('Could not fetch webmail settings:', error);
+      }
+    };
+
+    fetchWebmailSettings();
+  }, []);
+
+  // Handle webmail button click
+  const handleWebmailClick = useCallback(() => {
+    if (webmailUrl) {
+      window.open(webmailUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      toast.error('Webmail URL not configured');
+    }
+  }, [webmailUrl]);
 
   // Define actions based on what users typically need
   const quickActions = [
@@ -63,7 +97,16 @@ const QuickActions = ({ user }) => {
       shortcut: 'Ctrl+D',
       color: 'bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700',
     },
-    {
+    // Conditionally add webmail button if URL is available, otherwise show content button
+    webmailUrl ? {
+      id: 'webmail',
+      title: 'Webmail',
+      description: 'Access webmail system',
+      icon: HiAtSymbol,
+      action: handleWebmailClick,
+      shortcut: 'Ctrl+W',
+      color: 'bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700',
+    } : {
       id: 'content',
       title: 'Content',
       description: 'Manage email templates',
@@ -100,8 +143,16 @@ const QuickActions = ({ user }) => {
             navigate('/domains');
             break;
           case 't':
-            e.preventDefault();
-            navigate('/content');
+            if (!webmailUrl) {
+              e.preventDefault();
+              navigate('/content');
+            }
+            break;
+          case 'w':
+            if (webmailUrl) {
+              e.preventDefault();
+              handleWebmailClick();
+            }
             break;
         }
       }
@@ -109,7 +160,7 @@ const QuickActions = ({ user }) => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, [navigate, webmailUrl, handleWebmailClick]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">

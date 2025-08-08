@@ -309,7 +309,7 @@ class SecurityService
             ]))
         ]);
 
-        $this->log("security.{$event}", [
+        $this->logInfo("Security event: {$event}", [
             'user_id' => $user->id,
             'event' => $event,
             'metadata' => $metadata

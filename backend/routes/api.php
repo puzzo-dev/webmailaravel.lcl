@@ -256,7 +256,7 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/statistics', [BackupController::class, 'getStatistics']);
             Route::get('/{backup}', [BackupController::class, 'show']);
             Route::delete('/{backup}', [BackupController::class, 'destroy']);
-            Route::post('/{backup}/download', [BackupController::class, 'download']);
+            Route::get('/{backup}/download', [BackupController::class, 'download']);
             Route::post('/{backup}/restore', [BackupController::class, 'restore']);
         });
 
@@ -472,5 +472,66 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::get('/', [SecurityController::class, 'getSecuritySettings']);
             Route::put('/', [SecurityController::class, 'updateSecuritySettings']);
         });
+    });
+});
+
+// API Key authenticated routes
+Route::middleware(['api.key'])->prefix('v1')->group(function () {
+    // Campaign management via API
+    Route::prefix('campaigns')->group(function () {
+        Route::get('/', [CampaignController::class, 'index']); // List campaigns
+        Route::post('/', [CampaignController::class, 'store']); // Create campaign
+        Route::get('/{campaign}', [CampaignController::class, 'show']); // Show campaign
+        Route::put('/{campaign}', [CampaignController::class, 'update']); // Update campaign
+        Route::delete('/{campaign}', [CampaignController::class, 'destroy']); // Delete campaign
+        Route::post('/{campaign}/send', [CampaignController::class, 'sendCampaign']); // Send campaign
+        Route::get('/{campaign}/analytics', [CampaignController::class, 'getAnalytics']); // Campaign analytics
+        Route::post('/{campaign}/test', [CampaignController::class, 'sendTestEmail']); // Send test email
+    });
+    
+    // Sender management via API
+    Route::prefix('senders')->group(function () {
+        Route::get('/', [SenderController::class, 'index']); // List senders
+        Route::post('/', [SenderController::class, 'store']); // Create sender
+        Route::get('/{sender}', [SenderController::class, 'show']); // Show sender
+        Route::put('/{sender}', [SenderController::class, 'update']); // Update sender
+        Route::delete('/{sender}', [SenderController::class, 'destroy']); // Delete sender
+        Route::post('/{sender}/test', [SenderController::class, 'testSender']); // Test sender
+    });
+    
+    // Domain management via API
+    Route::prefix('domains')->group(function () {
+        Route::get('/', [DomainController::class, 'index']); // List domains
+        Route::post('/', [DomainController::class, 'store']); // Create domain
+        Route::get('/{domain}', [DomainController::class, 'show']); // Show domain
+        Route::put('/{domain}', [DomainController::class, 'update']); // Update domain
+        Route::delete('/{domain}', [DomainController::class, 'destroy']); // Delete domain
+        Route::post('/{domain}/verify', [DomainController::class, 'verifyDomain']); // Verify domain
+    });
+    
+    // Analytics via API
+    Route::prefix('analytics')->group(function () {
+        Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']); // Dashboard analytics
+        Route::get('/campaigns', [AnalyticsController::class, 'getCampaignAnalytics']); // Campaign analytics
+        Route::get('/users', [AnalyticsController::class, 'getUserAnalytics']); // User analytics
+        Route::get('/deliverability', [AnalyticsController::class, 'getDeliverabilityAnalytics']); // Deliverability analytics
+        Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']); // Reputation analytics
+    });
+    
+    // Content management via API
+    Route::prefix('content')->group(function () {
+        Route::get('/', [ContentController::class, 'index']); // List content/templates
+        Route::post('/', [ContentController::class, 'store']); // Create content/template
+        Route::get('/{content}', [ContentController::class, 'show']); // Show content/template
+        Route::put('/{content}', [ContentController::class, 'update']); // Update content/template
+        Route::delete('/{content}', [ContentController::class, 'destroy']); // Delete content/template
+    });
+    
+    // User account info via API
+    Route::prefix('account')->group(function () {
+        Route::get('/profile', [UserController::class, 'show']); // Get user profile
+        Route::put('/profile', [UserController::class, 'update']); // Update user profile
+        Route::get('/usage', [UserController::class, 'getUsageStats']); // Get usage statistics
+        Route::get('/api-keys', [SecurityController::class, 'getApiKeys']); // List user's API keys
     });
 }); 

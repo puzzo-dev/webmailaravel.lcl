@@ -25,6 +25,9 @@ import Verify2FA from './pages/auth/Verify2FA';
 // Landing Page
 import Landing from './pages/Landing';
 
+// Routing Components
+import SmartRedirect from './components/routing/SmartRedirect';
+
 // User Pages
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/campaigns/Campaigns';
@@ -111,7 +114,7 @@ function App() {
         <Routes>
           {/* Landing Page */}
           <Route path="/" element={
-            !isAuthenticated ? <Landing /> : <Navigate to={currentView === 'admin' ? "/admin" : "/dashboard"} replace />
+            !isAuthenticated ? <Landing /> : <SmartRedirect />
           } />
           
           {/* Auth Routes */}
@@ -185,10 +188,10 @@ function App() {
                 <div className="mt-8">
                   {isAuthenticated ? (
                     <a 
-                      href={currentView === 'admin' ? '/admin' : '/dashboard'} 
+                      href={user?.role === 'admin' && currentView === 'admin' ? '/admin' : '/dashboard'} 
                       className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg inline-block"
                     >
-                      Go to {currentView === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
+                      Go to {user?.role === 'admin' && currentView === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
                     </a>
                   ) : (
                     <a 
