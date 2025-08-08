@@ -500,6 +500,12 @@ const AdminSystem = () => {
                 icon: HiUser,
               },
               {
+                id: "training",
+                name: "Training",
+                shortName: "Training",
+                icon: HiChartBar,
+              },
+              {
                 id: "env",
                 name: "Environment",
                 shortName: "Env",

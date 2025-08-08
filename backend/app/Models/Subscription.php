@@ -12,7 +12,10 @@ class Subscription extends Model
     protected $fillable = [
         'user_id',
         'plan_id',
+        'plan_name',
         'status',
+        'starts_at',
+        'ends_at',
         'expiry',
         'payment_id',
         'payment_method',
@@ -25,6 +28,8 @@ class Subscription extends Model
     ];
 
     protected $casts = [
+        'starts_at' => 'datetime',
+        'ends_at' => 'datetime',
         'expiry' => 'datetime',
         'paid_at' => 'datetime',
         'payment_amount' => 'decimal:2'

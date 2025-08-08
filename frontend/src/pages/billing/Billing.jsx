@@ -89,8 +89,16 @@ const Billing = () => {
 
   const handleUpgrade = async (planId) => {
     try {
-      await dispatch(createSubscription({ plan_id: planId })).unwrap();
-      toast.success('Subscription created successfully! Check your email for payment instructions.');
+      const result = await dispatch(createSubscription({ plan_id: planId })).unwrap();
+      // Expecting checkout_url from backend to initiate BTCPay payment
+      if (result?.checkout_url) {
+        toast.success('Redirecting to BTCPay to complete payment...');
+        window.location.href = result.checkout_url;
+      } else {
+        // Fallback: show success but indicate manual follow-up if no URL present
+        toast.success('Subscription created. Please check your email for payment instructions.');
+        console.warn('No checkout_url returned from subscription creation result:', result);
+      }
     } catch (error) {
       console.error('Plan upgrade failed:', error);
       toast.error('Failed to create subscription. Please try again.');
@@ -432,7 +440,7 @@ const Billing = () => {
                           </tr>
                         ))
                       ) : (
-                        <tr>
+                        <tr key="no-payment-history">
                           <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
                             No payment history found
                           </td>
@@ -523,7 +531,7 @@ const Billing = () => {
                           </tr>
                         ))
                       ) : (
-                        <tr>
+                        <tr key="no-invoices">
                           <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
                             No invoices found
                           </td>

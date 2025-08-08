@@ -21,12 +21,15 @@ class Plan extends Model
         'max_live_campaigns',
         'daily_sending_limit',
         'features',
+        'training_mode',
+        'allow_manual_training',
         'is_active',
     ];
 
     protected $casts = [
         'features' => 'array',
         'is_active' => 'boolean',
+        'allow_manual_training' => 'boolean',
         'price' => 'decimal:2',
     ];
 

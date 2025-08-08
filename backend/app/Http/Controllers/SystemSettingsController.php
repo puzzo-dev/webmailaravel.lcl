@@ -54,6 +54,14 @@ class SystemSettingsController extends Controller
                     'email_enabled' => SystemConfig::get('NOTIFICATION_EMAIL_ENABLED', env('NOTIFICATION_EMAIL_ENABLED', true)),
                     'telegram_enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', env('NOTIFICATION_TELEGRAM_ENABLED', false)),
                 ],
+                
+                // Training Settings
+                'training' => [
+                    'default_mode' => SystemConfig::get('TRAINING_DEFAULT_MODE', 'automatic'),
+                    'allow_user_override' => SystemConfig::get('TRAINING_ALLOW_USER_OVERRIDE', true),
+                    'automatic_threshold' => SystemConfig::get('TRAINING_AUTOMATIC_THRESHOLD', 100),
+                    'manual_approval_required' => SystemConfig::get('TRAINING_MANUAL_APPROVAL_REQUIRED', false),
+                ],
             ];
 
             return $this->successResponse($settings, 'System settings retrieved successfully');
@@ -95,6 +103,12 @@ class SystemSettingsController extends Controller
                 // Notification validation
                 'notifications.email_enabled' => 'sometimes|boolean',
                 'notifications.telegram_enabled' => 'sometimes|boolean',
+                
+                // Training validation
+                'training.default_mode' => 'sometimes|in:automatic,manual',
+                'training.allow_user_override' => 'sometimes|boolean',
+                'training.automatic_threshold' => 'sometimes|integer|min:1|max:10000',
+                'training.manual_approval_required' => 'sometimes|boolean',
             ]);
 
             $updatedSettings = [];
@@ -153,6 +167,26 @@ class SystemSettingsController extends Controller
                     }
                     SystemConfig::set($configKey, $value);
                     $updatedSettings["notifications.{$key}"] = $value;
+                }
+            }
+
+            // Update training settings
+            if ($request->has('training')) {
+                $trainingSettings = $request->input('training');
+                foreach ($trainingSettings as $key => $value) {
+                    if ($key === 'default_mode') {
+                        $configKey = 'TRAINING_DEFAULT_MODE';
+                    } elseif ($key === 'allow_user_override') {
+                        $configKey = 'TRAINING_ALLOW_USER_OVERRIDE';
+                    } elseif ($key === 'automatic_threshold') {
+                        $configKey = 'TRAINING_AUTOMATIC_THRESHOLD';
+                    } elseif ($key === 'manual_approval_required') {
+                        $configKey = 'TRAINING_MANUAL_APPROVAL_REQUIRED';
+                    } else {
+                        $configKey = 'TRAINING_' . strtoupper($key);
+                    }
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["training.{$key}"] = $value;
                 }
             }
 

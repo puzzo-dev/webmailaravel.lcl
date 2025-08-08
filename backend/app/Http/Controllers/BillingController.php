@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Models\Plan;
 use App\Models\User;
+use App\Models\SystemConfig;
 use App\Traits\BillingTrait;
 use App\Traits\ResponseTrait;
 use App\Traits\LoggingTrait;
@@ -15,7 +16,9 @@ use Illuminate\Support\Facades\Log;
 
 class BillingController extends Controller
 {
-    use BillingTrait, ResponseTrait, LoggingTrait;
+    // Alias the trait's processManualPayment to avoid name collision with the controller's public method
+    use BillingTrait { processManualPayment as protected traitProcessManualPayment; }
+    use ResponseTrait, LoggingTrait;
 
     /**
      * Get user subscriptions
@@ -534,23 +537,39 @@ class BillingController extends Controller
      */
     public function processManualPayment(Request $request, Subscription $subscription): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'payment_method' => 'required|string',
-            'payment_reference' => 'required|string',
+            // Make reference optional; we will auto-generate if missing
+            'payment_reference' => 'nullable|string',
             'amount_paid' => 'required|numeric|min:0',
             'currency' => 'sometimes|string|size:3',
             'notes' => 'nullable|string',
         ]);
 
         try {
-            $result = $this->processManualPayment($subscription, $request->all());
+            // Auto-generate a unique payment reference if not provided
+            if (empty($validated['payment_reference'])) {
+                // Example format: TOPUP-YYYYMMDDHHMMSS-<subscriptionId>-<random>
+                $validated['payment_reference'] = sprintf(
+                    'TOPUP-%s-%d-%s',
+                    now()->format('YmdHis'),
+                    $subscription->id,
+                    substr(bin2hex(random_bytes(4)), 0, 8)
+                );
+            }
 
-            if ($result['success']) {
+            $result = $this->traitProcessManualPayment($subscription, $validated);
+
+            if (!empty($result['success'])) {
                 return $this->successResponse($subscription->fresh(['user', 'plan']), 'Manual payment processed successfully');
             }
 
             return $this->errorResponse($result['error'] ?? 'Failed to process manual payment', 400);
         } catch (\Exception $e) {
+            Log::error('Manual payment processing error', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage(),
+            ]);
             return $this->errorResponse('Failed to process manual payment', 500);
         }
     }
@@ -568,5 +587,106 @@ class BillingController extends Controller
         }
 
         return round(($activeSubscriptions / $totalUsers) * 100, 1);
+    }
+
+    /**
+     * Create BTCPay subscription
+     */
+    private function createBTCPaySubscription(User $user, Plan $plan): array
+    {
+        try {
+            // Create subscription record
+            $subscription = Subscription::create([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'plan_name' => $plan->name,
+                'status' => 'pending',
+                'starts_at' => now(),
+                'ends_at' => now()->addDays($plan->duration_days),
+                'expiry' => now()->addDays($plan->duration_days),
+            ]);
+
+            // Create BTCPay invoice (if BTCPay is configured)
+            $invoiceResult = $this->createBTCPaySubscriptionInvoice($subscription);
+
+            if ($invoiceResult['success']) {
+                // Update subscription with payment details
+                $subscription->update([
+                    'payment_id' => $invoiceResult['data']['invoice_id'] ?? null,
+                ]);
+
+                return [
+                    'success' => true,
+                    'subscription_id' => $subscription->id,
+                    'invoice_url' => $invoiceResult['data']['invoice_url'] ?? null,
+                    'invoice_id' => $invoiceResult['data']['invoice_id'] ?? null,
+                ];
+            }
+
+            // If BTCPay invoice creation fails, subscription still created but marked as pending
+            return [
+                'success' => true,
+                'subscription_id' => $subscription->id,
+                'warning' => 'Subscription created but payment invoice generation failed',
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('createBTCPaySubscription failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'Failed to create subscription: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Create BTCPay invoice for subscription
+     */
+    private function createBTCPaySubscriptionInvoice(Subscription $subscription): array
+    {
+        try {
+            // Check if BTCPay is configured
+            $btcpayUrl = SystemConfig::get('BTCPAY_BASE_URL');
+            $apiKey = SystemConfig::get('BTCPAY_API_KEY');
+            $storeId = SystemConfig::get('BTCPAY_STORE_ID');
+
+            if (!$btcpayUrl || !$apiKey || !$storeId) {
+                return [
+                    'success' => false,
+                    'error' => 'BTCPay not configured properly',
+                ];
+            }
+
+            // Create BTCPay invoice
+            $invoiceData = [
+                'amount' => $subscription->plan->price,
+                'currency' => $subscription->plan->currency,
+                'orderId' => 'subscription_' . $subscription->id,
+                'itemDesc' => $subscription->plan->name . ' Subscription',
+                'notificationURL' => url('/api/btcpay/webhook'),
+                'redirectURL' => url('/billing?payment=success'),
+                'buyer' => [
+                    'email' => $subscription->user->email,
+                    'name' => $subscription->user->name,
+                ]
+            ];
+
+            // TODO: Implement actual BTCPay API call here
+            // For now, return success with dummy data
+            return [
+                'success' => true,
+                'data' => [
+                    'invoice_id' => 'dummy_invoice_' . $subscription->id,
+                    'invoice_url' => $btcpayUrl . '/invoice/dummy_' . $subscription->id,
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('createBTCPaySubscriptionInvoice failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'error' => 'Failed to create BTCPay invoice: ' . $e->getMessage(),
+            ];
+        }
     }
 }

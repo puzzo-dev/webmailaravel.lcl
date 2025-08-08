@@ -67,6 +67,28 @@ const AdminBilling = () => {
     is_active: true
   });
 
+  // Manual payment form state for processing pending subscriptions (top up)
+  const [manualPaymentForm, setManualPaymentForm] = useState({
+    payment_method: 'cash',
+    payment_reference: '',
+    amount_paid: 0,
+    currency: 'USD',
+    notes: ''
+  });
+
+  // Helper to generate a unique payment reference client-side
+  const generatePaymentReference = (subscriptionId) => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const rand = Math.random().toString(16).slice(2, 10).toUpperCase();
+    return `TOPUP-${y}${m}${d}${hh}${mm}${ss}-${subscriptionId}-${rand}`;
+  };
+
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
@@ -137,6 +159,19 @@ const AdminBilling = () => {
       dispatch(clearError());
     }
   }, [error, dispatch]);
+
+  // When opening the subscription modal for a pending subscription, prefill manual payment form
+  useEffect(() => {
+    if (showSubscriptionModal && selectedPlan?.status === 'pending') {
+      setManualPaymentForm({
+        payment_method: 'cash',
+        payment_reference: generatePaymentReference(selectedPlan.id),
+        amount_paid: selectedPlan?.plan?.price ?? 0,
+        currency: selectedPlan?.plan?.currency ?? 'USD',
+        notes: ''
+      });
+    }
+  }, [showSubscriptionModal, selectedPlan]);
 
   const handleCreatePlan = async () => {
     try {
@@ -780,7 +815,11 @@ const AdminBilling = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-                      <select className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+                      <select
+                        value={manualPaymentForm.payment_method}
+                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, payment_method: e.target.value })}
+                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      >
                         <option value="cash">Cash</option>
                         <option value="bank_transfer">Bank Transfer</option>
                         <option value="check">Check</option>
@@ -793,9 +832,34 @@ const AdminBilling = () => {
                       <label className="block text-sm font-medium text-gray-700">Payment Reference</label>
                       <input
                         type="text"
+                        value={manualPaymentForm.payment_reference}
+                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, payment_reference: e.target.value })}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                         placeholder="Transaction ID or reference"
                       />
+                      <p className="mt-1 text-xs text-gray-500">Auto-generated. You can modify if needed.</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Amount</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={manualPaymentForm.amount_paid}
+                          onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, amount_paid: Number(e.target.value) })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Currency</label>
+                        <input
+                          type="text"
+                          value={manualPaymentForm.currency}
+                          onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, currency: e.target.value })}
+                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -803,6 +867,8 @@ const AdminBilling = () => {
                       <textarea
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                         rows="3"
+                        value={manualPaymentForm.notes}
+                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, notes: e.target.value })}
                         placeholder="Additional notes about the payment"
                       />
                     </div>
@@ -819,7 +885,7 @@ const AdminBilling = () => {
                 </button>
                 {selectedPlan.status === 'pending' && (
                   <button
-                    onClick={() => handleManualPayment(selectedPlan.id, {})}
+                    onClick={() => handleManualPayment(selectedPlan.id, manualPaymentForm)}
                     className="btn btn-primary"
                   >
                     Process Payment
