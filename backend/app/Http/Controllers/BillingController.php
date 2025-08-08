@@ -199,14 +199,36 @@ class BillingController extends Controller
      */
     public function webhook(Request $request): JsonResponse
     {
+        $this->logInfo('BTCPay webhook received', [
+            'headers' => $request->headers->all(),
+            'payload_size' => strlen($request->getContent())
+        ]);
+
         $payload = $request->all();
-        $signature = $request->header('BTCPay-Sig') ?? $request->header('X-BTCPay-Signature') ?? '';
         
+        // BTCPay Server sends signature in different header formats
+        $signature = $request->header('BTCPay-Sig') ?? 
+                    $request->header('X-BTCPay-Signature') ?? 
+                    $request->header('X-BTCPay-Sig') ?? '';
+        
+        if (empty($signature)) {
+            $this->logWarning('BTCPay webhook received without signature');
+            return $this->errorResponse('Missing webhook signature', 400);
+        }
+
         $result = $this->processBTCPayWebhook($payload, $signature);
 
         if ($result['success']) {
-            return $this->successResponse(null, 'Webhook processed successfully');
+            $this->logInfo('BTCPay webhook processed successfully', [
+                'result' => $result
+            ]);
+            return $this->successResponse($result, 'Webhook processed successfully');
         }
+
+        $this->logError('BTCPay webhook processing failed', [
+            'error' => $result['error'] ?? 'Unknown error',
+            'payload' => $payload
+        ]);
 
         return $this->errorResponse($result['error'] ?? 'Failed to process webhook', 400);
     }

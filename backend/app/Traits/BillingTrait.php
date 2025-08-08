@@ -35,7 +35,7 @@ trait BillingTrait
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'status' => 'pending',
-                'expiry' => now()->addDays(30), // Default 30 days
+                'expiry' => now()->addDays($plan->duration_days ?? 30),
             ]);
 
             // Create BTCPay invoice directly
@@ -449,7 +449,20 @@ trait BillingTrait
             
             $headers = $this->withApiKey($apiKey);
             
-            $result = $this->post($url, $data, $headers, $timeout);
+            // Prepare BTCPay invoice payload with proper structure
+            $invoicePayload = [
+                'amount' => $data['amount'],
+                'currency' => $data['currency'] ?? 'USD',
+                'metadata' => $data['metadata'] ?? [],
+                'checkout' => [
+                    'redirectURL' => url('/billing?payment=success'),
+                    'closeURL' => url('/billing?payment=cancelled'),
+                ],
+                'notificationURL' => url('/api/billing/webhook'),
+                'notificationEmail' => auth()->user()->email ?? null,
+            ];
+            
+            $result = $this->post($url, $invoicePayload, $headers, $timeout);
 
             if ($result['success']) {
                 $this->logInfo('BTCPay invoice created successfully', [
@@ -568,16 +581,19 @@ trait BillingTrait
      */
     protected function verifyBTCPaySignature(array $payload, string $signature): bool
     {
-        $apiKey = config('services.btcpay.api_key');
+        $webhookSecret = config('services.btcpay.webhook_secret');
         
-        // If API key is not configured, signature verification will fail
-        if (!$apiKey) {
-            $this->logWarning('BTCPay API key not configured, signature verification skipped');
+        // If webhook secret is not configured, signature verification will fail
+        if (!$webhookSecret) {
+            $this->logWarning('BTCPay webhook secret not configured, signature verification skipped');
             return false;
         }
         
-        $payloadString = json_encode($payload);
-        $expectedSignature = hash_hmac('sha256', $payloadString, $apiKey);
+        // Remove 'sha256=' prefix if present
+        $signature = str_replace('sha256=', '', $signature);
+        
+        $payloadString = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $expectedSignature = hash_hmac('sha256', $payloadString, $webhookSecret);
         
         return hash_equals($expectedSignature, $signature);
     }
@@ -587,13 +603,15 @@ trait BillingTrait
      */
     protected function processBTCPayPayment(array $payload): array
     {
-        $invoiceId = $payload['invoiceId'] ?? null;
+        // BTCPay Server webhook payload structure
+        $invoiceId = $payload['invoiceId'] ?? $payload['id'] ?? null;
         $status = $payload['status'] ?? null;
+        $type = $payload['type'] ?? null;
 
-        if (!$invoiceId || !$status) {
+        if (!$invoiceId) {
             return [
                 'success' => false,
-                'error' => 'Invalid webhook payload'
+                'error' => 'Invalid webhook payload - missing invoice ID'
             ];
         }
 
@@ -601,35 +619,61 @@ trait BillingTrait
         $subscription = Subscription::where('payment_id', $invoiceId)->first();
         
         if (!$subscription) {
+            $this->logWarning('Subscription not found for BTCPay invoice', [
+                'invoice_id' => $invoiceId,
+                'payload' => $payload
+            ]);
             return [
                 'success' => false,
                 'error' => 'Subscription not found for invoice'
             ];
         }
 
-        // Update subscription based on status
-        switch ($status) {
-            case 'confirmed':
-            case 'complete':
-                $subscription->update([
-                    'status' => 'active',
-                    'paid_at' => now(),
-                    'expiry' => Carbon::now()->addDays($subscription->plan->duration_days)
-                ]);
-                
-                // Update user billing status
-                $subscription->user->update([
-                    'billing_status' => 'active',
-                    'last_payment_at' => now()
-                ]);
-                
+        $this->logInfo('Processing BTCPay webhook for subscription', [
+            'subscription_id' => $subscription->id,
+            'invoice_id' => $invoiceId,
+            'status' => $status,
+            'type' => $type
+        ]);
+
+        // Handle different BTCPay webhook events
+        switch ($type) {
+            case 'InvoiceReceivedPayment':
+                // Payment received but not yet confirmed
+                $subscription->update(['status' => 'processing']);
                 return [
                     'success' => true,
-                    'message' => 'Payment confirmed and subscription activated',
+                    'message' => 'Payment received, waiting for confirmations',
                     'subscription_id' => $subscription->id
                 ];
 
-            case 'expired':
+            case 'InvoicePaymentSettled':
+                // Payment confirmed with required confirmations
+                $confirmationCount = $payload['confirmationCount'] ?? 0;
+                $requiredConfirmations = config('services.btcpay.required_confirmations', 1);
+                
+                if ($confirmationCount >= $requiredConfirmations) {
+                    $subscription->update([
+                        'status' => 'active',
+                        'paid_at' => now(),
+                        'expiry' => now()->addDays($subscription->plan->duration_days ?? 30)
+                    ]);
+                    
+                    // Update user billing status
+                    $subscription->user->update([
+                        'billing_status' => 'active',
+                        'last_payment_at' => now()
+                    ]);
+                    
+                    return [
+                        'success' => true,
+                        'message' => 'Payment confirmed and subscription activated',
+                        'subscription_id' => $subscription->id
+                    ];
+                }
+                break;
+
+            case 'InvoiceExpired':
                 $subscription->update(['status' => 'expired']);
                 return [
                     'success' => true,
@@ -637,20 +681,60 @@ trait BillingTrait
                     'subscription_id' => $subscription->id
                 ];
 
-            case 'invalid':
+            case 'InvoiceInvalid':
                 $subscription->update(['status' => 'failed']);
                 return [
                     'success' => true,
                     'message' => 'Payment failed',
                     'subscription_id' => $subscription->id
                 ];
-
-            default:
-                return [
-                    'success' => false,
-                    'error' => 'Unknown payment status: ' . $status
-                ];
         }
+
+        // Handle legacy status-based processing for backward compatibility
+        if ($status) {
+            switch (strtolower($status)) {
+                case 'settled':
+                case 'confirmed':
+                case 'complete':
+                    $subscription->update([
+                        'status' => 'active',
+                        'paid_at' => now(),
+                        'expiry' => now()->addDays($subscription->plan->duration_days ?? 30)
+                    ]);
+                    
+                    $subscription->user->update([
+                        'billing_status' => 'active',
+                        'last_payment_at' => now()
+                    ]);
+                    
+                    return [
+                        'success' => true,
+                        'message' => 'Payment confirmed and subscription activated',
+                        'subscription_id' => $subscription->id
+                    ];
+
+                case 'expired':
+                    $subscription->update(['status' => 'expired']);
+                    return [
+                        'success' => true,
+                        'message' => 'Invoice expired',
+                        'subscription_id' => $subscription->id
+                    ];
+
+                case 'invalid':
+                    $subscription->update(['status' => 'failed']);
+                    return [
+                        'success' => true,
+                        'message' => 'Payment failed',
+                        'subscription_id' => $subscription->id
+                    ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'error' => 'Unknown payment status: ' . $status
+        ];
     }
 
     /**

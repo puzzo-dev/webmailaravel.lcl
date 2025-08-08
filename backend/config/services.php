@@ -65,6 +65,7 @@ return [
         'webhook_secret' => env('BTCPAY_WEBHOOK_SECRET'),
         'currency' => env('BTCPAY_CURRENCY', 'BTC'),
         'timeout' => env('BTCPAY_TIMEOUT', 30),
+        'required_confirmations' => env('BTCPAY_REQUIRED_CONFIRMATIONS', 1),
     ],
 
 ];

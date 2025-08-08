@@ -22,6 +22,7 @@ class Subscription extends Model
         'payment_reference',
         'payment_amount',
         'payment_currency',
+        'payment_url',
         'paid_at',
         'notes',
         'processed_by'
