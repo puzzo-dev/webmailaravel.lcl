@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
 import {
   HiCog,
@@ -28,7 +28,6 @@ import {
 import {
   adminService,
   systemSettingsService,
-  securityService,
 } from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -72,13 +71,7 @@ const AdminSystem = () => {
     return Math.round((currentBytes / limitBytes) * 100);
   };
 
-  useEffect(() => {
-    if (user?.role === "admin") {
-      loadSystemData();
-    }
-  }, [user, activeTab]);
-
-  const loadSystemData = async () => {
+  const loadSystemData = useCallback(async () => {
     try {
       setLoading(true);
       const [statusResponse, settingsResponse] = await Promise.all([
@@ -129,20 +122,35 @@ const AdminSystem = () => {
 
       // Load additional configurations for specific tabs
       if (activeTab === "btcpay") {
-        const btcpayResponse = await adminService.getBTCPayConfig();
-        setSystemConfig((prev) => ({ ...prev, btcpay: btcpayResponse.data }));
+        try {
+          const btcpayResponse = await adminService.getBTCPayConfig();
+          setSystemConfig((prev) => ({ ...prev, btcpay: btcpayResponse.data }));
+        } catch (error) {
+          console.error('Failed to load BTCPay config:', error);
+          toast.error('Failed to load BTCPay configuration');
+        }
       } else if (activeTab === "powermta") {
-        const powermtaResponse = await adminService.getPowerMTAConfig();
-        setSystemConfig((prev) => ({
-          ...prev,
-          powermta: powermtaResponse.data,
-        }));
+        try {
+          const powermtaResponse = await adminService.getPowerMTAConfig();
+          setSystemConfig((prev) => ({
+            ...prev,
+            powermta: powermtaResponse.data,
+          }));
+        } catch (error) {
+          console.error('Failed to load PowerMTA config:', error);
+          toast.error('Failed to load PowerMTA configuration');
+        }
       } else if (activeTab === "telegram") {
-        const telegramResponse = await adminService.getTelegramConfig();
-        setSystemConfig((prev) => ({
-          ...prev,
-          telegram: telegramResponse.data,
-        }));
+        try {
+          const telegramResponse = await adminService.getTelegramConfig();
+          setSystemConfig((prev) => ({
+            ...prev,
+            telegram: telegramResponse.data,
+          }));
+        } catch (error) {
+          console.error('Failed to load Telegram config:', error);
+          toast.error('Failed to load Telegram configuration');
+        }
       }
     } catch (error) {
       toast.error("Failed to load system data");
@@ -150,7 +158,13 @@ const AdminSystem = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (user?.role === "admin") {
+      loadSystemData();
+    }
+  }, [user, activeTab, loadSystemData]);
 
   const handleSaveConfig = async () => {
     try {
@@ -718,7 +732,7 @@ const AdminSystem = () => {
                         env: envResponse.data,
                       }));
                       toast.success("Environment variables refreshed");
-                    } catch (error) {
+                    } catch {
                       toast.error("Failed to load environment variables");
                     }
                   }}

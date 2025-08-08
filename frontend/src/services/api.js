@@ -36,7 +36,10 @@ export const authService = {
         const response = await api.get('/user/me', {}, config);
             return response.data;
         } catch (error) {
-            console.error('getProfile error:', error);
+            // Don't log 401 errors during auth initialization - this is expected when not logged in
+            if (!isAuthInit || error.response?.status !== 401) {
+                console.error('getProfile error:', error);
+            }
             throw error;
         }
     },
@@ -551,64 +554,64 @@ export const securityService = {
 export const billingService = {
     async getSubscriptions(params = {}) {
         const response = await api.get('/billing/subscriptions', params);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async createSubscription(subscriptionData) {
         const response = await api.post('/billing/subscriptions', subscriptionData);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async cancelSubscription(id) {
         const response = await api.delete(`/billing/subscriptions/${id}`);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async createBTCPayInvoice(invoiceData) {
         const response = await api.post('/btcpay/invoice', invoiceData);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async getPaymentHistory(params = {}) {
         const response = await api.get('/billing/payment-history', params);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async getPaymentRates() {
         const response = await api.get('/billing/rates');
-        return response.data;
+        return response.data.data || response.data;
     },
 
     // Plan management
     async getPlans() {
         const response = await api.get('/billing/plans');
-        return response.data;
+        return response.data.data || response.data; // Handle both { data: [...] } and direct array responses
     },
 
     async createPlan(planData) {
         const response = await api.post('/admin/billing/plans', planData);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async updatePlan(planId, planData) {
         const response = await api.put(`/admin/billing/plans/${planId}`, planData);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async deletePlan(planId) {
         const response = await api.delete(`/admin/billing/plans/${planId}`);
-        return response.data;
+        return response.data.data || response.data;
     },
 
     // Admin billing management
     async getBillingStats() {
         const response = await api.get('/admin/billing/stats');
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async getAllSubscriptions(params = {}) {
         const response = await api.get('/admin/billing/subscriptions', { params });
-        return response.data;
+        return response.data.data || response.data;
     },
 
     async processManualPayment(subscriptionId, paymentData) {
@@ -698,6 +701,26 @@ export const adminService = {
 
     async getDomains(params = {}) {
         const response = await api.get('/admin/domains', { params });
+        return response.data;
+    },
+
+    async createDomain(domainData) {
+        const response = await api.post('/admin/domains', domainData);
+        return response.data;
+    },
+
+    async updateDomain(domainId, domainData) {
+        const response = await api.put(`/admin/domains/${domainId}`, domainData);
+        return response.data;
+    },
+
+    async deleteDomain(domainId) {
+        const response = await api.delete(`/admin/domains/${domainId}`);
+        return response.data;
+    },
+
+    async updateDomainStatus(domainId, status) {
+        const response = await api.patch(`/admin/domains/${domainId}/status`, { status });
         return response.data;
     },
 

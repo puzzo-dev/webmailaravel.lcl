@@ -34,7 +34,10 @@ export const api = {
       const response = await axios.get(url, config);
       return response;
     } catch (error) {
-      console.error('API GET error:', error.response?.status, error.response?.data);
+      // Don't log 401 errors during auth initialization
+      if (!(config._isAuthInit && error.response?.status === 401)) {
+        console.error('API GET error:', error.response?.status, error.response?.data);
+      }
       throw error;
     }
   },

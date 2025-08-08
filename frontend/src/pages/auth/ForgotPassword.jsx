@@ -19,7 +19,9 @@ const ForgotPassword = () => {
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      toast.error(errorMessage);
       dispatch(clearError());
     }
   }, [error, dispatch]);

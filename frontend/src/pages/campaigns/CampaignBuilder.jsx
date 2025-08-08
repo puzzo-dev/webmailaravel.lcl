@@ -235,7 +235,9 @@ const CampaignBuilder = () => {
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Campaign creation error:', error);
-      toast.error(error || 'Failed to create campaign');
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to create campaign';
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -285,7 +287,9 @@ const CampaignBuilder = () => {
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Draft save error:', error);
-      toast.error(error || 'Failed to save draft');
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to save draft';
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

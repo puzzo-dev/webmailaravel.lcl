@@ -239,7 +239,7 @@ const SuppressionList = () => {
             <HiExclamationCircle className="h-5 w-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
+              <div className="mt-2 text-sm text-red-700">{typeof error === 'string' ? error : error?.message || 'An error occurred'}</div>
             </div>
           </div>
         </div>

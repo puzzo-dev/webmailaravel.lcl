@@ -111,7 +111,9 @@ const Domains = () => {
   useEffect(() => {
     if (error) {
       if (!handleSubscriptionError({ response: { status: 403, data: { error: 'subscription_required', message: error } } })) {
-        toast.error(error);
+        // Ensure error is a string for toast display
+        const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+        toast.error(errorMessage);
       }
       dispatch(clearError());
     }

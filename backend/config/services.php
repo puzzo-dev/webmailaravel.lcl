@@ -62,6 +62,8 @@ return [
         'base_url' => env('BTCPAY_BASE_URL'),
         'api_key' => env('BTCPAY_API_KEY'),
         'store_id' => env('BTCPAY_STORE_ID'),
+        'webhook_secret' => env('BTCPAY_WEBHOOK_SECRET'),
+        'currency' => env('BTCPAY_CURRENCY', 'BTC'),
         'timeout' => env('BTCPAY_TIMEOUT', 30),
     ],
 

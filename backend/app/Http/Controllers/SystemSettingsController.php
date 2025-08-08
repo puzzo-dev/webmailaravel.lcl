@@ -290,11 +290,12 @@ class SystemSettingsController extends Controller
             }
             
             $config = [
-                'base_url' => SystemConfig::get('BTCPAY_URL'),
+                'base_url' => SystemConfig::get('BTCPAY_BASE_URL'),
                 'api_key' => SystemConfig::get('BTCPAY_API_KEY'),
                 'store_id' => SystemConfig::get('BTCPAY_STORE_ID'),
                 'webhook_secret' => SystemConfig::get('BTCPAY_WEBHOOK_SECRET'),
-                'currency' => SystemConfig::get('BTCPAY_CURRENCY', 'USD'),
+                'currency' => SystemConfig::get('BTCPAY_CURRENCY'),
+                'timeout' => SystemConfig::get('BTCPAY_TIMEOUT', 30),
             ];
             return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
         }, 'view_btcpay_config');
@@ -316,6 +317,7 @@ class SystemSettingsController extends Controller
                 'store_id' => 'nullable|string',
                 'webhook_secret' => 'nullable|string',
                 'currency' => 'nullable|string',
+                'timeout' => 'nullable|integer|min:1|max:300',
             ]);
             
             foreach ($validated as $key => $value) {

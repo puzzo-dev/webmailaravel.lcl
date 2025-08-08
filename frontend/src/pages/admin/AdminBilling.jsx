@@ -158,7 +158,9 @@ const AdminBilling = () => {
         is_active: true
       });
     } catch (error) {
-      toast.error(error || 'Failed to create plan');
+      // Ensure error is a string for toast display
+        const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to create plan';
+        toast.error(errorMessage);
     }
   };
 
@@ -169,7 +171,9 @@ const AdminBilling = () => {
       setShowPlanModal(false);
       setSelectedPlan(null);
     } catch (error) {
-      toast.error(error || 'Failed to update plan');
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to update plan';
+      toast.error(errorMessage);
     }
   };
 
@@ -180,7 +184,9 @@ const AdminBilling = () => {
       await dispatch(deletePlan(planId)).unwrap();
       toast.success('Plan deleted successfully');
     } catch (error) {
-      toast.error(error || 'Failed to delete plan');
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to delete plan';
+      toast.error(errorMessage);
     }
   };
 
@@ -190,7 +196,9 @@ const AdminBilling = () => {
       toast.success('Manual payment processed successfully');
       setShowSubscriptionModal(false);
     } catch (error) {
-      toast.error(error || 'Failed to process payment');
+      // Ensure error is a string for toast display
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to process payment';
+      toast.error(errorMessage);
     }
   };
 

@@ -272,6 +272,10 @@ Route::middleware(['auth:api'])->group(function () {
         // Admin domains management routes (admin only)
         Route::prefix('domains')->group(function () {
             Route::get('/', [DomainController::class, 'index']);
+            Route::post('/', [DomainController::class, 'store']);
+            Route::put('/{domain}', [DomainController::class, 'update']);
+            Route::delete('/{domain}', [DomainController::class, 'destroy']);
+            Route::patch('/{domain}/status', [DomainController::class, 'updateStatus']);
             Route::post('/{domain}/test', [DomainController::class, 'testDomainConnection']);
         });
 

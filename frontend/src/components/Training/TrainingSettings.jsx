@@ -83,7 +83,7 @@ const TrainingSettings = () => {
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
             <div className="flex justify-between items-center">
-              <p className="text-red-800">{error}</p>
+              <p className="text-red-800">{typeof error === 'string' ? error : error?.message || 'An error occurred'}</p>
               <button
                 onClick={() => handleCloseAlert('error')}
                 className="text-red-500 hover:text-red-700"
