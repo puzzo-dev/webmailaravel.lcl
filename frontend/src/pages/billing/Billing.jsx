@@ -105,15 +105,17 @@ const Billing = () => {
     }
   };
 
-  const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription?')) return;
+  const handleCancelSubscription = async (subscriptionId) => {
+    if (!confirm('Are you sure you want to cancel your subscription? This action cannot be undone.')) return;
     
     try {
-      if (currentSubscription) {
-        await dispatch(cancelSubscription(currentSubscription.id)).unwrap();
-      }
+      await dispatch(cancelSubscription(subscriptionId)).unwrap();
+      toast.success('Subscription cancelled successfully');
+      // Reload billing data to reflect changes
+      loadBillingData();
     } catch (error) {
       console.error('Subscription cancellation failed:', error);
+      toast.error(error.message || 'Failed to cancel subscription. Please try again.');
     }
   };
 
@@ -216,28 +218,173 @@ const Billing = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-medium text-gray-900">Current Plan</h3>
-                      <p className="text-2xl font-bold text-primary-600">{currentSubscription.plan}</p>
-                      <p className="text-gray-600 mt-1">
-                        ${currentSubscription.amount}/{currentSubscription.currency} per month
+                      <p className="text-2xl font-bold text-primary-600">
+                        {(() => {
+                          const planName = currentSubscription.plan?.name || currentSubscription.plan_name;
+                          return (typeof planName === 'string' && planName) ? planName : 'Unknown Plan';
+                        })()}
                       </p>
+                      <p className="text-gray-600 mt-1">
+                        {(() => {
+                          const amount = currentSubscription.payment_amount || currentSubscription.plan?.price || 0;
+                          const currency = currentSubscription.payment_currency || currentSubscription.plan?.currency || 'USD';
+                          const duration = currentSubscription.plan?.duration_days;
+                          
+                          return (
+                            <>
+                              ${formatNumber(typeof amount === 'number' ? amount : 0, 2)} {typeof currency === 'string' ? currency : 'USD'}
+                              {(typeof duration === 'number' && duration > 0) && (
+                                <span> / {duration} days</span>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </p>
+                      {currentSubscription.invoice && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Invoice: {currentSubscription.invoice}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                         currentSubscription.status === 'active' 
                           ? 'bg-success-100 text-success-800' 
-                          : 'bg-warning-100 text-warning-800'
+                          : currentSubscription.status === 'pending'
+                          ? 'bg-warning-100 text-warning-800'
+                          : currentSubscription.status === 'processing'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
                       }`}>
                         {currentSubscription.status === 'active' ? (
                           <HiCheckCircle className="h-4 w-4 mr-1" />
+                        ) : currentSubscription.status === 'processing' ? (
+                          <HiClock className="h-4 w-4 mr-1" />
                         ) : (
                           <HiClock className="h-4 w-4 mr-1" />
                         )}
-                        {currentSubscription.status}
+                        {currentSubscription.status?.charAt(0).toUpperCase() + currentSubscription.status?.slice(1) || 'Unknown'}
                       </span>
                       <p className="text-sm text-gray-500 mt-1">
-                        Next billing: {formatDate(currentSubscription.next_billing_date)}
+                        {currentSubscription.expiry ? (
+                          <>Expires: {formatDate(currentSubscription.expiry)}</>
+                        ) : currentSubscription.next_billing_date ? (
+                          <>Next billing: {formatDate(currentSubscription.next_billing_date)}</>
+                        ) : (
+                          'No expiry date'
+                        )}
                       </p>
+                      {currentSubscription.paid_at && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Paid: {formatDate(currentSubscription.paid_at)}
+                        </p>
+                      )}
+                      {/* Cancel Subscription Button */}
+                      {currentSubscription.status === 'active' && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => handleCancelSubscription(currentSubscription.id)}
+                            disabled={isLoading}
+                            className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <HiXCircle className="h-4 w-4 mr-1" />
+                            Cancel Subscription
+                          </button>
+                        </div>
+                      )}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Plan Limits & Usage */}
+              {currentSubscription && currentSubscription.plan && (
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Limits</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-primary-600">
+                        {(() => {
+                          const value = currentSubscription.plan?.max_domains;
+                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
+                        })()}
+                      </div>
+                      <div className="text-sm text-gray-500">Max Domains</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-primary-600">
+                        {(() => {
+                          const value = currentSubscription.plan?.max_total_campaigns;
+                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
+                        })()}
+                      </div>
+                      <div className="text-sm text-gray-500">Max Campaigns</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-primary-600">
+                        {(() => {
+                          const value = currentSubscription.plan?.daily_sending_limit;
+                          return (typeof value === 'number' && value > 0) ? formatNumber(value) : 'Unlimited';
+                        })()}
+                      </div>
+                      <div className="text-sm text-gray-500">Daily Limit</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-primary-600">
+                        {(() => {
+                          const value = currentSubscription.plan?.max_senders_per_domain;
+                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
+                        })()}
+                      </div>
+                      <div className="text-sm text-gray-500">Senders/Domain</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Information */}
+              {currentSubscription && (
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Payment Method</h4>
+                      <div className="flex items-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {currentSubscription.payment_method || 'BTCPay'}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Payment Status</h4>
+                      <div className="flex items-center">
+                        {currentSubscription.paid_at ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                            <HiCheckCircle className="h-3 w-3 mr-1" />
+                            Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800">
+                            <HiClock className="h-3 w-3 mr-1" />
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {currentSubscription.payment_url && currentSubscription.status === 'pending' && (
+                      <div className="md:col-span-2">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Complete Payment</h4>
+                        <a
+                          href={currentSubscription.payment_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 transition-colors"
+                        >
+                          <HiCreditCard className="h-4 w-4 mr-2" />
+                          Pay with BTCPay
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -247,16 +394,33 @@ const Billing = () => {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Features</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {Array.isArray(currentSubscription.features) && currentSubscription.features.length > 0 ? (
-                      currentSubscription.features.map((feature, index) => (
-                        <div key={index} className="flex items-center">
-                          <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
-                          <span className="text-gray-700">{feature}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-gray-500">No features listed</div>
-                    )}
+                    {(() => {
+                      // Handle different feature data structures
+                      let features = [];
+                      
+                      if (Array.isArray(currentSubscription.features)) {
+                        features = currentSubscription.features;
+                      } else if (Array.isArray(currentSubscription.plan?.features)) {
+                        features = currentSubscription.plan.features;
+                      } else if (typeof currentSubscription.features === 'string') {
+                        try {
+                          features = JSON.parse(currentSubscription.features);
+                        } catch (e) {
+                          features = [currentSubscription.features];
+                        }
+                      }
+                      
+                      return features.length > 0 ? (
+                        features.map((feature, index) => (
+                          <div key={index} className="flex items-center">
+                            <HiCheckCircle className="h-5 w-5 text-success-500 mr-3" />
+                            <span className="text-gray-700">{typeof feature === 'string' ? feature : feature.name || 'Feature'}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-500">No features listed</div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -398,30 +562,30 @@ const Billing = () => {
                         paymentHistory.map((payment, index) => (
                           <tr key={payment.id || `payment-${index}`}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(payment.date)}
+                              {payment.date ? formatDate(payment.date) : 'N/A'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ${formatNumber(payment.amount, 2)}
+                              ${payment.amount ? formatNumber(payment.amount, 2) : '0.00'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                payment.status === 'completed'
+                                payment.status === 'completed' || payment.status === 'active'
                                   ? 'bg-success-100 text-success-800'
                                   : 'bg-warning-100 text-warning-800'
                               }`}>
-                                {payment.status === 'completed' ? (
+                                {payment.status === 'completed' || payment.status === 'active' ? (
                                   <HiCheckCircle className="h-3 w-3 mr-1" />
                                 ) : (
                                   <HiClock className="h-3 w-3 mr-1" />
                                 )}
-                                {payment.status}
+                                {typeof payment.status === 'string' ? payment.status : 'pending'}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {payment.method}
+                              {typeof payment.method === 'string' ? payment.method : 'BTCPay'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {payment.invoice}
+                              {typeof payment.invoice === 'string' ? payment.invoice : payment.invoice?.id || 'N/A'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <button

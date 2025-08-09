@@ -129,6 +129,19 @@ class SystemConfig extends Model
     }
 
     /**
+     * Get Training configuration
+     */
+    public static function getTrainingConfig(): array
+    {
+        return [
+            'default_mode' => static::getValue('TRAINING_DEFAULT_MODE', 'manual'),
+            'allow_user_override' => static::getValue('TRAINING_ALLOW_USER_OVERRIDE', true),
+            'automatic_threshold' => static::getValue('TRAINING_AUTOMATIC_THRESHOLD', 100),
+            'manual_approval_required' => static::getValue('TRAINING_MANUAL_APPROVAL_REQUIRED', false)
+        ];
+    }
+
+    /**
      * Get file upload configuration
      */
     public static function getUploadConfig(): array

@@ -55,12 +55,24 @@ class SystemSettingsController extends Controller
                     'telegram_enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', env('NOTIFICATION_TELEGRAM_ENABLED', false)),
                 ],
                 
-                // Training Settings
+                // Training Settings (ADMIN ONLY)
                 'training' => [
                     'default_mode' => SystemConfig::get('TRAINING_DEFAULT_MODE', 'automatic'),
-                    'allow_user_override' => SystemConfig::get('TRAINING_ALLOW_USER_OVERRIDE', true),
+                    'manual_start_limit' => SystemConfig::get('TRAINING_MANUAL_START_LIMIT', 50),
+                    'manual_increase_percentage' => SystemConfig::get('TRAINING_MANUAL_INCREASE_PERCENTAGE', 10),
+                    'manual_increase_interval_days' => SystemConfig::get('TRAINING_MANUAL_INCREASE_INTERVAL_DAYS', 2),
+                    'manual_max_limit' => SystemConfig::get('TRAINING_MANUAL_MAX_LIMIT', 500),
                     'automatic_threshold' => SystemConfig::get('TRAINING_AUTOMATIC_THRESHOLD', 100),
-                    'manual_approval_required' => SystemConfig::get('TRAINING_MANUAL_APPROVAL_REQUIRED', false),
+                    'admin_only' => SystemConfig::get('TRAINING_ADMIN_ONLY', true),
+                ],
+                
+                // BTCPay Settings
+                'btcpay' => [
+                    'url' => SystemConfig::get('btcpay_url', ''),
+                    'api_key' => SystemConfig::get('btcpay_api_key', ''),
+                    'store_id' => SystemConfig::get('btcpay_store_id', ''),
+                    'webhook_secret' => SystemConfig::get('btcpay_webhook_secret', ''),
+                    'currency' => SystemConfig::get('btcpay_currency', 'USD'),
                 ],
             ];
 
@@ -104,11 +116,21 @@ class SystemSettingsController extends Controller
                 'notifications.email_enabled' => 'sometimes|boolean',
                 'notifications.telegram_enabled' => 'sometimes|boolean',
                 
-                // Training validation
+                // Training validation (ADMIN ONLY)
                 'training.default_mode' => 'sometimes|in:automatic,manual',
-                'training.allow_user_override' => 'sometimes|boolean',
+                'training.manual_start_limit' => 'sometimes|integer|min:1|max:1000',
+                'training.manual_increase_percentage' => 'sometimes|integer|min:1|max:100',
+                'training.manual_increase_interval_days' => 'sometimes|integer|min:1|max:30',
+                'training.manual_max_limit' => 'sometimes|integer|min:100|max:10000',
                 'training.automatic_threshold' => 'sometimes|integer|min:1|max:10000',
-                'training.manual_approval_required' => 'sometimes|boolean',
+                'training.admin_only' => 'sometimes|boolean',
+                
+                // BTCPay validation
+                'btcpay.url' => 'sometimes|nullable|url|max:255',
+                'btcpay.api_key' => 'sometimes|nullable|string|max:255',
+                'btcpay.store_id' => 'sometimes|nullable|string|max:255',
+                'btcpay.webhook_secret' => 'sometimes|nullable|string|max:255',
+                'btcpay.currency' => 'sometimes|string|max:10',
             ]);
 
             $updatedSettings = [];
@@ -170,23 +192,32 @@ class SystemSettingsController extends Controller
                 }
             }
 
-            // Update training settings
+            // Update training settings (ADMIN ONLY)
             if ($request->has('training')) {
                 $trainingSettings = $request->input('training');
                 foreach ($trainingSettings as $key => $value) {
-                    if ($key === 'default_mode') {
-                        $configKey = 'TRAINING_DEFAULT_MODE';
-                    } elseif ($key === 'allow_user_override') {
-                        $configKey = 'TRAINING_ALLOW_USER_OVERRIDE';
-                    } elseif ($key === 'automatic_threshold') {
-                        $configKey = 'TRAINING_AUTOMATIC_THRESHOLD';
-                    } elseif ($key === 'manual_approval_required') {
-                        $configKey = 'TRAINING_MANUAL_APPROVAL_REQUIRED';
-                    } else {
-                        $configKey = 'TRAINING_' . strtoupper($key);
-                    }
+                    $configKey = match($key) {
+                        'default_mode' => 'TRAINING_DEFAULT_MODE',
+                        'manual_start_limit' => 'TRAINING_MANUAL_START_LIMIT',
+                        'manual_increase_percentage' => 'TRAINING_MANUAL_INCREASE_PERCENTAGE',
+                        'manual_increase_interval_days' => 'TRAINING_MANUAL_INCREASE_INTERVAL_DAYS',
+                        'manual_max_limit' => 'TRAINING_MANUAL_MAX_LIMIT',
+                        'automatic_threshold' => 'TRAINING_AUTOMATIC_THRESHOLD',
+                        'admin_only' => 'TRAINING_ADMIN_ONLY',
+                        default => 'TRAINING_' . strtoupper($key)
+                    };
                     SystemConfig::set($configKey, $value);
                     $updatedSettings["training.{$key}"] = $value;
+                }
+            }
+
+            // Update BTCPay settings
+            if ($request->has('btcpay')) {
+                $btcpaySettings = $request->input('btcpay');
+                foreach ($btcpaySettings as $key => $value) {
+                    $configKey = 'btcpay_' . $key;
+                    SystemConfig::setValue($configKey, $value);
+                    $updatedSettings["btcpay.{$key}"] = $value;
                 }
             }
 
@@ -313,55 +344,9 @@ class SystemSettingsController extends Controller
         }, 'update_system_config');
     }
 
-    /**
-     * Get BTCPay configuration (admin only)
-     */
-    public function getBTCPayConfig(): JsonResponse
-    {
-        return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied. Admin role required.');
-            }
-            
-            $config = [
-                'base_url' => SystemConfig::get('BTCPAY_BASE_URL'),
-                'api_key' => SystemConfig::get('BTCPAY_API_KEY'),
-                'store_id' => SystemConfig::get('BTCPAY_STORE_ID'),
-                'webhook_secret' => SystemConfig::get('BTCPAY_WEBHOOK_SECRET'),
-                'currency' => SystemConfig::get('BTCPAY_CURRENCY'),
-                'timeout' => SystemConfig::get('BTCPAY_TIMEOUT', 30),
-            ];
-            return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
-        }, 'view_btcpay_config');
-    }
 
-    /**
-     * Update BTCPay configuration (admin only)
-     */
-    public function updateBTCPayConfig(Request $request): JsonResponse
-    {
-        return $this->executeWithErrorHandling(function () use ($request) {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied. Admin role required.');
-            }
-            
-            $validated = $request->validate([
-                'base_url' => 'nullable|string',
-                'api_key' => 'nullable|string',
-                'store_id' => 'nullable|string',
-                'webhook_secret' => 'nullable|string',
-                'currency' => 'nullable|string',
-                'timeout' => 'nullable|integer|min:1|max:300',
-            ]);
-            
-            foreach ($validated as $key => $value) {
-                $configKey = 'BTCPAY_' . strtoupper($key);
-                SystemConfig::set($configKey, $value);
-            }
-            
-            return $this->successResponse(null, 'BTCPay configuration updated successfully');
-        }, 'update_btcpay_config');
-    }
+
+
 
     /**
      * Get Telegram configuration (admin only)

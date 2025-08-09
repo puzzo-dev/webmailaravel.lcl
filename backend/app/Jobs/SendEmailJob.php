@@ -46,21 +46,42 @@ class SendEmailJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            // PRIORITY CHECK: Verify sender daily limit (highest priority)
-            $sender = $this->sender->fresh(); // Get fresh data
+            // Get fresh data
+            $sender = $this->sender->fresh();
+            $user = $this->campaign->user;
+            $userLimits = $user->getPlanLimits();
+            
+            // PRIORITY CHECK 1: Verify user daily plan limit
+            $userDailySent = $user->getDailySentCount();
+            if ($userDailySent >= $userLimits['daily_sending_limit']) {
+                Log::warning('User daily plan limit exceeded, rescheduling email', [
+                    'campaign_id' => $this->campaign->id,
+                    'user_id' => $user->id,
+                    'recipient' => $this->recipient,
+                    'daily_plan_limit' => $userLimits['daily_sending_limit'],
+                    'current_daily_sent' => $userDailySent
+                ]);
+                
+                // Reschedule for tomorrow
+                $this->release(now()->addDay()->startOfDay()->diffInSeconds(now()));
+                return;
+            }
+            
+            // PRIORITY CHECK 2: Verify sender training limit
             if (!$sender->canSendToday()) {
-                Log::warning('Sender daily limit exceeded, email not sent', [
+                Log::warning('Sender training limit exceeded, rescheduling email', [
                     'campaign_id' => $this->campaign->id,
                     'recipient' => $this->recipient,
                     'sender_id' => $sender->id,
                     'sender_email' => $sender->email,
-                    'daily_limit' => $sender->daily_limit,
+                    'training_limit' => $sender->daily_limit,
                     'current_daily_sent' => $sender->current_daily_sent,
                     'remaining_sends' => $sender->getRemainingDailySends()
                 ]);
                 
-                // Re-queue for later or assign to different sender
-                $this->release(3600); // Try again in 1 hour
+                // Try again in 1 hour with exponential backoff
+                $delay = min(3600 * $this->attempts(), 86400); // Max 24 hours
+                $this->release($delay);
                 return;
             }
 
@@ -84,8 +105,12 @@ class SendEmailJob implements ShouldQueue
             Mail::to($this->recipient)
                 ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData));
 
-            // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND
+            // INCREMENT SENDER COUNT AND CLEAR USER CACHE AFTER SUCCESSFUL SEND
             $sender->incrementDailySent();
+            
+            // Clear user daily cache to reflect new count
+            $userCacheKey = "user_daily_sent:{$user->id}:" . now()->format('Y-m-d');
+            \Illuminate\Support\Facades\Cache::forget($userCacheKey);
 
             Log::info('Campaign email sent successfully', [
                 'campaign_id' => $this->campaign->id,
@@ -168,6 +193,8 @@ class SendEmailJob implements ShouldQueue
             'smtp_encryption' => $smtpConfig->encryption
         ]);
     }
+
+
 
     /**
      * Handle a job failure.

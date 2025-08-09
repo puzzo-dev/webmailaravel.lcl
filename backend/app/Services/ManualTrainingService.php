@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Sender;
+use App\Models\SystemConfig;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
 use Illuminate\Support\Facades\Log;
@@ -13,31 +14,28 @@ class ManualTrainingService
     use LoggingTrait, ValidationTrait;
 
     /**
-     * Run manual training for a specific user
+     * Run manual training for a specific user (New System Requirements)
      */
     public function runManualTrainingForUser(User $user): array
     {
         $this->logInfo("Starting manual training for user: {$user->email}");
 
-        if (!$user->hasTrainingEnabled() || !$user->usesManualTraining()) {
-            $this->logInfo("Manual training not enabled for user: {$user->email}");
+        // Check if system is in manual mode
+        $systemMode = \App\Models\SystemConfig::get('TRAINING_DEFAULT_MODE', 'manual');
+        if ($systemMode !== 'manual') {
             return [
                 'success' => false,
-                'message' => 'Manual training not enabled for this user',
+                'message' => 'System is not in manual training mode',
                 'senders_updated' => 0
             ];
         }
 
-        if (!$user->isManualTrainingDue()) {
-            $this->logInfo("Manual training not due for user: {$user->email}");
-            return [
-                'success' => false,
-                'message' => 'Manual training not due yet (runs daily)',
-                'senders_updated' => 0
-            ];
-        }
+        // Get manual training settings from system config
+        $startLimit = (int) \App\Models\SystemConfig::get('TRAINING_MANUAL_START_LIMIT', 50);
+        $increasePercentage = (int) \App\Models\SystemConfig::get('TRAINING_MANUAL_INCREASE_PERCENTAGE', 10);
+        $intervalDays = (int) \App\Models\SystemConfig::get('TRAINING_MANUAL_INCREASE_INTERVAL_DAYS', 2);
+        $maxLimit = (int) \App\Models\SystemConfig::get('TRAINING_MANUAL_MAX_LIMIT', 500);
 
-        $percentage = $user->getManualTrainingPercentage();
         $sendersUpdated = 0;
         $errors = [];
 
@@ -46,8 +44,14 @@ class ManualTrainingService
 
         foreach ($senders as $sender) {
             try {
+                $daysSinceCreation = $sender->created_at->diffInDays(now());
+                $trainingIntervals = floor($daysSinceCreation / $intervalDays);
+                
+                // Calculate new limit: start_limit * (1 + increase_percentage/100)^intervals
+                $newLimit = $startLimit * pow(1 + ($increasePercentage / 100), $trainingIntervals);
+                $newLimit = min($maxLimit, (int) $newLimit);
+
                 $oldLimit = $sender->daily_limit;
-                $increase = max(1, (int) ($oldLimit * ($percentage / 100)));
                 $newLimit = min(500, $oldLimit + $increase); // Cap at 500 per user/domain
 
                 $sender->update([
@@ -184,5 +188,107 @@ class ManualTrainingService
         }
 
         return $stats;
+    }
+
+    /**
+     * Run system-wide manual training according to admin settings
+     * 50 emails start, 10% increase every 2 days, cap at 500 emails
+     */
+    public function runSystemManualTraining(): array
+    {
+        $this->logInfo('Starting system-wide manual training');
+
+        // Check if system is in manual training mode
+        $trainingMode = SystemConfig::get('TRAINING_DEFAULT_MODE', 'automatic');
+        if ($trainingMode !== 'manual') {
+            return [
+                'success' => false,
+                'message' => 'System is not in manual training mode',
+                'senders_updated' => 0
+            ];
+        }
+
+        // Get manual training settings from system config
+        $startLimit = (int) SystemConfig::get('TRAINING_MANUAL_START_LIMIT', 50);
+        $increasePercentage = (int) SystemConfig::get('TRAINING_MANUAL_INCREASE_PERCENTAGE', 10);
+        $intervalDays = (int) SystemConfig::get('TRAINING_MANUAL_INCREASE_INTERVAL_DAYS', 2);
+        $maxLimit = (int) SystemConfig::get('TRAINING_MANUAL_MAX_LIMIT', 500);
+
+        $sendersUpdated = 0;
+        $errors = [];
+
+        // Get all active senders in the system
+        $senders = Sender::where('is_active', true)->get();
+
+        foreach ($senders as $sender) {
+            try {
+                // Check if training interval has passed
+                $lastTraining = $sender->last_training_at;
+                if ($lastTraining && $lastTraining->addDays($intervalDays)->isFuture()) {
+                    continue; // Not time for training yet
+                }
+
+                $oldLimit = $sender->daily_limit ?: 0;
+                
+                // If sender is new or has no limit, start with start limit
+                if ($oldLimit == 0) {
+                    $newLimit = $startLimit;
+                } else {
+                    // Calculate increase (10% every 2 days)
+                    $increase = max(1, (int) ($oldLimit * ($increasePercentage / 100)));
+                    $newLimit = min($maxLimit, $oldLimit + $increase);
+                    
+                    // Don't update if already at max limit
+                    if ($oldLimit >= $maxLimit) {
+                        continue;
+                    }
+                }
+
+                // Update sender with new limit and training timestamp
+                $sender->update([
+                    'daily_limit' => $newLimit,
+                    'last_training_at' => now(),
+                    'training_data' => [
+                        'previous_limit' => $oldLimit,
+                        'new_limit' => $newLimit,
+                        'increase_percentage' => $increasePercentage,
+                        'training_type' => 'system_manual',
+                        'trained_at' => now()->toISOString(),
+                    ]
+                ]);
+
+                $sendersUpdated++;
+                $this->logInfo("Updated sender {$sender->email}: {$oldLimit} -> {$newLimit}");
+
+            } catch (\Exception $e) {
+                $error = "Failed to update sender {$sender->email}: " . $e->getMessage();
+                $errors[] = $error;
+                $this->logError($error);
+            }
+        }
+
+        $this->logInfo('System manual training completed', [
+            'senders_updated' => $sendersUpdated,
+            'errors_count' => count($errors),
+            'settings' => [
+                'start_limit' => $startLimit,
+                'increase_percentage' => $increasePercentage,
+                'interval_days' => $intervalDays,
+                'max_limit' => $maxLimit
+            ]
+        ]);
+
+        return [
+            'success' => true,
+            'message' => "System manual training completed",
+            'senders_updated' => $sendersUpdated,
+            'errors' => $errors,
+            'settings' => [
+                'start_limit' => $startLimit,
+                'increase_percentage' => $increasePercentage,
+                'interval_days' => $intervalDays,
+                'max_limit' => $maxLimit
+            ]
+        ];
     }
 }

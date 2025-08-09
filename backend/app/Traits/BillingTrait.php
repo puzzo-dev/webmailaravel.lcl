@@ -12,12 +12,43 @@ use App\Models\Subscription;
 use App\Models\Payment;
 use Carbon\Carbon;
 use App\Models\Plan;
+use App\Models\SystemConfig;
 use App\Events\SubscriptionUpdated;
 use App\Notifications\SubscriptionUpdated as SubscriptionNotification;
 
 trait BillingTrait
 {
     use LoggingTrait, ValidationTrait, CacheManagementTrait;
+
+    /**
+     * Cached BTCPay configuration
+     */
+    private static $btcpayConfig = null;
+
+    /**
+     * Get BTCPay configuration with validation and caching
+     */
+    private function getBTCPayConfiguration(): array
+    {
+        if (self::$btcpayConfig === null) {
+            self::$btcpayConfig = SystemConfig::getBTCPayConfig();
+            
+            // Validate configuration
+            if (empty(self::$btcpayConfig['url']) || empty(self::$btcpayConfig['api_key']) || empty(self::$btcpayConfig['store_id'])) {
+                self::$btcpayConfig['is_configured'] = false;
+                self::$btcpayConfig['error'] = 'BTCPay is not properly configured. Please check your configuration.';
+                self::$btcpayConfig['details'] = [
+                    'base_url' => self::$btcpayConfig['url'] ? 'configured' : 'missing',
+                    'api_key' => self::$btcpayConfig['api_key'] ? 'configured' : 'missing',
+                    'store_id' => self::$btcpayConfig['store_id'] ? 'configured' : 'missing'
+                ];
+            } else {
+                self::$btcpayConfig['is_configured'] = true;
+            }
+        }
+        
+        return self::$btcpayConfig;
+    }
 
     /**
      * Create a new subscription via BTCPay
@@ -64,8 +95,11 @@ trait BillingTrait
 
             // Update subscription with payment details
             $subscription->update([
-                'payment_id' => $invoiceResult['data']['id'],
-                'payment_url' => $invoiceResult['data']['checkoutLink']
+                'invoice' => $invoiceResult['data']['id'],
+                'payment_url' => $invoiceResult['data']['checkoutLink'] ?? null,
+                'payment_method' => 'btcpay',
+                'payment_currency' => $data['currency'] ?? 'USD',
+                'payment_amount' => $data['amount']
             ]);
 
             $this->logInfo('BTCPay invoice created', [
@@ -387,13 +421,17 @@ trait BillingTrait
             $history = [];
             foreach ($subscriptions as $subscription) {
                 $history[] = [
+                    'id' => $subscription->id,
                     'subscription_id' => $subscription->id,
                     'plan_name' => $subscription->plan->name,
                     'amount' => $subscription->payment_amount,
                     'currency' => $subscription->payment_currency,
                     'status' => $subscription->status,
-                    'payment_method' => $subscription->payment_method,
+                    'method' => $subscription->payment_method ?? 'btcpay',
+                    'invoice' => $subscription->invoice,
+                    'payment_method' => $subscription->payment_method ?? 'btcpay',
                     'payment_reference' => $subscription->payment_reference,
+                    'date' => $subscription->created_at,
                     'created_at' => $subscription->created_at,
                     'paid_at' => $subscription->paid_at,
                     'expiry' => $subscription->expiry
@@ -427,10 +465,11 @@ trait BillingTrait
         $this->logMethodEntry(__METHOD__, $data);
 
         try {
-            $baseUrl = config('services.btcpay.base_url');
-            $apiKey = config('services.btcpay.api_key');
-            $storeId = config('services.btcpay.store_id');
-            $timeout = config('services.btcpay.timeout', 30);
+            $btcpayConfig = SystemConfig::getBTCPayConfig();
+            $baseUrl = $btcpayConfig['url'];
+            $apiKey = $btcpayConfig['api_key'];
+            $storeId = $btcpayConfig['store_id'];
+            $timeout = 30;
 
             // Check if BTCPay is properly configured
             if (!$baseUrl || !$apiKey || !$storeId) {
@@ -492,26 +531,22 @@ trait BillingTrait
         $this->logMethodEntry(__METHOD__, ['invoice_id' => $invoiceId]);
 
         try {
-            $baseUrl = config('services.btcpay.base_url');
-            $apiKey = config('services.btcpay.api_key');
-            $storeId = config('services.btcpay.store_id');
-            $timeout = config('services.btcpay.timeout', 30);
-
+            $config = $this->getBTCPayConfiguration();
+            
             // Check if BTCPay is properly configured
-            if (!$baseUrl || !$apiKey || !$storeId) {
+            if (!$config['is_configured']) {
                 return [
                     'success' => false,
-                    'error' => 'BTCPay is not properly configured. Please check your configuration.',
-                    'details' => [
-                        'base_url' => $baseUrl ? 'configured' : 'missing',
-                        'api_key' => $apiKey ? 'configured' : 'missing',
-                        'store_id' => $storeId ? 'configured' : 'missing'
-                    ]
+                    'error' => $config['error'],
+                    'details' => $config['details']
                 ];
             }
 
+            $baseUrl = $config['url'];
+            $apiKey = $config['api_key'];
+            $storeId = $config['store_id'];
+
             $url = "{$baseUrl}/api/v1/stores/{$storeId}/invoices/{$invoiceId}";
-            
             $headers = $this->withApiKey($apiKey);
             
             $result = $this->get($url, $headers, $timeout);
@@ -581,7 +616,8 @@ trait BillingTrait
      */
     protected function verifyBTCPaySignature(array $payload, string $signature): bool
     {
-        $webhookSecret = config('services.btcpay.webhook_secret');
+        $btcpayConfig = SystemConfig::getBTCPayConfig();
+        $webhookSecret = $btcpayConfig['webhook_secret'];
         
         // If webhook secret is not configured, signature verification will fail
         if (!$webhookSecret) {
@@ -616,7 +652,7 @@ trait BillingTrait
         }
 
         // Find subscription by invoice ID
-        $subscription = Subscription::where('payment_id', $invoiceId)->first();
+        $subscription = Subscription::where('invoice', $invoiceId)->first();
         
         if (!$subscription) {
             $this->logWarning('Subscription not found for BTCPay invoice', [
@@ -650,7 +686,7 @@ trait BillingTrait
             case 'InvoicePaymentSettled':
                 // Payment confirmed with required confirmations
                 $confirmationCount = $payload['confirmationCount'] ?? 0;
-                $requiredConfirmations = config('services.btcpay.required_confirmations', 1);
+                $requiredConfirmations = 1;
                 
                 if ($confirmationCount >= $requiredConfirmations) {
                     $subscription->update([
@@ -809,23 +845,20 @@ trait BillingTrait
     protected function getBTCPayPaymentRates(): array
     {
         try {
-            $baseUrl = config('services.btcpay.base_url');
-            $apiKey = config('services.btcpay.api_key');
-            $storeId = config('services.btcpay.store_id');
-            $timeout = config('services.btcpay.timeout', 30);
-
+            $config = $this->getBTCPayConfiguration();
+            
             // Check if BTCPay is properly configured
-            if (!$baseUrl || !$apiKey || !$storeId) {
+            if (!$config['is_configured']) {
                 return [
                     'success' => false,
-                    'error' => 'BTCPay is not properly configured. Please check your configuration.',
-                    'details' => [
-                        'base_url' => $baseUrl ? 'configured' : 'missing',
-                        'api_key' => $apiKey ? 'configured' : 'missing',
-                        'store_id' => $storeId ? 'configured' : 'missing'
-                    ]
+                    'error' => $config['error'],
+                    'details' => $config['details']
                 ];
             }
+
+            $baseUrl = $config['url'];
+            $apiKey = $config['api_key'];
+            $storeId = $config['store_id'];
 
             $url = "{$baseUrl}/api/v1/stores/{$storeId}/rates";
             
@@ -846,6 +879,88 @@ trait BillingTrait
             return [
                 'success' => false,
                 'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Cancel a BTCPay subscription
+     */
+    protected function cancelBTCPaySubscription(Subscription $subscription): array
+    {
+        $this->logMethodEntry(__METHOD__, [
+            'subscription_id' => $subscription->id
+        ]);
+
+        try {
+            // Check if subscription can be cancelled
+            if (in_array($subscription->status, ['cancelled', 'expired'])) {
+                return [
+                    'success' => false,
+                    'error' => 'Subscription is already cancelled or expired'
+                ];
+            }
+
+            // For BTCPay subscriptions, we don't need to cancel on BTCPay side
+            // since they are one-time payments, not recurring subscriptions
+            // We just need to update the subscription status locally
+
+            DB::beginTransaction();
+
+            // Update subscription status to cancelled
+            $subscription->update([
+                'status' => 'cancelled',
+                'notes' => 'Cancelled by user'
+            ]);
+
+            // Update user billing status if this was their active subscription
+            $user = $subscription->user;
+            if ($user && $user->billing_status === 'active') {
+                // Check if user has other active subscriptions
+                $hasActiveSubscription = Subscription::where('user_id', $user->id)
+                    ->where('status', 'active')
+                    ->where('id', '!=', $subscription->id)
+                    ->exists();
+
+                if (!$hasActiveSubscription) {
+                    $user->update(['billing_status' => 'inactive']);
+                }
+            }
+
+            DB::commit();
+
+            // Fire subscription updated event
+            event(new SubscriptionUpdated($subscription));
+
+            // Send notification to user
+            if ($user) {
+                $user->notify(new SubscriptionNotification($subscription, 'cancelled'));
+            }
+
+            $this->logInfo('Subscription cancelled successfully', [
+                'subscription_id' => $subscription->id,
+                'user_id' => $subscription->user_id,
+                'previous_status' => $subscription->getOriginal('status')
+            ]);
+
+            return [
+                'success' => true,
+                'data' => $subscription->fresh(),
+                'message' => 'Subscription cancelled successfully'
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            $this->logError('Failed to cancel BTCPay subscription', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Failed to cancel subscription: ' . $e->getMessage()
             ];
         }
     }

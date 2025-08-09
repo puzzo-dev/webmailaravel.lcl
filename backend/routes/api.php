@@ -241,9 +241,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/system-config', [SystemSettingsController::class, 'updateSystemConfig']);
         Route::get('/system-config', [SystemSettingsController::class, 'index']);
 
-        // Granular config endpoints for BTCPay, Telegram, PowerMTA
-        Route::get('/system-config/btcpay', [SystemSettingsController::class, 'getBTCPayConfig']);
-        Route::post('/system-config/btcpay', [SystemSettingsController::class, 'updateBTCPayConfig']);
+        // Granular config endpoints for Telegram, PowerMTA
         Route::get('/system-config/telegram', [SystemSettingsController::class, 'getTelegramConfig']);
         Route::post('/system-config/telegram', [SystemSettingsController::class, 'updateTelegramConfig']);
         Route::get('/system-config/powermta', [SystemSettingsController::class, 'getPowerMTAConfig']);

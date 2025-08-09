@@ -18,11 +18,14 @@ return new class extends Migration
             $table->boolean('allow_manual_training')->default(true)->after('training_mode');
         });
 
-        // Add system-wide training settings
-        SystemConfig::set('TRAINING_DEFAULT_MODE', 'automatic', 'Default training mode for new plans');
-        SystemConfig::set('TRAINING_ALLOW_USER_OVERRIDE', true, 'Allow users to override training mode in their account settings');
+        // Add system-wide training settings (ADMIN ONLY)
+        SystemConfig::set('TRAINING_DEFAULT_MODE', 'manual', 'Default training mode for new plans');
+        SystemConfig::set('TRAINING_MANUAL_START_LIMIT', 50, 'Starting daily limit for new senders (manual mode)');
+        SystemConfig::set('TRAINING_MANUAL_INCREASE_PERCENTAGE', 10, 'Percentage increase every interval (manual mode)');
+        SystemConfig::set('TRAINING_MANUAL_INCREASE_INTERVAL_DAYS', 2, 'Days between limit increases (manual mode)');
+        SystemConfig::set('TRAINING_MANUAL_MAX_LIMIT', 500, 'Maximum daily limit for senders (manual mode)');
         SystemConfig::set('TRAINING_AUTOMATIC_THRESHOLD', 100, 'Number of emails before automatic training kicks in');
-        SystemConfig::set('TRAINING_MANUAL_APPROVAL_REQUIRED', false, 'Require admin approval for manual training changes');
+        SystemConfig::set('TRAINING_ADMIN_ONLY', true, 'Training settings are admin-only (no user override)');
     }
 
     /**
@@ -36,8 +39,11 @@ return new class extends Migration
 
         // Remove system config entries
         SystemConfig::where('key', 'TRAINING_DEFAULT_MODE')->delete();
-        SystemConfig::where('key', 'TRAINING_ALLOW_USER_OVERRIDE')->delete();
+        SystemConfig::where('key', 'TRAINING_MANUAL_START_LIMIT')->delete();
+        SystemConfig::where('key', 'TRAINING_MANUAL_INCREASE_PERCENTAGE')->delete();
+        SystemConfig::where('key', 'TRAINING_MANUAL_INCREASE_INTERVAL_DAYS')->delete();
+        SystemConfig::where('key', 'TRAINING_MANUAL_MAX_LIMIT')->delete();
         SystemConfig::where('key', 'TRAINING_AUTOMATIC_THRESHOLD')->delete();
-        SystemConfig::where('key', 'TRAINING_MANUAL_APPROVAL_REQUIRED')->delete();
+        SystemConfig::where('key', 'TRAINING_ADMIN_ONLY')->delete();
     }
 };

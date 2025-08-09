@@ -121,15 +121,7 @@ const AdminSystem = () => {
       setSystemConfig(settingsResponse.data || {});
 
       // Load additional configurations for specific tabs
-      if (activeTab === "btcpay") {
-        try {
-          const btcpayResponse = await adminService.getBTCPayConfig();
-          setSystemConfig((prev) => ({ ...prev, btcpay: btcpayResponse.data }));
-        } catch (error) {
-          console.error('Failed to load BTCPay config:', error);
-          toast.error('Failed to load BTCPay configuration');
-        }
-      } else if (activeTab === "powermta") {
+      if (activeTab === "powermta") {
         try {
           const powermtaResponse = await adminService.getPowerMTAConfig();
           setSystemConfig((prev) => ({
@@ -171,14 +163,12 @@ const AdminSystem = () => {
       setLoading(true);
 
       // Handle different configuration types based on activeTab
-      if (activeTab === "btcpay") {
-        await adminService.updateBTCPayConfig(editedConfig);
-      } else if (activeTab === "powermta") {
+      if (activeTab === "powermta") {
         await adminService.updatePowerMTAConfig(editedConfig);
       } else if (activeTab === "telegram") {
         await adminService.updateTelegramConfig(editedConfig);
       } else {
-        // For regular system settings (system_smtp, webmail, system, notifications)
+        // For regular system settings (system_smtp, webmail, system, notifications, btcpay)
         const updateData = { [activeTab]: editedConfig };
         await systemSettingsService.updateSettings(updateData);
       }

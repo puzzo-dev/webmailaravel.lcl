@@ -9,6 +9,8 @@ import {
   HiExclamation,
   HiCheckCircle,
   HiRefresh,
+  HiKey,
+  HiAcademicCap,
 } from 'react-icons/hi';
 import { systemSettingsService } from '../services/api';
 
@@ -45,6 +47,19 @@ const SystemSettings = () => {
       email_enabled: true,
       telegram_enabled: false,
       telegram_bot_token: '',
+    },
+    btcpay: {
+      url: '',
+      api_key: '',
+      store_id: '',
+      webhook_secret: '',
+      currency: 'USD',
+    },
+    training: {
+      default_mode: 'manual',
+      allow_user_override: true,
+      automatic_threshold: 100,
+      manual_approval_required: false,
     },
   });
   const [testEmail, setTestEmail] = useState('');
@@ -141,6 +156,8 @@ const SystemSettings = () => {
     { id: 'webmail', name: 'Webmail', icon: HiGlobe },
     { id: 'system', name: 'System', icon: HiServer },
     { id: 'notifications', name: 'Notifications', icon: HiBell },
+    { id: 'btcpay', name: 'BTCPay', icon: HiKey },
+    { id: 'training', name: 'Training', icon: HiAcademicCap },
   ];
 
   if (loading) {
@@ -541,6 +558,255 @@ const SystemSettings = () => {
                     />
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* BTCPay Settings */}
+          {activeTab === 'btcpay' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  BTCPay Server Configuration
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Configure BTCPay Server integration for cryptocurrency payments and subscriptions.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    BTCPay Server URL
+                  </label>
+                  <input
+                    type="url"
+                    value={settings.btcpay.url}
+                    onChange={(e) => updateSetting('btcpay', 'url', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="https://your-btcpay-server.com"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    The base URL of your BTCPay Server instance.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.btcpay.api_key}
+                    onChange={(e) => updateSetting('btcpay', 'api_key', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Your BTCPay Server API key"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    API key generated from your BTCPay Server account settings.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Store ID
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.btcpay.store_id}
+                    onChange={(e) => updateSetting('btcpay', 'store_id', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Your BTCPay Store ID"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    The Store ID from your BTCPay Server store settings.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Webhook Secret
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.btcpay.webhook_secret}
+                    onChange={(e) => updateSetting('btcpay', 'webhook_secret', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Webhook secret for payment verification"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Secret used to verify webhook authenticity from BTCPay Server.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Default Currency
+                  </label>
+                  <select
+                    value={settings.btcpay.currency}
+                    onChange={(e) => updateSetting('btcpay', 'currency', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CAD">CAD</option>
+                    <option value="AUD">AUD</option>
+                    <option value="BTC">BTC</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Default currency for invoice creation and pricing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex">
+                  <HiExclamation className="h-5 w-5 text-yellow-400" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">Configuration Requirements</h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>
+                        Ensure your BTCPay Server is properly configured with:
+                      </p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>API access enabled for your user account</li>
+                        <li>Store configured with payment methods</li>
+                        <li>Webhook endpoint configured to: <code className="bg-yellow-100 px-1 rounded">{settings.system?.app_url || 'your-app-url'}/api/btcpay/webhook</code></li>
+                        <li>Proper SSL certificates for secure communication</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Training Settings */}
+          {activeTab === 'training' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Training Configuration
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                  Configure sender training settings for campaign delivery optimization.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Training Mode Switch */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-medium text-gray-900">Training Mode</h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Choose between automatic and manual training modes for sender reputation management.
+                      </p>
+                    </div>
+                    <div className="ml-6">
+                      <div className="flex items-center space-x-4">
+                        <span className={`text-sm font-medium ${settings.training.default_mode === 'manual' ? 'text-primary-600' : 'text-gray-500'}`}>
+                          Manual
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateSetting('training', 'default_mode', settings.training.default_mode === 'automatic' ? 'manual' : 'automatic')}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                            settings.training.default_mode === 'automatic' ? 'bg-primary-600' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              settings.training.default_mode === 'automatic' ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-sm font-medium ${settings.training.default_mode === 'automatic' ? 'text-primary-600' : 'text-gray-500'}`}>
+                          Automatic
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="flex">
+                      <HiExclamation className="h-5 w-5 text-yellow-400" />
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-yellow-800">
+                          {settings.training.default_mode === 'automatic' ? 'Automatic Mode Requirements' : 'Manual Mode Selected'}
+                        </h3>
+                        <div className="mt-2 text-sm text-yellow-700">
+                          {settings.training.default_mode === 'automatic' ? (
+                            <p>
+                              Automatic training mode requires PowerMTA integration and configuration files. 
+                              Ensure PowerMTA is properly installed and configured before enabling this mode.
+                            </p>
+                          ) : (
+                            <p>
+                              Manual training mode is selected. Campaigns will use manual sender training processes 
+                              without requiring PowerMTA integration.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Training Settings */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={settings.training.allow_user_override}
+                        onChange={(e) => updateSetting('training', 'allow_user_override', e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm font-medium text-gray-700">Allow User Override</span>
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Allow users to override the default training mode for individual campaigns.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={settings.training.manual_approval_required}
+                        onChange={(e) => updateSetting('training', 'manual_approval_required', e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm font-medium text-gray-700">Manual Approval Required</span>
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Require manual approval before campaigns can be sent.
+                    </p>
+                  </div>
+
+                  {settings.training.default_mode === 'automatic' && (
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Automatic Training Threshold
+                      </label>
+                      <input
+                        type="number"
+                        value={settings.training.automatic_threshold}
+                        onChange={(e) => updateSetting('training', 'automatic_threshold', parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        min="1"
+                        max="10000"
+                        placeholder="100"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Number of emails to send before automatic training kicks in.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

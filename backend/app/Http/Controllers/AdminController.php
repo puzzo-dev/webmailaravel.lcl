@@ -134,51 +134,9 @@ class AdminController extends Controller
         }, 'update_system_config');
     }
 
-    /**
-     * Get BTCPay configuration
-     */
-    public function getBTCPayConfig(): JsonResponse
-    {
-        return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
-            }
-            
-            $config = [
-                'base_url' => \App\Models\SystemConfig::getValue('btcpay_url'),
-                'api_key' => \App\Models\SystemConfig::getValue('btcpay_api_key'),
-                'store_id' => \App\Models\SystemConfig::getValue('btcpay_store_id'),
-                'webhook_secret' => \App\Models\SystemConfig::getValue('btcpay_webhook_secret'),
-                'currency' => \App\Models\SystemConfig::getValue('btcpay_currency', 'USD'),
-            ];
-            return $this->successResponse($config, 'BTCPay configuration retrieved successfully');
-        }, 'view_system_config');
-    }
 
-    /**
-     * Update BTCPay configuration
-     */
-    public function updateBTCPayConfig(Request $request): JsonResponse
-    {
-        return $this->executeWithErrorHandling(function () use ($request) {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
-            }
-            
-            $validated = $request->validate([
-                'base_url' => 'nullable|string',
-                'api_key' => 'nullable|string',
-                'store_id' => 'nullable|string',
-                'webhook_secret' => 'nullable|string',
-                'currency' => 'nullable|string',
-            ]);
-            foreach ($validated as $key => $value) {
-                $configKey = 'btcpay_' . ($key === 'base_url' ? 'url' : $key);
-                \App\Models\SystemConfig::setValue($configKey, $value);
-            }
-            return $this->successResponse(null, 'BTCPay configuration updated successfully');
-        }, 'update_system_config');
-    }
+
+
 
     /**
      * Get Telegram configuration

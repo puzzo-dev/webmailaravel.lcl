@@ -46,46 +46,61 @@ class TrainingCheckMiddleware
         ]);
 
         try {
-            // Check if user has training enabled
-            if ($user->hasTrainingEnabled()) {
+            // Get system-wide training configuration
+            $trainingConfig = \App\Models\SystemConfig::getTrainingConfig();
+            $defaultMode = $trainingConfig['default_mode'] ?? 'manual';
+            $allowUserOverride = $trainingConfig['allow_user_override'] ?? true;
+            
+            // Determine which training mode to use
+            $trainingMode = $defaultMode;
+            if ($allowUserOverride && $user->hasTrainingEnabled()) {
+                // User can override system default if allowed
+                $trainingMode = $user->training_mode ?? $defaultMode;
+            }
+            
+            Log::info('Training middleware: Using training mode', [
+                'user_id' => $user->id,
+                'system_default_mode' => $defaultMode,
+                'allow_user_override' => $allowUserOverride,
+                'final_training_mode' => $trainingMode
+            ]);
+            
+            if ($trainingMode === 'manual') {
+                // Run manual training if due
+                if ($user->isManualTrainingDue()) {
+                    Log::info('Training middleware: Running manual training for user', [
+                        'user_id' => $user->id
+                    ]);
+                    
+                    $result = $this->manualTrainingService->runManualTrainingForUser($user);
+                    
+                    Log::info('Training middleware: Manual training completed', [
+                        'user_id' => $user->id,
+                        'senders_updated' => $result['senders_updated'],
+                        'success' => $result['success']
+                    ]);
+                }
                 
-                if ($user->usesManualTraining()) {
-                    // Run manual training if due
-                    if ($user->isManualTrainingDue()) {
-                        Log::info('Training middleware: Running manual training for user', [
-                            'user_id' => $user->id
-                        ]);
+            } elseif ($trainingMode === 'automatic') {
+                // Run automatic training for user's domains if needed
+                // Note: This is a simplified check - in production you might want more sophisticated timing
+                $userDomains = $user->domains()->get();
+                
+                foreach ($userDomains as $domain) {
+                    // Check if domain training is due (you can customize this logic)
+                    $lastTraining = $domain->trainingConfigs()
+                        ->where('user_id', $user->id)
+                        ->latest('last_analysis')
+                        ->first();
                         
-                        $result = $this->manualTrainingService->runManualTrainingForUser($user);
-                        
-                        Log::info('Training middleware: Manual training completed', [
+                    if (!$lastTraining || $lastTraining->last_analysis < now()->subHours(24)) {
+                        Log::info('Training middleware: Running automatic training for domain', [
                             'user_id' => $user->id,
-                            'senders_updated' => $result['senders_updated'],
-                            'success' => $result['success']
+                            'domain_id' => $domain->id
                         ]);
-                    }
-                    
-                } elseif ($user->usesAutomaticTraining()) {
-                    // Run automatic training for user's domains if needed
-                    // Note: This is a simplified check - in production you might want more sophisticated timing
-                    $userDomains = $user->domains()->get();
-                    
-                    foreach ($userDomains as $domain) {
-                        // Check if domain training is due (you can customize this logic)
-                        $lastTraining = $domain->trainingConfigs()
-                            ->where('user_id', $user->id)
-                            ->latest('last_analysis')
-                            ->first();
-                            
-                        if (!$lastTraining || $lastTraining->last_analysis < now()->subHours(24)) {
-                            Log::info('Training middleware: Running automatic training for domain', [
-                                'user_id' => $user->id,
-                                'domain_id' => $domain->id
-                            ]);
-                            
-                            // Run automatic training for this specific domain
-                            $this->automaticTrainingService->runDomainTraining($domain->id);
-                        }
+                        
+                        // Run automatic training for this specific domain
+                        $this->automaticTrainingService->runDomainTraining($domain->id);
                     }
                 }
             }

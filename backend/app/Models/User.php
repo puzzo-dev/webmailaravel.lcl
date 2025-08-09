@@ -116,6 +116,18 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Get user's daily sent email count (all senders combined)
+     */
+    public function getDailySentCount(): int
+    {
+        $today = now()->toDateString();
+        
+        return $this->senders()
+            ->where('last_reset_date', $today)
+            ->sum('current_daily_sent');
+    }
+
+    /**
      * Check if user can create more campaigns
      */
     public function canCreateCampaign(): bool

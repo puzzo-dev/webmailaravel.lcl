@@ -888,16 +888,7 @@ export const adminService = {
         return response.data;
     },
 
-    // BTCPay configuration
-    async getBTCPayConfig() {
-        const response = await api.get('/admin/system-config/btcpay');
-        return response.data;
-    },
-
-    async updateBTCPayConfig(btcpayData) {
-        const response = await api.post('/admin/system-config/btcpay', btcpayData);
-        return response.data;
-    },
+    // BTCPay configuration is now handled through SystemSettings
 
     // PowerMTA configuration
     async getPowerMTAConfig() {

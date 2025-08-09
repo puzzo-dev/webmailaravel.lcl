@@ -18,6 +18,7 @@ class Subscription extends Model
         'ends_at',
         'expiry',
         'payment_id',
+        'invoice',
         'payment_method',
         'payment_reference',
         'payment_amount',

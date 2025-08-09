@@ -154,7 +154,22 @@ class BillingController extends Controller
             return $this->errorResponse('Unauthorized', 403);
         }
 
-        $result = $this->createBTCPaySubscriptionInvoice($subscription);
+        // Create BTCPay invoice using proper trait method
+        $plan = $subscription->plan;
+        $invoiceData = [
+            'amount' => $plan->price,
+            'currency' => $plan->currency ?? 'USD',
+            'orderId' => 'subscription_' . $subscription->id,
+            'itemDesc' => $plan->name . ' Subscription',
+            'notificationURL' => url('/api/btcpay/webhook'),
+            'redirectURL' => url('/billing?payment=success'),
+            'buyer' => [
+                'email' => $subscription->user->email,
+                'name' => $subscription->user->name,
+            ]
+        ];
+        
+        $result = $this->createBTCPayInvoice($invoiceData);
 
         if ($result['success']) {
             return $this->successResponse($result['data'], 'Invoice created successfully');
@@ -628,8 +643,21 @@ class BillingController extends Controller
                 'expiry' => now()->addDays($plan->duration_days),
             ]);
 
-            // Create BTCPay invoice (if BTCPay is configured)
-            $invoiceResult = $this->createBTCPaySubscriptionInvoice($subscription);
+            // Create BTCPay invoice using proper trait method
+            $invoiceData = [
+                'amount' => $plan->price,
+                'currency' => $plan->currency ?? 'USD',
+                'orderId' => 'subscription_' . $subscription->id,
+                'itemDesc' => $plan->name . ' Subscription',
+                'notificationURL' => url('/api/btcpay/webhook'),
+                'redirectURL' => url('/billing?payment=success'),
+                'buyer' => [
+                    'email' => $user->email,
+                    'name' => $user->name,
+                ]
+            ];
+            
+            $invoiceResult = $this->createBTCPayInvoice($invoiceData);
 
             if ($invoiceResult['success']) {
                 // Update subscription with payment details
@@ -640,7 +668,7 @@ class BillingController extends Controller
                 return [
                     'success' => true,
                     'subscription_id' => $subscription->id,
-                    'invoice_url' => $invoiceResult['data']['invoice_url'] ?? null,
+                    'checkout_url' => $invoiceResult['data']['invoice_url'] ?? null,
                     'invoice_id' => $invoiceResult['data']['invoice_id'] ?? null,
                 ];
             }
@@ -661,54 +689,5 @@ class BillingController extends Controller
         }
     }
 
-    /**
-     * Create BTCPay invoice for subscription
-     */
-    private function createBTCPaySubscriptionInvoice(Subscription $subscription): array
-    {
-        try {
-            // Check if BTCPay is configured
-            $btcpayUrl = SystemConfig::get('BTCPAY_BASE_URL');
-            $apiKey = SystemConfig::get('BTCPAY_API_KEY');
-            $storeId = SystemConfig::get('BTCPAY_STORE_ID');
 
-            if (!$btcpayUrl || !$apiKey || !$storeId) {
-                return [
-                    'success' => false,
-                    'error' => 'BTCPay not configured properly',
-                ];
-            }
-
-            // Create BTCPay invoice
-            $invoiceData = [
-                'amount' => $subscription->plan->price,
-                'currency' => $subscription->plan->currency,
-                'orderId' => 'subscription_' . $subscription->id,
-                'itemDesc' => $subscription->plan->name . ' Subscription',
-                'notificationURL' => url('/api/btcpay/webhook'),
-                'redirectURL' => url('/billing?payment=success'),
-                'buyer' => [
-                    'email' => $subscription->user->email,
-                    'name' => $subscription->user->name,
-                ]
-            ];
-
-            // TODO: Implement actual BTCPay API call here
-            // For now, return success with dummy data
-            return [
-                'success' => true,
-                'data' => [
-                    'invoice_id' => 'dummy_invoice_' . $subscription->id,
-                    'invoice_url' => $btcpayUrl . '/invoice/dummy_' . $subscription->id,
-                ]
-            ];
-
-        } catch (\Exception $e) {
-            \Log::error('createBTCPaySubscriptionInvoice failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => 'Failed to create BTCPay invoice: ' . $e->getMessage(),
-            ];
-        }
-    }
 }
