@@ -16,7 +16,7 @@ import {
   HiAtSymbol,
 } from 'react-icons/hi';
 
-const QuickActions = ({ user }) => {
+const QuickActions = ({ _user }) => {
   const navigate = useNavigate();
   const [webmailUrl, setWebmailUrl] = useState(null);
 

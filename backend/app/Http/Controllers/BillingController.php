@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class BillingController extends Controller
 {
@@ -648,9 +649,19 @@ class BillingController extends Controller
                 'amount' => $plan->price,
                 'currency' => $plan->currency ?? 'USD',
                 'orderId' => 'subscription_' . $subscription->id,
-                'itemDesc' => $plan->name . ' Subscription',
-                'notificationURL' => url('/api/btcpay/webhook'),
-                'redirectURL' => url('/billing?payment=success'),
+                'itemDesc' => $plan->name . ' Subscription for ' . $user->name,
+                'metadata' => [
+                    'subscriptionId' => $subscription->id,
+                    'userId' => $user->id,
+                    'planId' => $plan->id,
+                    'itemCode' => 'subscription',
+                    'itemDesc' => $plan->name . ' Subscription'
+                ],
+                'checkout' => [
+                    'redirectURL' => url('/billing/payment/success?subscription=' . $subscription->id),
+                    'closeURL' => url('/billing/payment/cancelled?subscription=' . $subscription->id),
+                ],
+                'notificationURL' => url('/api/billing/webhook'),
                 'buyer' => [
                     'email' => $user->email,
                     'name' => $user->name,
@@ -689,5 +700,62 @@ class BillingController extends Controller
         }
     }
 
+    /**
+     * Make GET request
+     */
+    protected function get(string $url, array $headers = [], int $timeout = 30): array
+    {
+        try {
+            $response = Http::withHeaders($headers)
+                ->timeout($timeout)
+                ->get($url);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => 'HTTP ' . $response->status() . ': ' . $response->body()
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Make POST request
+     */
+    protected function post(string $url, array $data = [], array $headers = [], int $timeout = 30): array
+    {
+        try {
+            $response = Http::withHeaders($headers)
+                ->timeout($timeout)
+                ->post($url, $data);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => 'HTTP ' . $response->status() . ': ' . $response->body()
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
 
 }

@@ -26,7 +26,9 @@ class Subscription extends Model
         'payment_url',
         'paid_at',
         'notes',
-        'processed_by'
+        'processed_by',
+        'confirmation_count',
+        'payment_data'
     ];
 
     protected $casts = [
@@ -34,7 +36,9 @@ class Subscription extends Model
         'ends_at' => 'datetime',
         'expiry' => 'datetime',
         'paid_at' => 'datetime',
-        'payment_amount' => 'decimal:2'
+        'payment_amount' => 'decimal:2',
+        'payment_data' => 'array',
+        'confirmation_count' => 'integer'
     ];
 
     // Relationships

@@ -30,10 +30,10 @@ const Billing = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const {
-    subscriptions,
+    SUBSCRIPTIONS,
     currentSubscription,
     paymentHistory,
-    paymentRates,
+    PAYMENT_RATES,
     invoices,
     plans,
     isLoading,
@@ -43,24 +43,24 @@ const Billing = () => {
   const [activeTab, setActiveTab] = useState('subscription');
   const [showWelcome, setShowWelcome] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadBillingData = async () => {
+    if (!user?.id || isLoading) return;
     
-    const loadBillingData = async () => {
-      if (!user?.id || isLoading) return;
-      
-      try {
-        // Load data sequentially to avoid overwhelming the backend
-        await Promise.allSettled([
-          dispatch(fetchSubscriptions()),
-          dispatch(fetchPaymentHistory()),
-          dispatch(fetchPaymentRates()),
-          dispatch(fetchPlans())
-        ]);
-      } catch (error) {
-        console.error('Failed to load billing data:', error);
-      }
-    };
+    try {
+      // Load data sequentially to avoid overwhelming the backend
+      await Promise.allSettled([
+        dispatch(fetchSubscriptions()),
+        dispatch(fetchPaymentHistory()),
+        dispatch(fetchPaymentRates()),
+        dispatch(fetchPlans())
+      ]);
+    } catch (error) {
+      console.error('Failed to load billing data:', error);
+    }
+  };
+
+  useEffect(() => {
+    let _isMounted = true;
     
     loadBillingData();
     
@@ -73,7 +73,7 @@ const Billing = () => {
     }
     
     return () => {
-      isMounted = false;
+      _isMounted = false;
     };
   }, [dispatch, user?.id]); // Add user.id as dependency
 
@@ -405,7 +405,7 @@ const Billing = () => {
                       } else if (typeof currentSubscription.features === 'string') {
                         try {
                           features = JSON.parse(currentSubscription.features);
-                        } catch (e) {
+                        } catch (_e) {
                           features = [currentSubscription.features];
                         }
                       }

@@ -1,14 +1,15 @@
 <?php
 
+use App\Http\Middleware\AdminAuthorizationMiddleware;
+use App\Http\Middleware\ApiKeyAuth;
+use App\Http\Middleware\CheckActiveSubscription;
+use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\JWTFromCookie;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
-use Illuminate\Auth\AuthenticationException;
-use App\Http\Middleware\CheckRole;
-use App\Http\Middleware\JWTFromCookie;
-use App\Http\Middleware\CheckActiveSubscription;
-use App\Http\Middleware\ApiKeyAuth;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,16 +23,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             JWTFromCookie::class,
         ]);
-        
+
         // Register aliases for route-specific middleware
         $middleware->alias([
             'role' => CheckRole::class,
             'subscription' => CheckActiveSubscription::class,
             'training.check' => \App\Http\Middleware\TrainingCheckMiddleware::class,
             'api.key' => ApiKeyAuth::class,
+            'admin' => AdminAuthorizationMiddleware::class,
         ]);
-        
-		 $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
+
+        // CORS middleware is already included by default in Laravel 11
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

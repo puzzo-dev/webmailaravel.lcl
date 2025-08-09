@@ -5,6 +5,9 @@ namespace App\Traits;
 use App\Models\SuppressionList;
 use App\Models\EmailTracking;
 use App\Models\Campaign;
+use App\Traits\LoggingTrait;
+use App\Traits\CacheManagementTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Support\Facades\Storage;
 
 trait SuppressionListTrait

@@ -15,7 +15,6 @@ import {
 import { systemSettingsService } from '../services/api';
 
 const SystemSettings = () => {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   
   const [loading, setLoading] = useState(true);
@@ -757,34 +756,54 @@ const SystemSettings = () => {
 
                 {/* Additional Training Settings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={settings.training.allow_user_override}
-                        onChange={(e) => updateSetting('training', 'allow_user_override', e.target.checked)}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <span className="ml-2 text-sm font-medium text-gray-700">Allow User Override</span>
-                    </label>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Allow users to override the default training mode for individual campaigns.
-                    </p>
+                  {/* Allow User Override Toggle */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h5 className="text-sm font-medium text-gray-900">Allow User Override</h5>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Allow users to override the default training mode for individual campaigns.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting('training', 'allow_user_override', !settings.training.allow_user_override)}
+                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                          settings.training.allow_user_override ? 'bg-primary-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            settings.training.allow_user_override ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={settings.training.manual_approval_required}
-                        onChange={(e) => updateSetting('training', 'manual_approval_required', e.target.checked)}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <span className="ml-2 text-sm font-medium text-gray-700">Manual Approval Required</span>
-                    </label>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Require manual approval before campaigns can be sent.
-                    </p>
+                  {/* Manual Approval Required Toggle */}
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h5 className="text-sm font-medium text-gray-900">Manual Approval Required</h5>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Require manual approval before campaigns can be sent.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting('training', 'manual_approval_required', !settings.training.manual_approval_required)}
+                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                          settings.training.manual_approval_required ? 'bg-primary-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            settings.training.manual_approval_required ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {settings.training.default_mode === 'automatic' && (

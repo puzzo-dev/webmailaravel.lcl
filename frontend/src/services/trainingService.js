@@ -41,8 +41,8 @@ const trainingService = {
     return response.data;
   },
 
-  updateAdminTrainingActivation: async (userId, activation) => {
-    const response = await api.put(`/admin/training/users/${userId}/activation`, activation);
+  updateAdminTrainingSettings: async (userId, settings) => {
+    const response = await api.put(`/admin/training/users/${userId}/settings`, settings);
     return response.data;
   },
 

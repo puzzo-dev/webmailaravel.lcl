@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
+use App\Traits\SuppressionListTrait;
 use App\Models\User;
 use App\Models\Campaign;
 use App\Models\Content;

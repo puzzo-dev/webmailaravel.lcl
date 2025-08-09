@@ -13,7 +13,7 @@ class SystemConfig extends Model
     protected $fillable = [
         'key',
         'value',
-        'description'
+        'description',
     ];
 
     /**
@@ -23,6 +23,7 @@ class SystemConfig extends Model
     {
         return Cache::remember("system_config:{$key}", 3600, function () use ($key, $default) {
             $config = static::where('key', $key)->first();
+
             return $config ? $config->value : $default;
         });
     }
@@ -36,7 +37,7 @@ class SystemConfig extends Model
             ['key' => $key],
             [
                 'value' => $value,
-                'description' => $description
+                'description' => $description,
             ]
         );
 
@@ -63,7 +64,7 @@ class SystemConfig extends Model
             'port' => static::getValue('redis_port', 6379),
             'password' => static::getValue('redis_password'),
             'database' => static::getValue('redis_database', 0),
-            'prefix' => static::getValue('redis_prefix', 'campaign_manager:')
+            'prefix' => static::getValue('redis_prefix', 'campaign_manager:'),
         ];
     }
 
@@ -82,7 +83,7 @@ class SystemConfig extends Model
             'acct_file' => static::getValue('powermta_acct_file', 'acct.csv'),
             'fbl_file' => static::getValue('powermta_fbl_file', 'fbl.csv'),
             'diag_file' => static::getValue('powermta_diag_file', 'diag.csv'),
-            'logs_file' => static::getValue('powermta_logs_file', 'logs.txt')
+            'logs_file' => static::getValue('powermta_logs_file', 'logs.txt'),
         ];
     }
 
@@ -98,7 +99,7 @@ class SystemConfig extends Model
             'password' => static::getValue('default_smtp_password'),
             'encryption' => static::getValue('default_smtp_encryption', 'tls'),
             'from_address' => static::getValue('default_smtp_from_address'),
-            'from_name' => static::getValue('default_smtp_from_name')
+            'from_name' => static::getValue('default_smtp_from_name'),
         ];
     }
 
@@ -112,7 +113,7 @@ class SystemConfig extends Model
             'api_key' => static::getValue('btcpay_api_key'),
             'store_id' => static::getValue('btcpay_store_id'),
             'webhook_secret' => static::getValue('btcpay_webhook_secret'),
-            'currency' => static::getValue('btcpay_currency', 'USD')
+            'currency' => static::getValue('btcpay_currency', 'USD'),
         ];
     }
 
@@ -124,7 +125,7 @@ class SystemConfig extends Model
         return [
             'database_path' => static::getValue('geoip_database_path'),
             'api_key' => static::getValue('geoip_api_key'),
-            'service' => static::getValue('geoip_service', 'maxmind')
+            'service' => static::getValue('geoip_service', 'maxmind'),
         ];
     }
 
@@ -135,10 +136,33 @@ class SystemConfig extends Model
     {
         return [
             'default_mode' => static::getValue('TRAINING_DEFAULT_MODE', 'manual'),
-            'allow_user_override' => static::getValue('TRAINING_ALLOW_USER_OVERRIDE', true),
-            'automatic_threshold' => static::getValue('TRAINING_AUTOMATIC_THRESHOLD', 100),
-            'manual_approval_required' => static::getValue('TRAINING_MANUAL_APPROVAL_REQUIRED', false)
+            'allow_user_override' => static::getBooleanValue('TRAINING_ALLOW_USER_OVERRIDE', true),
+            'automatic_threshold' => static::getIntegerValue('TRAINING_AUTOMATIC_THRESHOLD', 100),
+            'manual_approval_required' => static::getBooleanValue('TRAINING_MANUAL_APPROVAL_REQUIRED', false),
         ];
+    }
+
+    /**
+     * Get boolean config value with proper casting
+     */
+    public static function getBooleanValue(string $key, bool $default = false): bool
+    {
+        $value = static::getValue($key, $default);
+        if (is_string($value)) {
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return (bool) $value;
+    }
+
+    /**
+     * Get integer config value with proper casting
+     */
+    public static function getIntegerValue(string $key, int $default = 0): int
+    {
+        $value = static::getValue($key, $default);
+
+        return (int) $value;
     }
 
     /**
@@ -151,7 +175,7 @@ class SystemConfig extends Model
             'allowed_extensions' => static::getValue('upload_allowed_extensions', 'txt,csv'),
             'upload_path' => static::getValue('upload_path', 'uploads'),
             'backup_path' => static::getValue('backup_path', 'backups'),
-            'powermta_logs_path' => static::getValue('powermta_logs_path', 'powermta_logs')
+            'powermta_logs_path' => static::getValue('powermta_logs_path', 'powermta_logs'),
         ];
     }
 
@@ -164,7 +188,7 @@ class SystemConfig extends Model
             'default_emails_per_hour' => static::getValue('rate_limit_default_emails_per_hour', 100),
             'max_emails_per_hour' => static::getValue('rate_limit_max_emails_per_hour', 1000),
             'burst_limit' => static::getValue('rate_limit_burst_limit', 50),
-            'decay_minutes' => static::getValue('rate_limit_decay_minutes', 60)
+            'decay_minutes' => static::getValue('rate_limit_decay_minutes', 60),
         ];
     }
 
@@ -178,7 +202,7 @@ class SystemConfig extends Model
             'telegram_enabled' => static::getValue('notification_telegram_enabled', false),
             'telegram_bot_token' => static::getValue('notification_telegram_bot_token'),
             'telegram_chat_id' => static::getValue('notification_telegram_chat_id'),
-            'websocket_enabled' => static::getValue('notification_websocket_enabled', true)
+            'websocket_enabled' => static::getValue('notification_websocket_enabled', true),
         ];
     }
 
@@ -192,7 +216,7 @@ class SystemConfig extends Model
             'lockout_duration' => static::getValue('security_lockout_duration', 15),
             'password_min_length' => static::getValue('security_password_min_length', 8),
             'require_2fa' => static::getValue('security_require_2fa', false),
-            'session_timeout' => static::getValue('security_session_timeout', 120)
+            'session_timeout' => static::getValue('security_session_timeout', 120),
         ];
     }
 
@@ -232,7 +256,7 @@ class SystemConfig extends Model
 
             // Notifications
             ['key' => 'notification_email_enabled', 'value' => 'true', 'description' => 'Enable email notifications'],
-            ['key' => 'notification_websocket_enabled', 'value' => 'true', 'description' => 'Enable WebSocket notifications']
+            ['key' => 'notification_websocket_enabled', 'value' => 'true', 'description' => 'Enable WebSocket notifications'],
         ];
 
         foreach ($defaults as $config) {
@@ -240,7 +264,7 @@ class SystemConfig extends Model
                 ['key' => $config['key']],
                 [
                     'value' => $config['value'],
-                    'description' => $config['description']
+                    'description' => $config['description'],
                 ]
             );
         }

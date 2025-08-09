@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from './logger';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -31,12 +32,25 @@ export const api = {
     try {
       const queryString = new URLSearchParams(params).toString();
       const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-      const response = await axios.get(url, config);
+      
+      // Merge params into axios config properly
+      const axiosConfig = {
+        ...config,
+        params: Object.keys(params).length > 0 ? params : undefined
+      };
+      
+      // For blob responses, ensure proper handling of binary data
+      if (config.responseType === 'blob') {
+        axiosConfig.responseEncoding = 'binary';
+      }
+      
+      const response = await axios.get(endpoint, axiosConfig);
+      
       return response;
     } catch (error) {
       // Don't log 401 errors during auth initialization
       if (!(config._isAuthInit && error.response?.status === 401)) {
-        console.error('API GET error:', error.response?.status, error.response?.data);
+        logger.apiError('GET', error);
       }
       throw error;
     }
@@ -54,41 +68,53 @@ export const api = {
         return response;
       }
     } catch (error) {
-      console.error('API POST error:', error.response?.status, error.response?.data);
+      logger.apiError('POST', error);
 
       throw error;
     }
   },
 
   // PUT request
-  put: async (endpoint, data = {}) => {
+  put: async (endpoint, data = {}, config = {}) => {
     try {
-      const response = await axios.put(endpoint, data);
-      return response;
+      // Handle FormData - use separate axios instance
+      if (data instanceof FormData) {
+        const response = await formDataAxios.put(endpoint, data, config);
+        return response;
+      } else {
+        const response = await axios.put(endpoint, data, config);
+        return response;
+      }
     } catch (error) {
-      console.error('API PUT error:', error.response?.status, error.response?.data);
+      logger.apiError('PUT', error);
       throw error;
     }
   },
 
   // DELETE request
-  delete: async (endpoint, data = {}) => {
+  delete: async (endpoint, data = {}, config = {}) => {
     try {
-      const response = await axios.delete(endpoint, { data });
+      const response = await axios.delete(endpoint, { data, ...config });
       return response;
     } catch (error) {
-      console.error('API DELETE error:', error.response?.status, error.response?.data);
+      logger.apiError('DELETE', error);
       throw error;
     }
   },
 
   // PATCH request
-  patch: async (endpoint, data = {}) => {
+  patch: async (endpoint, data = {}, config = {}) => {
     try {
-      const response = await axios.patch(endpoint, data);
-      return response;
+      // Handle FormData - use separate axios instance
+      if (data instanceof FormData) {
+        const response = await formDataAxios.patch(endpoint, data, config);
+        return response;
+      } else {
+        const response = await axios.patch(endpoint, data, config);
+        return response;
+      }
     } catch (error) {
-      console.error('API PATCH error:', error.response?.status, error.response?.data);
+      logger.apiError('PATCH', error);
       throw error;
     }
   },

@@ -2,32 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Controllers\AnalyticsController;
-use App\Models\User;
-use App\Models\Campaign;
 use App\Models\Analytics;
+use App\Models\Campaign;
+use App\Models\SystemConfig;
+use App\Models\User;
 use App\Traits\ResponseTrait;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
     use ResponseTrait;
-    
+
     /**
      * Get admin dashboard data
      */
     public function dashboard(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
+            if (! Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
-            
+
             $stats = [
                 'total_users' => User::count(),
                 'total_campaigns' => Campaign::count(),
@@ -50,8 +51,6 @@ class AdminController extends Controller
         }, 'view_admin_dashboard');
     }
 
-
-
     /**
      * Get analytics data (admin only) - redirects to AnalyticsController
      */
@@ -59,6 +58,7 @@ class AdminController extends Controller
     {
         // Redirect to consolidated analytics endpoint
         $analyticsController = app(AnalyticsController::class);
+
         return $analyticsController->getAdminAnalytics(request());
     }
 
@@ -68,10 +68,10 @@ class AdminController extends Controller
     public function systemStatus(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
+            if (! Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
-            
+
             $status = [
                 'database' => $this->checkDatabaseStatus(),
                 'cache' => $this->checkCacheStatus(),
@@ -95,10 +95,10 @@ class AdminController extends Controller
     public function getSystemConfig(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
+            if (! Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
-            
+
             $config = [
                 'app' => config('app'),
                 'mail' => config('mail'),
@@ -118,10 +118,10 @@ class AdminController extends Controller
     public function updateSystemConfig(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            if (!Auth::user()->hasRole('admin')) {
+            if (! Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
-            
+
             $validated = $request->validate([
                 'config_type' => 'required|string|in:app,mail,queue,cache,session,logging',
                 'config_data' => 'required|array',
@@ -134,27 +134,24 @@ class AdminController extends Controller
         }, 'update_system_config');
     }
 
-
-
-
-
     /**
      * Get Telegram configuration
      */
     public function getTelegramConfig(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
             }
-            
+
             $config = [
-                'bot_token' => \App\Models\SystemConfig::getValue('notification_telegram_bot_token'),
-                'chat_id' => \App\Models\SystemConfig::getValue('notification_telegram_chat_id'),
-                'enabled' => \App\Models\SystemConfig::getValue('notification_telegram_enabled', false),
+                'bot_token' => SystemConfig::get('TELEGRAM_BOT_TOKEN'),
+                'chat_id' => SystemConfig::get('TELEGRAM_CHAT_ID'),
+                'enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', false),
             ];
+
             return $this->successResponse($config, 'Telegram configuration retrieved successfully');
-        }, 'view_system_config');
+        }, 'view_telegram_config');
     }
 
     /**
@@ -163,21 +160,27 @@ class AdminController extends Controller
     public function updateTelegramConfig(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
             }
-            
+
             $validated = $request->validate([
                 'bot_token' => 'nullable|string',
                 'chat_id' => 'nullable|string',
                 'enabled' => 'nullable|boolean',
             ]);
+
             foreach ($validated as $key => $value) {
-                $configKey = 'notification_telegram_' . $key;
-                \App\Models\SystemConfig::setValue($configKey, $value);
+                if ($key === 'enabled') {
+                    $configKey = 'NOTIFICATION_TELEGRAM_ENABLED';
+                } else {
+                    $configKey = 'TELEGRAM_'.strtoupper($key);
+                }
+                SystemConfig::set($configKey, $value);
             }
+
             return $this->successResponse(null, 'Telegram configuration updated successfully');
-        }, 'update_system_config');
+        }, 'update_telegram_config');
     }
 
     /**
@@ -186,20 +189,21 @@ class AdminController extends Controller
     public function getPowerMTAConfig(): JsonResponse
     {
         return $this->executeWithErrorHandling(function () {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
             }
-            
+
             $config = [
-                'base_url' => \App\Models\SystemConfig::getValue('powermta_base_url'),
-                'api_key' => \App\Models\SystemConfig::getValue('powermta_api_key'),
-                'config_path' => \App\Models\SystemConfig::getValue('powermta_config_path'),
-                'accounting_path' => \App\Models\SystemConfig::getValue('powermta_accounting_path'),
-                'fbl_path' => \App\Models\SystemConfig::getValue('powermta_fbl_path'),
-                'diag_path' => \App\Models\SystemConfig::getValue('powermta_diag_path'),
+                'base_url' => SystemConfig::get('POWERMTA_BASE_URL'),
+                'api_key' => SystemConfig::get('POWERMTA_API_KEY'),
+                'config_path' => SystemConfig::get('POWERMTA_CONFIG_PATH'),
+                'accounting_path' => SystemConfig::get('POWERMTA_ACCOUNTING_PATH'),
+                'fbl_path' => SystemConfig::get('POWERMTA_FBL_PATH'),
+                'diag_path' => SystemConfig::get('POWERMTA_DIAG_PATH'),
             ];
+
             return $this->successResponse($config, 'PowerMTA configuration retrieved successfully');
-        }, 'view_system_config');
+        }, 'view_powermta_config');
     }
 
     /**
@@ -208,10 +212,10 @@ class AdminController extends Controller
     public function updatePowerMTAConfig(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
             }
-            
+
             $validated = $request->validate([
                 'base_url' => 'nullable|string',
                 'api_key' => 'nullable|string',
@@ -220,12 +224,318 @@ class AdminController extends Controller
                 'fbl_path' => 'nullable|string',
                 'diag_path' => 'nullable|string',
             ]);
+
             foreach ($validated as $key => $value) {
-                $configKey = 'powermta_' . $key;
-                \App\Models\SystemConfig::setValue($configKey, $value);
+                $configKey = 'POWERMTA_'.strtoupper($key);
+                SystemConfig::set($configKey, $value);
             }
+
             return $this->successResponse(null, 'PowerMTA configuration updated successfully');
-        }, 'update_system_config');
+        }, 'update_powermta_config');
+    }
+
+    /**
+     * Get comprehensive system settings
+     */
+    public function getSystemSettings(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            // Check if user has admin role
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            $settings = [
+                // System SMTP Settings (for notifications, not campaigns)
+                'system_smtp' => [
+                    'host' => SystemConfig::get('SYSTEM_SMTP_HOST', env('MAIL_HOST', 'localhost')),
+                    'port' => SystemConfig::get('SYSTEM_SMTP_PORT', env('MAIL_PORT', 587)),
+                    'username' => SystemConfig::get('SYSTEM_SMTP_USERNAME', env('MAIL_USERNAME', '')),
+                    'password' => SystemConfig::get('SYSTEM_SMTP_PASSWORD', env('MAIL_PASSWORD', '')),
+                    'encryption' => SystemConfig::get('SYSTEM_SMTP_ENCRYPTION', env('MAIL_ENCRYPTION', 'tls')),
+                    'from_address' => SystemConfig::get('SYSTEM_SMTP_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'noreply@example.com')),
+                    'from_name' => SystemConfig::get('SYSTEM_SMTP_FROM_NAME', env('MAIL_FROM_NAME', 'System')),
+                ],
+
+                // Webmail Settings
+                'webmail' => [
+                    'url' => SystemConfig::get('WEBMAIL_URL', env('WEBMAIL_URL', '')),
+                    'enabled' => SystemConfig::get('WEBMAIL_ENABLED', env('WEBMAIL_ENABLED', false)),
+                ],
+
+                // General System Settings
+                'system' => [
+                    'app_name' => SystemConfig::get('APP_NAME', env('APP_NAME', 'WebMail Laravel')),
+                    'app_url' => SystemConfig::get('APP_URL', env('APP_URL', 'http://localhost')),
+                    'timezone' => SystemConfig::get('APP_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+                    'max_campaigns_per_day' => SystemConfig::get('MAX_CAMPAIGNS_PER_DAY', env('MAX_CAMPAIGNS_PER_DAY', 50)),
+                    'max_recipients_per_campaign' => SystemConfig::get('MAX_RECIPIENTS_PER_CAMPAIGN', env('MAX_RECIPIENTS_PER_CAMPAIGN', 10000)),
+                ],
+
+                // Notification Settings
+                'notifications' => [
+                    'email_enabled' => SystemConfig::get('NOTIFICATION_EMAIL_ENABLED', env('NOTIFICATION_EMAIL_ENABLED', true)),
+                    'telegram_enabled' => SystemConfig::get('NOTIFICATION_TELEGRAM_ENABLED', env('NOTIFICATION_TELEGRAM_ENABLED', false)),
+                ],
+
+                // Training Settings
+                'training' => [
+                    'default_mode' => SystemConfig::get('TRAINING_DEFAULT_MODE', 'manual'),
+                    'allow_user_override' => SystemConfig::getBooleanValue('TRAINING_ALLOW_USER_OVERRIDE', true),
+                    'automatic_threshold' => SystemConfig::getIntegerValue('TRAINING_AUTOMATIC_THRESHOLD', 100),
+                    'manual_approval_required' => SystemConfig::getBooleanValue('TRAINING_MANUAL_APPROVAL_REQUIRED', false),
+                ],
+
+                // BTCPay Settings
+                'btcpay' => [
+                    'url' => SystemConfig::get('btcpay_url', ''),
+                    'api_key' => SystemConfig::get('btcpay_api_key', ''),
+                    'store_id' => SystemConfig::get('btcpay_store_id', ''),
+                    'webhook_secret' => SystemConfig::get('btcpay_webhook_secret', ''),
+                    'currency' => SystemConfig::get('btcpay_currency', 'USD'),
+                ],
+            ];
+
+            return $this->successResponse($settings, 'System settings retrieved successfully');
+        }, 'get_system_settings');
+    }
+
+    /**
+     * Update comprehensive system settings
+     */
+    public function updateSystemSettings(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            // Check if user has admin role
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            $request->validate([
+                // System SMTP validation
+                'system_smtp.host' => 'sometimes|string|max:255',
+                'system_smtp.port' => 'sometimes|integer|min:1|max:65535',
+                'system_smtp.username' => 'sometimes|string|max:255',
+                'system_smtp.password' => 'sometimes|string|max:255',
+                'system_smtp.encryption' => ['sometimes', Rule::in(['tls', 'ssl', 'none'])],
+                'system_smtp.from_address' => 'sometimes|email|max:255',
+                'system_smtp.from_name' => 'sometimes|string|max:255',
+
+                // Webmail validation
+                'webmail.url' => 'sometimes|nullable|url|max:255',
+                'webmail.enabled' => 'sometimes|boolean',
+
+                // System validation
+                'system.app_name' => 'sometimes|string|max:255',
+                'system.app_url' => 'sometimes|url|max:255',
+                'system.timezone' => 'sometimes|string|max:50',
+                'system.max_campaigns_per_day' => 'sometimes|integer|min:1|max:1000',
+                'system.max_recipients_per_campaign' => 'sometimes|integer|min:1|max:100000',
+
+                // Notification validation
+                'notifications.email_enabled' => 'sometimes|boolean',
+                'notifications.telegram_enabled' => 'sometimes|boolean',
+
+                // Training validation
+                'training.default_mode' => 'sometimes|in:automatic,manual',
+                'training.allow_user_override' => 'sometimes|boolean',
+                'training.automatic_threshold' => 'sometimes|integer|min:1|max:10000',
+                'training.manual_approval_required' => 'sometimes|boolean',
+
+                // BTCPay validation
+                'btcpay.url' => 'sometimes|nullable|url|max:255',
+                'btcpay.api_key' => 'sometimes|nullable|string|max:255',
+                'btcpay.store_id' => 'sometimes|nullable|string|max:255',
+                'btcpay.webhook_secret' => 'sometimes|nullable|string|max:255',
+                'btcpay.currency' => 'sometimes|string|max:10',
+            ]);
+
+            $updatedSettings = [];
+
+            // Update system SMTP settings
+            if ($request->has('system_smtp')) {
+                $smtpSettings = $request->input('system_smtp');
+                foreach ($smtpSettings as $key => $value) {
+                    $configKey = 'SYSTEM_SMTP_'.strtoupper($key);
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["system_smtp.{$key}"] = $value;
+                }
+            }
+
+            // Update webmail settings
+            if ($request->has('webmail')) {
+                $webmailSettings = $request->input('webmail');
+                foreach ($webmailSettings as $key => $value) {
+                    $configKey = 'WEBMAIL_'.strtoupper($key);
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["webmail.{$key}"] = $value;
+                }
+            }
+
+            // Update system settings
+            if ($request->has('system')) {
+                $systemSettings = $request->input('system');
+                foreach ($systemSettings as $key => $value) {
+                    $configKey = strtoupper($key);
+                    if ($key === 'max_campaigns_per_day') {
+                        $configKey = 'MAX_CAMPAIGNS_PER_DAY';
+                    } elseif ($key === 'max_recipients_per_campaign') {
+                        $configKey = 'MAX_RECIPIENTS_PER_CAMPAIGN';
+                    } elseif ($key === 'app_name') {
+                        $configKey = 'APP_NAME';
+                    } elseif ($key === 'app_url') {
+                        $configKey = 'APP_URL';
+                    } elseif ($key === 'timezone') {
+                        $configKey = 'APP_TIMEZONE';
+                    }
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["system.{$key}"] = $value;
+                }
+            }
+
+            // Update notification settings
+            if ($request->has('notifications')) {
+                $notificationSettings = $request->input('notifications');
+                foreach ($notificationSettings as $key => $value) {
+                    if ($key === 'email_enabled') {
+                        $configKey = 'NOTIFICATION_EMAIL_ENABLED';
+                    } elseif ($key === 'telegram_enabled') {
+                        $configKey = 'NOTIFICATION_TELEGRAM_ENABLED';
+                    } else {
+                        $configKey = 'NOTIFICATION_'.strtoupper($key);
+                    }
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["notifications.{$key}"] = $value;
+                }
+            }
+
+            // Update training settings
+            if ($request->has('training')) {
+                $trainingSettings = $request->input('training');
+                foreach ($trainingSettings as $key => $value) {
+                    if ($key === 'default_mode') {
+                        $configKey = 'TRAINING_DEFAULT_MODE';
+                    } elseif ($key === 'allow_user_override') {
+                        $configKey = 'TRAINING_ALLOW_USER_OVERRIDE';
+                    } elseif ($key === 'automatic_threshold') {
+                        $configKey = 'TRAINING_AUTOMATIC_THRESHOLD';
+                    } elseif ($key === 'manual_approval_required') {
+                        $configKey = 'TRAINING_MANUAL_APPROVAL_REQUIRED';
+                    } else {
+                        $configKey = 'TRAINING_'.strtoupper($key);
+                    }
+                    SystemConfig::set($configKey, $value);
+                    $updatedSettings["training.{$key}"] = $value;
+                }
+            }
+
+            // Update BTCPay settings
+            if ($request->has('btcpay')) {
+                $btcpaySettings = $request->input('btcpay');
+                foreach ($btcpaySettings as $key => $value) {
+                    $configKey = 'btcpay_'.$key;
+                    SystemConfig::setValue($configKey, $value);
+                    $updatedSettings["btcpay.{$key}"] = $value;
+                }
+            }
+
+            return $this->successResponse($updatedSettings, 'System settings updated successfully');
+        }, 'update_system_settings');
+    }
+
+    /**
+     * Test system SMTP configuration
+     */
+    public function testSmtp(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            // Check if user has admin role
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            $request->validate([
+                'email' => 'required|email',
+            ]);
+
+            $testEmail = $request->input('email');
+
+            try {
+                // Use system SMTP settings to send test email
+                $systemSmtp = [
+                    'host' => SystemConfig::get('SYSTEM_SMTP_HOST', env('MAIL_HOST')),
+                    'port' => SystemConfig::get('SYSTEM_SMTP_PORT', env('MAIL_PORT')),
+                    'username' => SystemConfig::get('SYSTEM_SMTP_USERNAME', env('MAIL_USERNAME')),
+                    'password' => SystemConfig::get('SYSTEM_SMTP_PASSWORD', env('MAIL_PASSWORD')),
+                    'encryption' => SystemConfig::get('SYSTEM_SMTP_ENCRYPTION', env('MAIL_ENCRYPTION')),
+                    'from_address' => SystemConfig::get('SYSTEM_SMTP_FROM_ADDRESS', env('MAIL_FROM_ADDRESS')),
+                    'from_name' => SystemConfig::get('SYSTEM_SMTP_FROM_NAME', env('MAIL_FROM_NAME')),
+                ];
+
+                // Configure mail settings temporarily
+                Config::set('mail.mailers.smtp.host', $systemSmtp['host']);
+                Config::set('mail.mailers.smtp.port', $systemSmtp['port']);
+                Config::set('mail.mailers.smtp.username', $systemSmtp['username']);
+                Config::set('mail.mailers.smtp.password', $systemSmtp['password']);
+                Config::set('mail.mailers.smtp.encryption', $systemSmtp['encryption']);
+                Config::set('mail.from.address', $systemSmtp['from_address']);
+                Config::set('mail.from.name', $systemSmtp['from_name']);
+
+                // Send test email
+                \Mail::raw('This is a test email from your system SMTP configuration.', function ($message) use ($testEmail, $systemSmtp) {
+                    $message->to($testEmail)
+                        ->subject('System SMTP Test Email')
+                        ->from($systemSmtp['from_address'], $systemSmtp['from_name']);
+                });
+
+                return $this->successResponse(null, 'Test email sent successfully');
+            } catch (\Exception $e) {
+                return $this->errorResponse('Failed to send test email: '.$e->getMessage(), 500);
+            }
+        }, 'test_system_smtp');
+    }
+
+    /**
+     * Get environment variables that can be configured
+     */
+    public function getEnvVariables(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            // Check if user has admin role
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            $envVariables = [
+                'system_smtp' => [
+                    'SYSTEM_SMTP_HOST' => env('SYSTEM_SMTP_HOST', env('MAIL_HOST', '')),
+                    'SYSTEM_SMTP_PORT' => env('SYSTEM_SMTP_PORT', env('MAIL_PORT', '')),
+                    'SYSTEM_SMTP_USERNAME' => env('SYSTEM_SMTP_USERNAME', env('MAIL_USERNAME', '')),
+                    'SYSTEM_SMTP_PASSWORD' => env('SYSTEM_SMTP_PASSWORD', env('MAIL_PASSWORD', '')),
+                    'SYSTEM_SMTP_ENCRYPTION' => env('SYSTEM_SMTP_ENCRYPTION', env('MAIL_ENCRYPTION', '')),
+                    'SYSTEM_SMTP_FROM_ADDRESS' => env('SYSTEM_SMTP_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', '')),
+                    'SYSTEM_SMTP_FROM_NAME' => env('SYSTEM_SMTP_FROM_NAME', env('MAIL_FROM_NAME', '')),
+                ],
+                'webmail' => [
+                    'WEBMAIL_URL' => env('WEBMAIL_URL', ''),
+                    'WEBMAIL_ENABLED' => env('WEBMAIL_ENABLED', false),
+                ],
+                'system' => [
+                    'APP_NAME' => env('APP_NAME', ''),
+                    'APP_URL' => env('APP_URL', ''),
+                    'APP_TIMEZONE' => env('APP_TIMEZONE', ''),
+                    'MAX_CAMPAIGNS_PER_DAY' => env('MAX_CAMPAIGNS_PER_DAY', ''),
+                    'MAX_RECIPIENTS_PER_CAMPAIGN' => env('MAX_RECIPIENTS_PER_CAMPAIGN', ''),
+                ],
+                'notifications' => [
+                    'NOTIFICATION_EMAIL_ENABLED' => env('NOTIFICATION_EMAIL_ENABLED', true),
+                    'NOTIFICATION_TELEGRAM_ENABLED' => env('NOTIFICATION_TELEGRAM_ENABLED', false),
+                    'TELEGRAM_BOT_TOKEN' => env('TELEGRAM_BOT_TOKEN', ''),
+                ],
+            ];
+
+            return $this->successResponse($envVariables, 'Environment variables retrieved successfully');
+        }, 'get_env_variables');
     }
 
     /**
@@ -234,7 +544,7 @@ class AdminController extends Controller
     private function getUserGrowth($timeRange)
     {
         $days = $timeRange === '7d' ? 7 : ($timeRange === '30d' ? 30 : 90);
-        
+
         return User::selectRaw('DATE(created_at) as date, COUNT(*) as count')
             ->where('created_at', '>=', now()->subDays($days))
             ->groupBy('date')
@@ -245,7 +555,7 @@ class AdminController extends Controller
     private function getCampaignPerformance($timeRange)
     {
         $days = $timeRange === '7d' ? 7 : ($timeRange === '30d' ? 30 : 90);
-        
+
         return Campaign::selectRaw('
                 DATE(created_at) as date,
                 COUNT(*) as total_campaigns,
@@ -262,7 +572,7 @@ class AdminController extends Controller
     private function getDeliverabilityStats($timeRange)
     {
         $days = $timeRange === '7d' ? 7 : ($timeRange === '30d' ? 30 : 90);
-        
+
         return Campaign::selectRaw('
                 AVG(delivery_rate) as avg_delivery_rate,
                 AVG(bounce_rate) as avg_bounce_rate,
@@ -275,7 +585,7 @@ class AdminController extends Controller
     private function getRevenueMetrics($timeRange)
     {
         $days = $timeRange === '7d' ? 7 : ($timeRange === '30d' ? 30 : 90);
-        
+
         // This would integrate with your billing/subscription system
         return [
             'total_revenue' => 0,
@@ -288,6 +598,7 @@ class AdminController extends Controller
     {
         try {
             DB::connection()->getPdo();
+
             return ['status' => 'connected', 'message' => 'Database connection successful'];
         } catch (\Exception $e) {
             return ['status' => 'error', 'message' => 'Database connection failed'];
@@ -298,6 +609,7 @@ class AdminController extends Controller
     {
         try {
             Cache::store()->has('test');
+
             return ['status' => 'connected', 'message' => 'Cache connection successful'];
         } catch (\Exception $e) {
             return ['status' => 'error', 'message' => 'Cache connection failed'];
@@ -310,31 +622,31 @@ class AdminController extends Controller
             // Check if queue workers are running by examining failed jobs and queue statistics
             $failedJobs = DB::table('failed_jobs')->count();
             $pendingJobs = DB::table('jobs')->count();
-            
+
             // Check for recent job processing (jobs processed in last 5 minutes)
             $recentlyProcessed = DB::table('jobs')
                 ->where('created_at', '>=', now()->subMinutes(5))
                 ->count();
-            
+
             // Determine queue health
             $status = 'healthy';
             $message = 'Queue workers are running normally';
-            
+
             if ($failedJobs > 50) {
                 $status = 'warning';
                 $message = "High number of failed jobs: {$failedJobs}";
             }
-            
+
             if ($pendingJobs > 1000) {
                 $status = 'warning';
                 $message = "High queue backlog: {$pendingJobs} pending jobs";
             }
-            
+
             if ($pendingJobs > 0 && $recentlyProcessed === 0) {
                 $status = 'error';
                 $message = 'Queue workers appear to be stuck or not running';
             }
-            
+
             return [
                 'status' => $status,
                 'message' => $message,
@@ -343,14 +655,14 @@ class AdminController extends Controller
                     'pending_jobs' => $pendingJobs,
                     'recently_processed' => $recentlyProcessed,
                     'last_check' => now()->toISOString(),
-                ]
+                ],
             ];
-            
+
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
-                'message' => 'Failed to check queue status: ' . $e->getMessage(),
-                'details' => []
+                'message' => 'Failed to check queue status: '.$e->getMessage(),
+                'details' => [],
             ];
         }
     }
@@ -370,28 +682,28 @@ class AdminController extends Controller
             'total_space' => $this->formatBytes($totalSpace),
         ];
     }
-    
+
     private function getBackupStatus()
     {
         try {
             $latestBackup = \App\Models\Backup::where('status', 'completed')
                 ->orderBy('created_at', 'desc')
                 ->first();
-            
+
             return [
                 'status' => $latestBackup ? 'ok' : 'warning',
                 'last_backup' => $latestBackup ? $latestBackup->created_at : null,
                 'last_backup_size' => $latestBackup ? $latestBackup->human_size : null,
-                'message' => $latestBackup 
-                    ? 'Backups are available' 
-                    : 'No backups found - consider creating a backup'
+                'message' => $latestBackup
+                    ? 'Backups are available'
+                    : 'No backups found - consider creating a backup',
             ];
         } catch (\Exception $e) {
             return [
                 'status' => 'error',
-                'message' => 'Failed to check backup status: ' . $e->getMessage(),
+                'message' => 'Failed to check backup status: '.$e->getMessage(),
                 'last_backup' => null,
-                'last_backup_size' => null
+                'last_backup_size' => null,
             ];
         }
     }
@@ -431,7 +743,7 @@ class AdminController extends Controller
         $pow = min($pow, count($units) - 1);
         $bytes /= pow(1024, $pow);
 
-        return round($bytes, 2) . ' ' . $units[$pow];
+        return round($bytes, 2).' '.$units[$pow];
     }
 
     private function getSystemInfo()
@@ -453,12 +765,14 @@ class AdminController extends Controller
             if (function_exists('sys_getloadavg') && file_exists('/proc/uptime')) {
                 $uptime = file_get_contents('/proc/uptime');
                 $uptimeSeconds = (float) explode(' ', $uptime)[0];
+
                 return $this->formatUptime($uptimeSeconds);
             }
-            
+
             // Fallback: calculate PHP process uptime
             $startTime = $_SERVER['REQUEST_TIME'] ?? time();
             $uptimeSeconds = time() - $startTime;
+
             return $this->formatUptime($uptimeSeconds);
         } catch (\Exception $e) {
             return 'Unknown';
@@ -470,7 +784,7 @@ class AdminController extends Controller
         $days = floor($seconds / 86400);
         $hours = floor(($seconds % 86400) / 3600);
         $minutes = floor(($seconds % 3600) / 60);
-        
+
         if ($days > 0) {
             return sprintf('%d days, %d hours', $days, $hours);
         } elseif ($hours > 0) {
@@ -488,30 +802,30 @@ class AdminController extends Controller
                 $load = file_get_contents('/proc/loadavg');
                 $loadArray = explode(' ', $load);
                 $cpuLoad = (float) $loadArray[0]; // 1-minute load average
-                
+
                 // Convert load average to percentage (assuming single core)
                 $cpuCores = $this->getCpuCores();
                 $cpuUsage = min(100, ($cpuLoad / $cpuCores) * 100);
-                
+
                 return [
                     'usage_percent' => round($cpuUsage, 2),
                     'load_average' => $cpuLoad,
                     'cores' => $cpuCores,
                 ];
             }
-            
+
             return [
                 'usage_percent' => 0,
                 'load_average' => 0,
                 'cores' => 1,
-                'message' => 'CPU monitoring not available on this system'
+                'message' => 'CPU monitoring not available on this system',
             ];
         } catch (\Exception $e) {
             return [
                 'usage_percent' => 0,
                 'load_average' => 0,
                 'cores' => 1,
-                'message' => 'Error retrieving CPU usage'
+                'message' => 'Error retrieving CPU usage',
             ];
         }
     }
@@ -522,12 +836,13 @@ class AdminController extends Controller
             if (file_exists('/proc/cpuinfo')) {
                 $cpuinfo = file_get_contents('/proc/cpuinfo');
                 $cores = substr_count($cpuinfo, 'processor');
+
                 return max(1, $cores);
             }
+
             return 1;
         } catch (\Exception $e) {
             return 1;
         }
     }
-
 }

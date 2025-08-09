@@ -13,6 +13,7 @@ import notificationsReducer from './slices/notificationsSlice';
 import analyticsReducer from './slices/analyticsSlice';
 import uiReducer from './slices/uiSlice';
 import systemConfigReducer from './slices/systemConfigSlice';
+import performanceReducer from './slices/performanceSlice';
 
 export const store = configureStore({
   reducer: {
@@ -30,6 +31,7 @@ export const store = configureStore({
     analytics: analyticsReducer,
     ui: uiReducer,
     systemConfig: systemConfigReducer,
+    performance: performanceReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -44,7 +46,7 @@ export const store = configureStore({
         warnAfter: 128,
       },
     }),
-  devTools: process.env.NODE_ENV !== 'production',
+  devTools: import.meta.env.MODE !== 'production',
 });
 
 // JavaScript exports for Redux types

@@ -1,28 +1,25 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\CampaignController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\SenderController;
-use App\Http\Controllers\DomainController;
-use App\Http\Controllers\ContentController;
-use App\Http\Controllers\BillingController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\BounceCredentialController;
+use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\ContentController;
+use App\Http\Controllers\DomainController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PowerMTAController;
-use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\SecurityController;
-use App\Http\Controllers\TrackingController;
-use App\Http\Controllers\SuppressionListController;
-use App\Http\Controllers\TrainingController;
-use App\Http\Controllers\SystemSettingsController;
-use App\Http\Controllers\PublicConfigController;
-use App\Http\Controllers\BounceCredentialController;
 use App\Http\Controllers\PerformanceController;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\PowerMTAController;
+use App\Http\Controllers\PublicConfigController;
+use App\Http\Controllers\SecurityController;
+use App\Http\Controllers\SenderController;
+use App\Http\Controllers\SuppressionListController;
+use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,11 +40,7 @@ Route::get('/security/test', function () {
     return response()->json(['message' => 'Security routes working']);
 });
 
-// Security routes (temporarily outside auth middleware for testing)
-Route::prefix('security')->group(function () {
-    Route::get('/sessions', [SecurityController::class, 'getActiveSessions']);
-    Route::get('/devices', [SecurityController::class, 'getTrustedDevices']);
-});
+// Security routes removed - now handled within authenticated middleware section
 
 // Auth routes (public)
 Route::prefix('auth')->group(function () {
@@ -82,7 +75,7 @@ Route::middleware(['auth:api'])->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Authentication working',
-            'user' => auth()->user()
+            'user' => auth()->user(),
         ]);
     });
 
@@ -94,7 +87,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/devices', [UserController::class, 'getDevices']);
         Route::get('/sessions', [UserController::class, 'getSessions']);
         Route::get('/me', [AuthController::class, 'me']);
-        
+
         // User settings routes
         Route::get('/settings', [UserController::class, 'getSettings']);
         Route::put('/settings/general', [UserController::class, 'updateGeneralSettings']);
@@ -105,8 +98,6 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/settings/api/generate-key', [UserController::class, 'generateApiKey']);
         Route::post('/settings/telegram/test', [UserController::class, 'testTelegram']);
     });
-
-
 
     // Campaign routes (require active subscription)
     Route::prefix('campaigns')->middleware(['subscription'])->group(function () {
@@ -128,7 +119,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
         Route::post('/send-single', [CampaignController::class, 'sendSingle'])->middleware('training.check');
-        
+
         // Admin campaign management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
             Route::put('/{campaign}/admin-update', [CampaignController::class, 'updateCampaign']);
@@ -163,7 +154,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/{domain}/bounce-processing/test', [DomainController::class, 'testBounceConnection']);
         Route::get('/{domain}/bounce-processing/stats', [DomainController::class, 'getBounceStatistics']);
         Route::post('/{domain}/bounce-processing/process', [DomainController::class, 'processBounces']);
-        
+
         // Admin domain management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
             Route::put('/{domain}/admin-update', [DomainController::class, 'updateDomain']);
@@ -205,12 +196,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::put('/subscriptions/{subscription}', [BillingController::class, 'update']);
         Route::delete('/subscriptions/{subscription}', [BillingController::class, 'destroy']);
         Route::post('/subscriptions/{subscription}/renew', [BillingController::class, 'renew']);
-        
+
         // Payment & Invoice management
         Route::post('/invoice', [BillingController::class, 'createInvoice']);
         Route::get('/invoice/{invoice_id}/status', [BillingController::class, 'invoiceStatus']);
         Route::get('/payment-history', [BillingController::class, 'paymentHistory']);
-        
+
         // Webhook for payment processing
         Route::post('/webhook', [BillingController::class, 'webhook']);
     });
@@ -240,14 +231,14 @@ Route::middleware(['auth:api'])->group(function () {
         Route::put('/campaigns/{campaign}/status', [CampaignController::class, 'updateCampaign']);
         Route::get('/analytics', [AdminController::class, 'analytics']);
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
-        Route::post('/system-config', [SystemSettingsController::class, 'updateSystemConfig']);
-        Route::get('/system-config', [SystemSettingsController::class, 'index']);
+        Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
+        Route::get('/system-config', [AdminController::class, 'getSystemConfig']);
 
         // Granular config endpoints for Telegram, PowerMTA
-        Route::get('/system-config/telegram', [SystemSettingsController::class, 'getTelegramConfig']);
-        Route::post('/system-config/telegram', [SystemSettingsController::class, 'updateTelegramConfig']);
-        Route::get('/system-config/powermta', [SystemSettingsController::class, 'getPowerMTAConfig']);
-        Route::post('/system-config/powermta', [SystemSettingsController::class, 'updatePowerMTAConfig']);
+        Route::get('/system-config/telegram', [AdminController::class, 'getTelegramConfig']);
+        Route::post('/system-config/telegram', [AdminController::class, 'updateTelegramConfig']);
+        Route::get('/system-config/powermta', [AdminController::class, 'getPowerMTAConfig']);
+        Route::post('/system-config/powermta', [AdminController::class, 'updatePowerMTAConfig']);
 
         // Backup routes (admin only)
         Route::prefix('backups')->group(function () {
@@ -306,14 +297,14 @@ Route::middleware(['auth:api'])->group(function () {
         });
 
         // Admin notifications management routes (admin only)
-Route::prefix('notifications')->group(function () {
-Route::get('/', [NotificationController::class, 'index']);
-Route::post('/', [NotificationController::class, 'store']);
-Route::post('/bulk', [NotificationController::class, 'sendBulk']);
-Route::get('/{notification}', [NotificationController::class, 'show']);
-Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
-Route::delete('/{notification}', [NotificationController::class, 'destroy']);
-});
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('/', [NotificationController::class, 'store']);
+            Route::post('/bulk', [NotificationController::class, 'sendBulk']);
+            Route::get('/{notification}', [NotificationController::class, 'show']);
+            Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+            Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+        });
 
         // Admin logs management routes (admin only)
         Route::prefix('logs')->group(function () {
@@ -349,7 +340,7 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::get('/diagnostic-files/{filename}/download', [PowerMTAController::class, 'downloadDiagnosticFile']);
             Route::post('/process-bounces', [PowerMTAController::class, 'processBounceFiles']);
         });
-        
+
         // Unified Training admin routes (admin only) - consolidated from PowerMTA and Training controllers
         Route::prefix('training')->group(function () {
             Route::get('/status', [\App\Http\Controllers\TrainingController::class, 'getTrainingStatus']);
@@ -357,7 +348,7 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::post('/run', [\App\Http\Controllers\TrainingController::class, 'runTraining']);
             Route::post('/run/users/{user}', [\App\Http\Controllers\TrainingController::class, 'runUserTraining']);
             Route::post('/run/domains/{domain}', [\App\Http\Controllers\TrainingController::class, 'runDomainTraining']);
-            
+
             // Per-user training management (admin only)
             Route::get('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingSettings']);
             Route::put('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
@@ -393,17 +384,7 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
         Route::delete('/', [NotificationController::class, 'deleteAll']);
     });
 
-    // PowerMTA routes
-    Route::prefix('powermta')->group(function () {
-        Route::get('/status', [PowerMTAController::class, 'getStatus']);
-        Route::get('/fbl/accounts', [PowerMTAController::class, 'getFBLAccounts']);
-        Route::get('/diagnostics/files', [PowerMTAController::class, 'getDiagnosticFiles']);
-        Route::post('/diagnostics/parse', [PowerMTAController::class, 'parseDiagnosticFile']);
-        Route::post('/reputation/analyze', [PowerMTAController::class, 'analyzeSenderReputation']);
-        Route::get('/reputation/summary', [PowerMTAController::class, 'getReputationSummary']);
-        Route::get('/config', [PowerMTAController::class, 'getConfiguration']);
-        Route::put('/config', [PowerMTAController::class, 'updateConfiguration']);
-    });
+    // PowerMTA routes removed - use /admin/powermta endpoints (admin access required)
 
     // Legacy routes for backward compatibility - redirect to new billing endpoints
     Route::prefix('btcpay')->group(function () {
@@ -412,22 +393,14 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
         Route::get('/rates', [BillingController::class, 'rates']);
         Route::get('/history', [BillingController::class, 'paymentHistory']);
     });
-    
-    // Legacy subscription routes for backward compatibility
-    Route::prefix('subscriptions')->group(function () {
-        Route::get('/', [BillingController::class, 'index']);
-        Route::post('/', [BillingController::class, 'store']);
-        Route::get('/{subscription}', [BillingController::class, 'show']);
-        Route::put('/{subscription}', [BillingController::class, 'update']);
-        Route::delete('/{subscription}', [BillingController::class, 'destroy']);
-        Route::post('/{subscription}/renew', [BillingController::class, 'renew']);
-    });
+
+    // Legacy subscription routes removed - use /billing/subscriptions endpoints instead
 
     // Analytics routes
     Route::prefix('analytics')->group(function () {
         // Dashboard route (accessible to all authenticated users)
         Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']);
-        
+
         // Advanced analytics routes (require active subscription)
         Route::middleware(['subscription'])->group(function () {
             Route::get('/', [AnalyticsController::class, 'index']);
@@ -474,10 +447,10 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
     // Admin System Settings routes (admin only)
     Route::prefix('admin')->group(function () {
         Route::prefix('system-settings')->group(function () {
-            Route::get('/', [SystemSettingsController::class, 'index']);
-            Route::put('/', [SystemSettingsController::class, 'update']);
-            Route::post('/test-smtp', [SystemSettingsController::class, 'testSmtp']);
-            Route::get('/env-variables', [SystemSettingsController::class, 'getEnvVariables']);
+            Route::get('/', [AdminController::class, 'getSystemSettings']);
+            Route::put('/', [AdminController::class, 'updateSystemSettings']);
+            Route::post('/test-smtp', [AdminController::class, 'testSmtp']);
+            Route::get('/env-variables', [AdminController::class, 'getEnvVariables']);
         });
 
         // Admin Security Settings routes (admin only)
@@ -501,7 +474,7 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::get('/{campaign}/analytics', [CampaignController::class, 'getAnalytics']); // Campaign analytics
         Route::post('/{campaign}/test', [CampaignController::class, 'sendTestEmail']); // Send test email
     });
-    
+
     // Sender management via API
     Route::prefix('senders')->group(function () {
         Route::get('/', [SenderController::class, 'index']); // List senders
@@ -511,7 +484,7 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::delete('/{sender}', [SenderController::class, 'destroy']); // Delete sender
         Route::post('/{sender}/test', [SenderController::class, 'testSender']); // Test sender
     });
-    
+
     // Domain management via API
     Route::prefix('domains')->group(function () {
         Route::get('/', [DomainController::class, 'index']); // List domains
@@ -521,7 +494,7 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::delete('/{domain}', [DomainController::class, 'destroy']); // Delete domain
         Route::post('/{domain}/verify', [DomainController::class, 'verifyDomain']); // Verify domain
     });
-    
+
     // Analytics via API
     Route::prefix('analytics')->group(function () {
         Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']); // Dashboard analytics
@@ -530,7 +503,7 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::get('/deliverability', [AnalyticsController::class, 'getDeliverabilityAnalytics']); // Deliverability analytics
         Route::get('/reputation', [AnalyticsController::class, 'getReputationAnalytics']); // Reputation analytics
     });
-    
+
     // Content management via API
     Route::prefix('content')->group(function () {
         Route::get('/', [ContentController::class, 'index']); // List content/templates
@@ -539,7 +512,7 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::put('/{content}', [ContentController::class, 'update']); // Update content/template
         Route::delete('/{content}', [ContentController::class, 'destroy']); // Delete content/template
     });
-    
+
     // User account info via API
     Route::prefix('account')->group(function () {
         Route::get('/profile', [UserController::class, 'show']); // Get user profile
@@ -547,4 +520,4 @@ Route::middleware(['api.key'])->prefix('v1')->group(function () {
         Route::get('/usage', [UserController::class, 'getUsageStats']); // Get usage statistics
         Route::get('/api-keys', [SecurityController::class, 'getApiKeys']); // List user's API keys
     });
-}); 
+});

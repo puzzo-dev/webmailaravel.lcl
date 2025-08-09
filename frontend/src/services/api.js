@@ -1,4 +1,5 @@
 import { api } from '../utils/api';
+import axios from 'axios';
 
 // Auth service methods
 export const authService = {
@@ -888,6 +889,116 @@ export const adminService = {
         return response.data;
     },
 
+    // Backup management methods
+    async getBackups(params = {}) {
+        const response = await api.get('/admin/backups', { params });
+        return response.data;
+    },
+
+    async getBackupStatistics() {
+        const response = await api.get('/admin/backups/statistics');
+        return response.data;
+    },
+
+    async createBackup(backupData = {}) {
+        const response = await api.post('/admin/backups', backupData);
+        return response.data;
+    },
+
+    async deleteBackup(backupId) {
+        const response = await api.delete(`/admin/backups/${backupId}`);
+        return response.data;
+    },
+
+    async downloadBackup(backupId) {
+        // Debug: Backup download initiated
+        try {
+            // Try using fetch API for better blob handling
+            const baseURL = axios.defaults.baseURL || '';
+            const url = `${baseURL}/admin/backups/${backupId}/download`;
+            
+            // Initiating backup download
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                credentials: 'include', // equivalent to withCredentials: true
+                headers: {
+                    'Accept': 'application/zip, application/octet-stream, */*',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            // Check response status and content type
+            
+            if (!response.ok) {
+                // Try to get error message from response
+                const errorText = await response.text();
+                console.error('Server error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+            }
+            
+            // Check if response is actually a file or JSON error
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json();
+                console.error('Server returned JSON instead of file:', errorData);
+                throw new Error(errorData.message || 'Server returned error instead of file');
+            }
+            
+            const blob = await response.blob();
+            
+            console.log('Fetch blob result:', {
+                blob,
+                type: typeof blob,
+                isBlob: blob instanceof Blob,
+                size: blob.size,
+                blobType: blob.type
+            });
+            
+            return blob;
+        } catch (error) {
+            console.error('Download error:', error);
+            throw error;
+        }
+    },
+
+    async restoreBackup(backupId) {
+        const response = await api.post(`/admin/backups/${backupId}/restore`);
+        return response.data;
+    },
+
+    async getBackupSettings() {
+        const response = await api.get('/admin/backups/settings');
+        return response.data;
+    },
+
+    async updateBackupSettings(settingsData) {
+        const response = await api.put('/admin/backups/settings', settingsData);
+        return response.data;
+    },
+
+    // PowerMTA configuration
+    async getPowerMTAConfig() {
+        const response = await api.get('/admin/system-config/powermta');
+        return response.data;
+    },
+
+    async updatePowerMTAConfig(powermtaData) {
+        const response = await api.post('/admin/system-config/powermta', powermtaData);
+        return response.data;
+    },
+
+    // Telegram configuration
+    async getTelegramConfig() {
+        const response = await api.get('/admin/system-config/telegram');
+        return response.data;
+    },
+
+    async updateTelegramConfig(telegramData) {
+        const response = await api.post('/admin/system-config/telegram', telegramData);
+        return response.data;
+    },
+
     // BTCPay configuration is now handled through SystemSettings
 
 };
@@ -917,27 +1028,6 @@ export const performanceService = {
 
 // PowerMTA service methods
 export const powerMTAService = {
-    // PowerMTA configuration
-    async getPowerMTAConfig() {
-        const response = await api.get('/admin/system-config/powermta');
-        return response.data;
-    },
-
-    async updatePowerMTAConfig(powermtaData) {
-        const response = await api.post('/admin/system-config/powermta', powermtaData);
-        return response.data;
-    },
-
-    // Telegram configuration
-    async getTelegramConfig() {
-        const response = await api.get('/admin/system-config/telegram');
-        return response.data;
-    },
-
-    async updateTelegramConfig(telegramData) {
-        const response = await api.post('/admin/system-config/telegram', telegramData);
-        return response.data;
-    },
 
     // Environment variables
     async getEnvVariables() {
@@ -1036,12 +1126,7 @@ export const powerMTAService = {
         return response.data;
     },
 
-    async downloadBackup(backupId) {
-        const response = await api.get(`/admin/backups/${backupId}/download`, {}, {
-            responseType: 'blob'
-        });
-        return response.data;
-    },
+
 
     async restoreBackup(backupId) {
         const response = await api.post(`/admin/backups/${backupId}/restore`);

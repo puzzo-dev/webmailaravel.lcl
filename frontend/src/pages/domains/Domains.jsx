@@ -175,7 +175,7 @@ const Domains = () => {
       // Refresh SMTP config
       const res = await domainService.getDomainSmtpConfig(selectedDomain.id);
       setSmtpConfig(res.data || null);
-    } catch (e) {
+    } catch (_e) {
       toast.error('Failed to save SMTP config');
     }
   };
@@ -185,7 +185,7 @@ const Domains = () => {
       await domainService.deleteDomainSmtpConfig(selectedDomain.id);
       toast.success('SMTP config deleted!');
       setSmtpConfig(null);
-    } catch (e) {
+    } catch (_e) {
       toast.error('Failed to delete SMTP config');
     }
   };

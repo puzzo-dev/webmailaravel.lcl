@@ -43,6 +43,7 @@ import {
   updateGeneralSettings,
   updateNotificationSettings,
   updateApiSettings,
+  updateSecuritySettings,
   generateApiKey,
   updateTelegramSettings,
   testTelegramConnection

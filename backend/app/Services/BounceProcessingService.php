@@ -2,21 +2,20 @@
 
 namespace App\Services;
 
-use App\Models\Domain;
 use App\Models\BounceCredential;
 use App\Models\BounceProcessingLog;
+use App\Models\Domain;
 use App\Models\SuppressionList;
-use App\Services\PowerMTAService;
-use App\Traits\LoggingTrait;
-use App\Traits\ValidationTrait;
-use App\Traits\SuppressionListTrait;
 use App\Traits\FileProcessingTrait;
-use Illuminate\Support\Facades\Log;
+use App\Traits\LoggingTrait;
+use App\Traits\SuppressionListTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 class BounceProcessingService
 {
-    use LoggingTrait, ValidationTrait, SuppressionListTrait, FileProcessingTrait;
+    use FileProcessingTrait, LoggingTrait, SuppressionListTrait, ValidationTrait;
 
     protected $powerMTAService;
 
@@ -52,15 +51,15 @@ class BounceProcessingService
                     'credential_id' => $credential->id,
                     'domain_id' => $credential->domain_id,
                     'user_id' => $credential->user_id,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
-                
+
                 $key = $credential->domain_id ? "domain_{$credential->domain_id}" : "user_{$credential->user_id}_default";
                 $results[$key] = [
                     'success' => false,
                     'error' => $e->getMessage(),
                     'processed' => 0,
-                    'suppressed' => 0
+                    'suppressed' => 0,
                 ];
             }
         }
@@ -81,7 +80,7 @@ class BounceProcessingService
         $this->logMethodEntry(__METHOD__, [
             'credential_id' => $credential->id,
             'domain_id' => $credential->domain_id,
-            'user_id' => $credential->user_id
+            'user_id' => $credential->user_id,
         ]);
 
         $connection = $this->createConnectionFromCredential($credential);
@@ -92,10 +91,10 @@ class BounceProcessingService
         foreach ($messages as $message) {
             try {
                 $bounceData = $this->parseBounceMessage($message, $credential);
-                
+
                 if ($bounceData) {
                     $this->logBounceProcessing($credential, $bounceData);
-                    
+
                     // Add to suppression list if it's a hard bounce or spam
                     if (in_array($bounceData['bounce_type'], ['hard', 'spam'])) {
                         SuppressionList::addEmail(
@@ -106,14 +105,14 @@ class BounceProcessingService
                         );
                         $suppressed++;
                     }
-                    
+
                     $processed++;
                 }
             } catch (\Exception $e) {
                 $this->logError('Failed to process bounce message', [
                     'credential_id' => $credential->id,
                     'message_id' => $message['id'] ?? 'unknown',
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -128,7 +127,7 @@ class BounceProcessingService
             'processed' => $processed,
             'suppressed' => $suppressed,
             'credential_id' => $credential->id,
-            'domain_name' => $credential->domain ? $credential->domain->name : 'default'
+            'domain_name' => $credential->domain ? $credential->domain->name : 'default',
         ];
 
         $this->logInfo('Bounce processing completed', [
@@ -136,10 +135,11 @@ class BounceProcessingService
             'domain_id' => $credential->domain_id,
             'user_id' => $credential->user_id,
             'processed' => $processed,
-            'suppressed' => $suppressed
+            'suppressed' => $suppressed,
         ]);
 
         $this->logMethodExit(__METHOD__, $result);
+
         return $result;
     }
 
@@ -150,8 +150,8 @@ class BounceProcessingService
     {
         // Try to get domain-specific credential or fallback to user default
         $credential = BounceCredential::getForDomain($domain);
-        
-        if (!$credential) {
+
+        if (! $credential) {
             // Fallback to old domain-based configuration
             return $this->processDomainBouncesLegacy($domain);
         }
@@ -165,14 +165,14 @@ class BounceProcessingService
     private function createConnectionFromCredential(BounceCredential $credential): object
     {
         $connectionString = $credential->getConnectionString();
-        $mailbox = $connectionString . ($credential->settings['mailbox'] ?? 'INBOX');
+        $mailbox = $connectionString.($credential->settings['mailbox'] ?? 'INBOX');
         $username = $credential->username;
         $password = $credential->getDecryptedPassword();
-        
+
         $connection = $this->connectToMailbox($mailbox, $username, $password);
-        
-        if (!$connection) {
-            $error = "Failed to connect to {$credential->protocol} server: " . imap_last_error();
+
+        if (! $connection) {
+            $error = "Failed to connect to {$credential->protocol} server: ".imap_last_error();
             $credential->recordError($error);
             throw new \Exception($error);
         }
@@ -193,10 +193,10 @@ class BounceProcessingService
         $ssl = $domain->bounce_ssl;
 
         $connectionString = $this->buildConnectionString($protocol, $host, $port, $ssl);
-        
+
         $connection = $this->connectToMailbox($connectionString, $username, $password);
-        
-        if (!$connection) {
+
+        if (! $connection) {
             throw new \Exception("Failed to connect to {$protocol} server");
         }
 
@@ -209,6 +209,7 @@ class BounceProcessingService
     private function buildConnectionString(string $protocol, string $host, int $port, bool $ssl): string
     {
         $sslFlag = $ssl ? 'ssl' : 'tcp';
+
         return "{$protocol}://{$sslFlag}/{$host}:{$port}";
     }
 
@@ -218,9 +219,9 @@ class BounceProcessingService
     private function connectToMailbox(string $connectionString, string $username, string $password): object
     {
         $connection = imap_open($connectionString, $username, $password);
-        
-        if (!$connection) {
-            throw new \Exception('Failed to connect to mailbox: ' . imap_last_error());
+
+        if (! $connection) {
+            throw new \Exception('Failed to connect to mailbox: '.imap_last_error());
         }
 
         return $connection;
@@ -235,24 +236,24 @@ class BounceProcessingService
         $messages = [];
 
         // Select mailbox
-        if (!imap_reopen($connection, $connectionString . $mailbox)) {
-            throw new \Exception('Failed to open mailbox: ' . imap_last_error());
+        if (! imap_reopen($connection, $connectionString.$mailbox)) {
+            throw new \Exception('Failed to open mailbox: '.imap_last_error());
         }
 
         $messageCount = imap_num_msg($connection);
-        
+
         for ($i = 1; $i <= $messageCount; $i++) {
             $header = imap_headerinfo($connection, $i);
             $body = imap_body($connection, $i);
-            
+
             $messages[] = [
                 'id' => $i,
                 'header' => $header,
                 'body' => $body,
                 'subject' => $header->subject ?? '',
-                'from' => $header->from[0]->mailbox . '@' . $header->from[0]->host ?? '',
-                'to' => $header->to[0]->mailbox . '@' . $header->to[0]->host ?? '',
-                'date' => $header->date ?? ''
+                'from' => $header->from[0]->mailbox.'@'.$header->from[0]->host ?? '',
+                'to' => $header->to[0]->mailbox.'@'.$header->to[0]->host ?? '',
+                'date' => $header->date ?? '',
             ];
         }
 
@@ -270,20 +271,20 @@ class BounceProcessingService
 
         // Check for bounce patterns
         $bounceType = $this->determineBounceType($subject, $body, $rules);
-        
-        if (!$bounceType) {
+
+        if (! $bounceType) {
             return null;
         }
 
         // Extract recipient email
         $recipientEmail = $this->extractRecipientEmail($message, $body);
-        
-        if (!$recipientEmail) {
+
+        if (! $recipientEmail) {
             return null;
         }
 
         // Extract bounce reason
-        $bounceReason = $this->extractBounceReason($body, $rules[$bounceType . '_patterns'] ?? []);
+        $bounceReason = $this->extractBounceReason($body, $rules[$bounceType.'_patterns'] ?? []);
 
         return [
             'message_id' => $message['id'],
@@ -291,7 +292,7 @@ class BounceProcessingService
             'to_email' => $recipientEmail,
             'bounce_type' => $bounceType,
             'bounce_reason' => $bounceReason,
-            'raw_message' => $message
+            'raw_message' => $message,
         ];
     }
 
@@ -300,7 +301,7 @@ class BounceProcessingService
      */
     private function determineBounceType(string $subject, string $body, array $rules): ?string
     {
-        $text = $subject . ' ' . $body;
+        $text = $subject.' '.$body;
 
         foreach ($rules as $type => $patterns) {
             foreach ($patterns as $pattern) {
@@ -328,7 +329,7 @@ class BounceProcessingService
             '/failed recipient:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i',
             '/original recipient:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i',
             '/to:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i',
-            '/recipient:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i'
+            '/recipient:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i',
         ];
 
         foreach ($patterns as $pattern) {
@@ -368,7 +369,7 @@ class BounceProcessingService
             'bounce_type' => $bounceData['bounce_type'],
             'status' => 'processed',
             'raw_message' => $bounceData['raw_message'],
-            'processed_at' => now()
+            'processed_at' => now(),
         ]);
     }
 
@@ -379,28 +380,28 @@ class BounceProcessingService
     {
         $this->logMethodEntry(__METHOD__, [
             'domain_id' => $domain->id,
-            'domain_name' => $domain->name
+            'domain_name' => $domain->name,
         ]);
 
         try {
-            if (!$domain->isBounceProcessingConfigured()) {
+            if (! $domain->isBounceProcessingConfigured()) {
                 throw new \Exception('Bounce processing not properly configured');
             }
 
             $connection = $this->createConnection($domain);
             $messageCount = imap_num_msg($connection);
-            
+
             imap_close($connection);
 
             $result = [
                 'success' => true,
                 'message' => 'Connection successful',
-                'message_count' => $messageCount
+                'message_count' => $messageCount,
             ];
 
             $this->logInfo('Bounce processing connection test successful', [
                 'domain_id' => $domain->id,
-                'message_count' => $messageCount
+                'message_count' => $messageCount,
             ]);
 
             return $result;
@@ -408,12 +409,12 @@ class BounceProcessingService
         } catch (\Exception $e) {
             $this->logError('Bounce processing connection test failed', [
                 'domain_id' => $domain->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -432,7 +433,7 @@ class BounceProcessingService
     public function processPowerMTAFiles(): array
     {
         $this->logInfo('Starting PowerMTA file processing for bounce detection');
-        
+
         $results = [
             'acct_files_processed' => 0,
             'diag_files_processed' => 0,
@@ -440,7 +441,7 @@ class BounceProcessingService
             'total_bounces_added' => 0,
             'total_complaints_added' => 0,
             'total_failures_added' => 0,
-            'errors' => []
+            'errors' => [],
         ];
 
         try {
@@ -448,17 +449,17 @@ class BounceProcessingService
             $acctResults = $this->processAccountingFiles();
             $results['acct_files_processed'] = $acctResults['files_processed'];
             $results['total_failures_added'] += $acctResults['emails_added'];
-            
+
             // Process Diagnostic files for bounces
             $diagResults = $this->processDiagnosticFiles();
             $results['diag_files_processed'] = $diagResults['files_processed'];
             $results['total_bounces_added'] += $diagResults['emails_added'];
-            
+
             // Process FBL files for complaints
             $fblResults = $this->processFBLFiles();
             $results['fbl_files_processed'] = $fblResults['files_processed'];
             $results['total_complaints_added'] += $fblResults['emails_added'];
-            
+
             $results['errors'] = array_merge(
                 $acctResults['errors'] ?? [],
                 $diagResults['errors'] ?? [],
@@ -466,10 +467,10 @@ class BounceProcessingService
             );
 
             $this->logInfo('PowerMTA file processing completed', $results);
-            
+
         } catch (\Exception $e) {
             $this->logError('PowerMTA file processing failed', ['error' => $e->getMessage()]);
-            $results['errors'][] = 'General processing error: ' . $e->getMessage();
+            $results['errors'][] = 'General processing error: '.$e->getMessage();
         }
 
         return $results;
@@ -481,30 +482,30 @@ class BounceProcessingService
     protected function processAccountingFiles(): array
     {
         $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
-        
+
         try {
             $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
-            $acctFiles = glob($csvPath . '/acct*.csv');
-            
+            $acctFiles = glob($csvPath.'/acct*.csv');
+
             foreach ($acctFiles as $file) {
                 // Only process files from last 24 hours
                 if (filemtime($file) < strtotime('-24 hours')) {
                     continue;
                 }
-                
+
                 try {
                     $processed = $this->processAccountingFile($file);
                     $results['files_processed']++;
                     $results['emails_added'] += $processed;
                 } catch (\Exception $e) {
-                    $results['errors'][] = "Accounting file {$file}: " . $e->getMessage();
+                    $results['errors'][] = "Accounting file {$file}: ".$e->getMessage();
                 }
             }
-            
+
         } catch (\Exception $e) {
-            $results['errors'][] = 'Accounting processing error: ' . $e->getMessage();
+            $results['errors'][] = 'Accounting processing error: '.$e->getMessage();
         }
-        
+
         return $results;
     }
 
@@ -514,38 +515,32 @@ class BounceProcessingService
     protected function processAccountingFile(string $filePath): int
     {
         $addedCount = 0;
-        
-        if (($handle = fopen($filePath, 'r')) !== false) {
-            $headers = fgetcsv($handle);
-            
-            while (($row = fgetcsv($handle)) !== false) {
-                if (count($row) >= count($headers)) {
-                    $data = array_combine($headers, $row);
-                    
-                    // Check for failed deliveries
-                    $status = strtolower($data['status'] ?? $data['result'] ?? '');
-                    $recipient = $data['recipient'] ?? $data['email'] ?? $data['to'] ?? '';
-                    
-                    if (!empty($recipient) && $this->validateEmail($recipient)) {
-                        // Add to suppression if delivery failed
-                        if (strpos($status, 'failed') !== false || 
-                            strpos($status, 'bounced') !== false ||
-                            strpos($status, 'rejected') !== false) {
-                            
-                            $this->addToSuppressionList(
-                                $recipient,
-                                'pmta_failure',
-                                'bounce',
-                                'PowerMTA delivery failure: ' . $status
-                            );
-                            $addedCount++;
-                        }
-                    }
+
+        // Use FileProcessingTrait for CSV processing
+        $csvData = $this->processCSVFile($filePath, true); // true = has headers
+
+        foreach ($csvData as $row) {
+            // Check for failed deliveries
+            $status = strtolower($row['status'] ?? $row['result'] ?? '');
+            $recipient = $row['recipient'] ?? $row['email'] ?? $row['to'] ?? '';
+
+            if (! empty($recipient) && $this->validateEmail($recipient)) {
+                // Add to suppression if delivery failed
+                if (strpos($status, 'failed') !== false ||
+                    strpos($status, 'bounced') !== false ||
+                    strpos($status, 'rejected') !== false) {
+
+                    $this->addToSuppressionList(
+                        $recipient,
+                        'pmta_failure',
+                        'bounce',
+                        'PowerMTA delivery failure: '.$status
+                    );
+                    $addedCount++;
                 }
             }
-            fclose($handle);
         }
-        
+
         return $addedCount;
     }
 
@@ -555,30 +550,30 @@ class BounceProcessingService
     protected function processDiagnosticFiles(): array
     {
         $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
-        
+
         try {
             $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
-            $diagFiles = glob($csvPath . '/diag*.csv');
-            
+            $diagFiles = glob($csvPath.'/diag*.csv');
+
             foreach ($diagFiles as $file) {
                 // Only process files from last 24 hours
                 if (filemtime($file) < strtotime('-24 hours')) {
                     continue;
                 }
-                
+
                 try {
                     $processed = $this->processDiagnosticFile($file);
                     $results['files_processed']++;
                     $results['emails_added'] += $processed;
                 } catch (\Exception $e) {
-                    $results['errors'][] = "Diagnostic file {$file}: " . $e->getMessage();
+                    $results['errors'][] = "Diagnostic file {$file}: ".$e->getMessage();
                 }
             }
-            
+
         } catch (\Exception $e) {
-            $results['errors'][] = 'Diagnostic processing error: ' . $e->getMessage();
+            $results['errors'][] = 'Diagnostic processing error: '.$e->getMessage();
         }
-        
+
         return $results;
     }
 
@@ -588,38 +583,32 @@ class BounceProcessingService
     protected function processDiagnosticFile(string $filePath): int
     {
         $addedCount = 0;
-        
-        if (($handle = fopen($filePath, 'r')) !== false) {
-            $headers = fgetcsv($handle);
-            
-            while (($row = fgetcsv($handle)) !== false) {
-                if (count($row) >= count($headers)) {
-                    $data = array_combine($headers, $row);
-                    
-                    $recipient = $data['recipient'] ?? $data['email'] ?? $data['to'] ?? '';
-                    $bounceType = $data['bounce_type'] ?? $data['type'] ?? '';
-                    $reason = $data['reason'] ?? $data['message'] ?? $data['status'] ?? '';
-                    
-                    if (!empty($recipient) && $this->validateEmail($recipient)) {
-                        // Add permanent bounces to suppression
-                        if (strpos(strtolower($bounceType), 'hard') !== false ||
-                            strpos(strtolower($reason), 'permanent') !== false ||
-                            strpos(strtolower($reason), '5.') !== false) {
-                            
-                            $this->addToSuppressionList(
-                                $recipient,
-                                'pmta_bounce',
-                                'bounce',
-                                'PowerMTA hard bounce: ' . $reason
-                            );
-                            $addedCount++;
-                        }
-                    }
+
+        // Use FileProcessingTrait for CSV processing
+        $csvData = $this->processCSVFile($filePath, true); // true = has headers
+
+        foreach ($csvData as $row) {
+            $recipient = $row['recipient'] ?? $row['email'] ?? $row['to'] ?? '';
+            $bounceType = $row['bounce_type'] ?? $row['type'] ?? '';
+            $reason = $row['reason'] ?? $row['message'] ?? $row['status'] ?? '';
+
+            if (! empty($recipient) && $this->validateEmail($recipient)) {
+                // Add permanent bounces to suppression
+                if (strpos(strtolower($bounceType), 'hard') !== false ||
+                    strpos(strtolower($reason), 'permanent') !== false ||
+                    strpos(strtolower($reason), '5.') !== false) {
+
+                    $this->addToSuppressionList(
+                        $recipient,
+                        'pmta_bounce',
+                        'bounce',
+                        'PowerMTA hard bounce: '.$reason
+                    );
+                    $addedCount++;
                 }
             }
-            fclose($handle);
         }
-        
+
         return $addedCount;
     }
 
@@ -629,30 +618,30 @@ class BounceProcessingService
     protected function processFBLFiles(): array
     {
         $results = ['files_processed' => 0, 'emails_added' => 0, 'errors' => []];
-        
+
         try {
             $csvPath = config('services.powermta.csv_path', '/var/log/powermta');
-            $fblFiles = glob($csvPath . '/fbl*.csv');
-            
+            $fblFiles = glob($csvPath.'/fbl*.csv');
+
             foreach ($fblFiles as $file) {
                 // Only process files from last 24 hours
                 if (filemtime($file) < strtotime('-24 hours')) {
                     continue;
                 }
-                
+
                 try {
                     $processed = $this->processFBLFile($file, 'pmta_auto');
                     $results['files_processed']++;
                     $results['emails_added'] += $processed['added'];
                 } catch (\Exception $e) {
-                    $results['errors'][] = "FBL file {$file}: " . $e->getMessage();
+                    $results['errors'][] = "FBL file {$file}: ".$e->getMessage();
                 }
             }
-            
+
         } catch (\Exception $e) {
-            $results['errors'][] = 'FBL processing error: ' . $e->getMessage();
+            $results['errors'][] = 'FBL processing error: '.$e->getMessage();
         }
-        
+
         return $results;
     }
 
@@ -666,31 +655,32 @@ class BounceProcessingService
             if (SuppressionList::where('email', $email)->exists()) {
                 return false;
             }
-            
+
             SuppressionList::create([
                 'email' => $email,
                 'type' => $type,
                 'source' => $source,
                 'reason' => $reason,
                 'added_at' => now(),
-                'is_active' => true
+                'is_active' => true,
             ]);
-            
+
             $this->logInfo('Email added to suppression list from PowerMTA', [
                 'email' => $email,
                 'source' => $source,
                 'type' => $type,
-                'reason' => $reason
+                'reason' => $reason,
             ]);
-            
+
             return true;
-            
+
         } catch (\Exception $e) {
             $this->logError('Failed to add email to suppression list', [
                 'email' => $email,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
-} 
+}

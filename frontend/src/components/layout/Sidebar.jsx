@@ -63,7 +63,7 @@ const adminNavigation = [
   { name: 'Notifications', href: '/admin/notifications', icon: HiBell },
 ];
 
-const Sidebar = ({ isOpen, onClose, user, onLogout }) => {
+const Sidebar = ({ _isOpen, _onClose, user, onLogout }) => {
   const location = useLocation();
   const { currentView } = useSelector((state) => state.auth);
   const appName = useAppName();

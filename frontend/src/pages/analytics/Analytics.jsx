@@ -28,7 +28,7 @@ const Analytics = () => {
     setIsLoadingData(true);
     try {
       await dispatch(fetchAnalytics({ timeRange })).unwrap();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load analytics data');
     } finally {
       setIsLoadingData(false);

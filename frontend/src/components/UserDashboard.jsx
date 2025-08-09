@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
@@ -40,19 +40,19 @@ import {
 
 const UserDashboard = ({ data, onRefresh }) => {
   const navigate = useNavigate();
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
+  const [SELECTED_PERIOD, SET_SELECTED_PERIOD] = useState('7d');
 
   // Chart colors
-  const chartColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+  const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
   // Safe data access with defaults
   const safeData = data || {};
   const campaigns = safeData.campaigns || {};
-  const users = safeData.users || {};
+  const USERS = safeData.users || {};
   const performance = safeData.performance || {};
   const deliverability = safeData.deliverability || {};
-  const revenue = safeData.revenue || {};
-  const reputation = safeData.reputation || {};
+  const REVENUE = safeData.revenue || {};
+  const REPUTATION = safeData.reputation || {};
   const bounceProcessing = safeData.bounce_processing || {};
   const suppression = safeData.suppression || {};
 

@@ -57,7 +57,7 @@ const Login = () => {
       })).unwrap();
       
       toast.success('Login successful!');
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

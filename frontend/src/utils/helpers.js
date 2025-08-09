@@ -21,7 +21,7 @@ export const formatDate = (dateString, options = {}) => {
     }
     return date.toLocaleDateString('en-US', mergedOptions);
   } catch (error) {
-    console.warn('Date formatting error:', error, 'Input:', dateString);
+    // Silently fail for invalid dates in production
     return 'Invalid date';
   }
 };
@@ -49,7 +49,7 @@ export const formatRelativeTime = (dateString) => {
     
     return formatDate(dateString, { month: 'short', day: 'numeric' });
   } catch (error) {
-    console.warn('Relative time formatting error:', error, 'Input:', dateString);
+    // Return fallback for invalid dates
     return 'Invalid date';
   }
 };
@@ -201,7 +201,7 @@ export const storage = {
       const item = localStorage.getItem(key);
       return item ? JSON.parse(item) : defaultValue;
     } catch (error) {
-      console.error('Error reading from localStorage:', error);
+      // localStorage access failed - return null
       return defaultValue;
     }
   },
@@ -210,7 +210,7 @@ export const storage = {
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      console.error('Error writing to localStorage:', error);
+      // localStorage write failed - silently fail
     }
   },
 
@@ -218,7 +218,7 @@ export const storage = {
     try {
       localStorage.removeItem(key);
     } catch (error) {
-      console.error('Error removing from localStorage:', error);
+      // localStorage remove failed - silently fail
     }
   },
 
@@ -226,7 +226,7 @@ export const storage = {
     try {
       localStorage.clear();
     } catch (error) {
-      console.error('Error clearing localStorage:', error);
+      // localStorage clear failed - silently fail
     }
   },
 };
@@ -259,7 +259,7 @@ export const copyToClipboard = async (text) => {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
+    // Clipboard copy failed - return false
     return false;
   }
 };

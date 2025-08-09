@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import { initializeAuth } from './store/slices/authSlice';
-import { hideSubscriptionOverlay } from './store/slices/uiSlice';
+
 import { fetchSystemConfig } from './store/slices/systemConfigSlice';
 import { useAppName } from './hooks/useSystemConfig';
 
@@ -27,38 +27,42 @@ import Landing from './pages/Landing';
 
 // Routing Components
 import SmartRedirect from './components/routing/SmartRedirect';
+import LoadingSpinner from './components/common/LoadingSpinner';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import LazyWrapper from './components/common/LazyWrapper';
 
-// User Pages
-import Dashboard from './pages/Dashboard';
-import Campaigns from './pages/campaigns/Campaigns';
-import CampaignBuilder from './pages/campaigns/CampaignBuilder';
-import CampaignDetail from './pages/campaigns/CampaignDetail';
-import SingleSend from './pages/campaigns/SingleSend';
-import Analytics from './pages/analytics/Analytics';
-import Notifications from './pages/Notifications';
-import Account from './pages/Account';
-import UserActivity from './pages/UserActivity';
+// Lazy-loaded User Pages (reduce initial bundle size)
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Campaigns = lazy(() => import('./pages/campaigns/Campaigns'));
+const CampaignBuilder = lazy(() => import('./pages/campaigns/CampaignBuilder'));
+const CampaignDetail = lazy(() => import('./pages/campaigns/CampaignDetail'));
+const SingleSend = lazy(() => import('./pages/campaigns/SingleSend'));
+const Analytics = lazy(() => import('./pages/analytics/Analytics'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Account = lazy(() => import('./pages/Account'));
+const UserActivity = lazy(() => import('./pages/UserActivity'));
 
-// User Feature Pages
-import Billing from './pages/billing/Billing';
-import SuppressionList from './pages/suppression/SuppressionList';
-import Senders from './pages/senders/Senders';
-import Domains from './pages/domains/Domains';
-import BounceCredentials from './pages/bounce-credentials/BounceCredentials';
+// Lazy-loaded User Feature Pages
+const Billing = lazy(() => import('./pages/billing/Billing'));
+const SuppressionList = lazy(() => import('./pages/suppression/SuppressionList'));
+const Senders = lazy(() => import('./pages/senders/Senders'));
+const Domains = lazy(() => import('./pages/domains/Domains'));
+const BounceCredentials = lazy(() => import('./pages/bounce-credentials/BounceCredentials'));
 
-// Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminCampaigns from './pages/admin/AdminCampaigns';
-import AdminDomains from './pages/admin/AdminDomains';
-import AdminSenders from './pages/admin/AdminSenders';
-import AdminSmtp from './pages/admin/AdminSmtp';
-import AdminSystem from './pages/admin/AdminSystem';
-import AdminBackups from './pages/admin/AdminBackups';
-import AdminLogsAndQueues from './pages/admin/AdminLogsAndQueues';
-import AdminPowerMTA from './pages/admin/AdminPowerMTA';
-import AdminNotifications from './pages/admin/AdminNotifications';
-import AdminBilling from './pages/admin/AdminBilling';
+// Lazy-loaded Admin Pages (largest components)
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
+const AdminDomains = lazy(() => import('./pages/admin/AdminDomains'));
+const AdminSenders = lazy(() => import('./pages/admin/AdminSenders'));
+const AdminSmtp = lazy(() => import('./pages/admin/AdminSmtp'));
+const AdminSystem = lazy(() => import('./pages/admin/AdminSystem'));
+const AdminBackups = lazy(() => import('./pages/admin/AdminBackups'));
+const AdminLogsAndQueues = lazy(() => import('./pages/admin/AdminLogsAndQueues'));
+const AdminPowerMTA = lazy(() => import('./pages/admin/AdminPowerMTA'));
+const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
+const AdminBilling = lazy(() => import('./pages/admin/AdminBilling'));
+
 function App() {
   const { isAuthenticated, user, isLoading, currentView } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
@@ -91,8 +95,9 @@ function App() {
   }
 
   return (
-    <Router>
-      <div className="App">
+    <ErrorBoundary>
+      <Router>
+        <div className="App">
         <Toaster
           position="top-right"
           toastOptions={{
@@ -148,19 +153,19 @@ function App() {
               <Route path="/bounce-credentials" element={<BounceCredentials />} />
 
               {/* Admin Routes - Only available to admin users */}
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/users" element={<AdminUsers />} />
-                <Route path="/admin/suppression-list" element={<SuppressionList />} />
-                <Route path="/admin/campaigns" element={<AdminCampaigns />} />
-                <Route path="/admin/domains" element={<AdminDomains />} />
-                <Route path="/admin/senders" element={<AdminSenders />} />
-                <Route path="/admin/smtp" element={<AdminSmtp />} />
-                <Route path="/admin/system" element={<AdminSystem />} />
-                <Route path="/admin/backups" element={<AdminBackups />} />
-                <Route path="/admin/logs" element={<AdminLogsAndQueues />} />
-                <Route path="/admin/powermta" element={<AdminPowerMTA />} />
-                <Route path="/admin/notifications" element={<AdminNotifications />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/suppression-list" element={<SuppressionList />} />
+              <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+              <Route path="/admin/domains" element={<AdminDomains />} />
+              <Route path="/admin/senders" element={<AdminSenders />} />
+              <Route path="/admin/smtp" element={<AdminSmtp />} />
+              <Route path="/admin/system" element={<AdminSystem />} />
+              <Route path="/admin/backups" element={<AdminBackups />} />
+              <Route path="/admin/logs" element={<AdminLogsAndQueues />} />
+              <Route path="/admin/powermta" element={<AdminPowerMTA />} />
+              <Route path="/admin/notifications" element={<AdminNotifications />} />
               <Route path="/admin/billing" element={<AdminBilling />} />
             </Route>
           </Route>
@@ -206,8 +211,9 @@ function App() {
             </div>
           } />
         </Routes>
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

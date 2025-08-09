@@ -9,7 +9,7 @@ export { default as AuthLayout } from '../layout/AuthLayout';
 export { default as MobileMenu } from '../layout/MobileMenu';
 
 // Dashboard Components
-export { default as StatsCard } from '../dashboard/StatsCard';
-export { default as AnalyticsChart } from '../dashboard/AnalyticsChart';
+export { default as StatsCard } from '../shared/MetricCard';
+export { default as AnalyticsChart } from '../shared/AnalyticsChart';
 export { default as RecentCampaigns } from '../dashboard/RecentCampaigns';
-export { default as QuickActions } from '../dashboard/QuickActions'; 
+export { default as QuickActions } from '../QuickActions'; 

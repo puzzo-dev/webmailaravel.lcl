@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { HiBell, HiX, HiCheckCircle, HiExclamation, HiInformationCircle, HiClock } from 'react-icons/hi';
-import toast from 'react-hot-toast';
 
 const RealTimeUpdates = () => {
   const dispatch = useDispatch();
@@ -19,7 +18,7 @@ const RealTimeUpdates = () => {
     const connectPusher = async () => {
       try {
         // Only connect if we have required environment variables
-        if (!process.env.REACT_APP_PUSHER_KEY || !user?.id) {
+        if (!import.meta.env.VITE_PUSHER_KEY || !user?.id) {
           return;
         }
 
@@ -27,8 +26,8 @@ const RealTimeUpdates = () => {
         const Pusher = (await import('pusher-js')).default;
         
         // Initialize Pusher connection
-        pusher = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
-          cluster: process.env.REACT_APP_PUSHER_CLUSTER || 'us2',
+        pusher = new Pusher(import.meta.env.VITE_PUSHER_KEY, {
+          cluster: import.meta.env.VITE_PUSHER_CLUSTER || 'us2',
           encrypted: true,
           authEndpoint: '/api/broadcasting/auth',
           auth: {
@@ -215,7 +214,7 @@ const RealTimeUpdates = () => {
     }
   };
 
-  const getNotificationColor = (type) => {
+  const _getNotificationColor = (type) => {
     switch (type) {
       case 'success':
         return 'bg-green-50 border-green-200';

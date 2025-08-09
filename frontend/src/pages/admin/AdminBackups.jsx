@@ -21,7 +21,6 @@ import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminBackups = () => {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -92,7 +91,7 @@ const AdminBackups = () => {
         backupData.description = newBackupDescription.trim();
       }
       
-      const result = await adminService.createBackup(backupData);
+      await adminService.createBackup(backupData);
       
       toast.success('Backup created successfully');
       setShowCreateModal(false);
@@ -114,11 +113,28 @@ const AdminBackups = () => {
   const handleDownloadBackup = async (backupId) => {
     setIsLoading(true);
     try {
-      const blob = await adminService.downloadBackup(backupId);
+      console.log('Starting download for backup ID:', backupId);
+      const result = await adminService.downloadBackup(backupId);
+      
+      console.log('AdminService returned:', { 
+        result, 
+        type: typeof result, 
+        isBlob: result instanceof Blob, 
+        size: result?.size,
+        constructor: result?.constructor?.name 
+      });
       
       // Verify we received a blob
-      if (!(blob instanceof Blob)) {
-        throw new Error('Invalid response format - expected blob');
+      if (!(result instanceof Blob)) {
+        console.error('Not a blob, trying to handle different response types...');
+        throw new Error(`Expected Blob, got ${typeof result} (${result?.constructor?.name})`);
+      }
+      
+      const blob = result;
+      
+      // Verify the blob has content
+      if (blob.size === 0) {
+        throw new Error('Received empty file');
       }
       
       const url = window.URL.createObjectURL(blob);
@@ -130,11 +146,17 @@ const AdminBackups = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      toast.success('Backup downloaded successfully');
+      toast.success(`Backup downloaded successfully (${(blob.size / 1024).toFixed(1)} KB)`);
     } catch (error) {
+      console.error('Download error details:', {
+        error,
+        response: error.response,
+        data: error.response?.data,
+        status: error.response?.status
+      });
+      
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
       toast.error(`Failed to download backup: ${errorMessage}`);
-      console.error('Failed to download backup:', error);
     } finally {
       setIsLoading(false);
     }

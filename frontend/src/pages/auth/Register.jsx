@@ -61,7 +61,7 @@ const Register = () => {
       // If user came from pricing, redirect to billing to complete subscription
       const redirectTo = fromPricing ? '/billing?welcome=true' : '/dashboard';
       navigate(redirectTo);
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL','http://localhost:3000')],
+    'allowed_origins' => [
+        env('FRONTEND_URL', 'http://localhost:3000'),
+        'http://localhost:3001', // Vite dev server default
+        env('FRONTEND_URL_PROD', 'https://yourdomain.com'),
+        env('FRONTEND_URL_STAGING', 'https://staging.yourdomain.com'),
+    ],
 
     'allowed_origins_patterns' => [],
 

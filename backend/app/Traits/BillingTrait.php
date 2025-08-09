@@ -26,6 +26,42 @@ trait BillingTrait
     private static $btcpayConfig = null;
 
     /**
+     * Create headers with API key for BTCPay requests
+     */
+    private function withApiKey(string $apiKey): array
+    {
+        return [
+            'Authorization' => 'token ' . $apiKey,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json'
+        ];
+    }
+
+    /**
+     * Make GET request to BTCPay API
+     */
+    private function get(string $url, array $headers = [], int $timeout = 30): array
+    {
+        try {
+            $response = Http::timeout($timeout)
+                ->withHeaders($headers)
+                ->get($url);
+
+            return [
+                'success' => $response->successful(),
+                'data' => $response->json(),
+                'status' => $response->status()
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'status' => 0
+            ];
+        }
+    }
+
+    /**
      * Get BTCPay configuration with validation and caching
      */
     private function getBTCPayConfiguration(): array
@@ -492,14 +528,20 @@ trait BillingTrait
             $invoicePayload = [
                 'amount' => $data['amount'],
                 'currency' => $data['currency'] ?? 'USD',
+                'orderId' => $data['orderId'] ?? null,
                 'metadata' => $data['metadata'] ?? [],
-                'checkout' => [
+                'checkout' => $data['checkout'] ?? [
                     'redirectURL' => url('/billing?payment=success'),
                     'closeURL' => url('/billing?payment=cancelled'),
                 ],
-                'notificationURL' => url('/api/billing/webhook'),
-                'notificationEmail' => auth()->user()->email ?? null,
+                'notificationURL' => $data['notificationURL'] ?? url('/api/billing/webhook'),
+                'buyer' => $data['buyer'] ?? [],
             ];
+
+            // Add description if provided
+            if (isset($data['itemDesc'])) {
+                $invoicePayload['itemDesc'] = $data['itemDesc'];
+            }
             
             $result = $this->post($url, $invoicePayload, $headers, $timeout);
 
@@ -686,7 +728,18 @@ trait BillingTrait
             case 'InvoicePaymentSettled':
                 // Payment confirmed with required confirmations
                 $confirmationCount = $payload['confirmationCount'] ?? 0;
-                $requiredConfirmations = 1;
+                $requiredConfirmations = 2; // Bitcoin standard: 2 confirmations
+                
+                // Update confirmation count in metadata
+                $subscription->update([
+                    'confirmation_count' => $confirmationCount,
+                    'payment_data' => json_encode([
+                        'btc_confirmations' => $confirmationCount,
+                        'required_confirmations' => $requiredConfirmations,
+                        'last_updated' => now()->toISOString(),
+                        'btcpay_status' => $status
+                    ])
+                ]);
                 
                 if ($confirmationCount >= $requiredConfirmations) {
                     $subscription->update([
@@ -701,10 +754,33 @@ trait BillingTrait
                         'last_payment_at' => now()
                     ]);
                     
+                    $this->logInfo('Subscription activated after Bitcoin confirmations', [
+                        'subscription_id' => $subscription->id,
+                        'confirmations' => $confirmationCount,
+                        'required' => $requiredConfirmations
+                    ]);
+                    
                     return [
                         'success' => true,
                         'message' => 'Payment confirmed and subscription activated',
-                        'subscription_id' => $subscription->id
+                        'subscription_id' => $subscription->id,
+                        'confirmations' => $confirmationCount
+                    ];
+                } else {
+                    $this->logInfo('Payment settled but waiting for more confirmations', [
+                        'subscription_id' => $subscription->id,
+                        'current_confirmations' => $confirmationCount,
+                        'required_confirmations' => $requiredConfirmations
+                    ]);
+                    
+                    $subscription->update(['status' => 'confirming']);
+                    
+                    return [
+                        'success' => true,
+                        'message' => "Payment settling: {$confirmationCount}/{$requiredConfirmations} confirmations",
+                        'subscription_id' => $subscription->id,
+                        'confirmations' => $confirmationCount,
+                        'required_confirmations' => $requiredConfirmations
                     ];
                 }
                 break;

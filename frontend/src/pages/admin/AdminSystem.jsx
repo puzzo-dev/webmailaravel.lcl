@@ -670,8 +670,20 @@ const AdminSystem = () => {
               </div>
               <div className="bg-gray-50 rounded-lg p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.entries(systemConfig[activeTab] || {}).map(
-                    ([key, value]) => (
+                  {Object.entries(systemConfig[activeTab] || {})
+                    .filter(([key]) => {
+                      // Hide pointless user override and approval settings for training
+                      if (activeTab === 'training' && (
+                        key.toLowerCase().includes('allow_user_override') ||
+                        key.toLowerCase().includes('user_override') ||
+                        key.toLowerCase().includes('manual_approval') ||
+                        key.toLowerCase().includes('approval_required')
+                      )) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map(([key, value]) => (
                       <div key={key}>
                         <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
                           {key.replace(/_/g, " ")}
@@ -821,27 +833,48 @@ const AdminSystem = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.entries(selectedConfig).map(([key, value]) => (
+                  {Object.entries(selectedConfig)
+                    .filter(([key]) => {
+                      // Hide pointless user override and approval settings for training
+                      if (activeTab === 'training' && (
+                        key.toLowerCase().includes('allow_user_override') ||
+                        key.toLowerCase().includes('user_override') ||
+                        key.toLowerCase().includes('manual_approval') ||
+                        key.toLowerCase().includes('approval_required')
+                      )) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map(([key, value]) => (
                     <div key={key}>
                       <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
                         {key.replace(/_/g, " ")}
                       </label>
                       {typeof value === "boolean" ? (
-                        <select
-                          value={
-                            editedConfig[key]?.toString() || value.toString()
-                          }
-                          onChange={(e) =>
-                            setEditedConfig((prev) => ({
-                              ...prev,
-                              [key]: e.target.value === "true",
-                            }))
-                          }
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                        >
-                          <option value="true">Enabled</option>
-                          <option value="false">Disabled</option>
-                        </select>
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
+                          <span className="text-sm text-gray-700">
+                            {editedConfig[key] !== undefined ? editedConfig[key] : value ? "Enabled" : "Disabled"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditedConfig((prev) => ({
+                                ...prev,
+                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
+                              }))
+                            }
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                              (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
                       ) : typeof value === "number" ? (
                         <input
                           type="number"
@@ -858,6 +891,78 @@ const AdminSystem = () => {
                           }
                           className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                         />
+                      ) : (key.toLowerCase().includes('training') && key.toLowerCase().includes('mode')) || key.toLowerCase() === 'default_mode' ? (
+                        // Training mode - styled dropdown
+                        <div className="relative">
+                          <select
+                            value={editedConfig[key] !== undefined ? editedConfig[key] : value || 'manual'}
+                            onChange={(e) =>
+                              setEditedConfig((prev) => ({
+                                ...prev,
+                                [key]: e.target.value,
+                              }))
+                            }
+                            className="block w-full px-4 py-3 text-base border-2 border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none cursor-pointer hover:border-gray-300"
+                          >
+                            <option value="manual">🔧 Manual Training</option>
+                            <option value="automatic">🤖 Automatic Training</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3">
+                            <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        </div>
+                      ) : key.toLowerCase().includes('training') && (key.toLowerCase().includes('enabled') || key.toLowerCase().includes('allow') || key.toLowerCase().includes('required') || key.toLowerCase().includes('approval')) ? (
+                        // Training boolean fields (enabled, allow_user_override, manual_approval_required, etc.)
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
+                          <span className="text-sm text-gray-700">
+                            {editedConfig[key] !== undefined ? (editedConfig[key] ? "Enabled" : "Disabled") : (value ? "Enabled" : "Disabled")}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditedConfig((prev) => ({
+                                ...prev,
+                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
+                              }))
+                            }
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                              (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      ) : typeof value === 'string' && (value === 'true' || value === 'false' || value === true || value === false) ? (
+                        // Handle string boolean values
+                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
+                          <span className="text-sm text-gray-700">
+                            {(editedConfig[key] !== undefined ? editedConfig[key] : value === 'true' || value === true) ? "Enabled" : "Disabled"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditedConfig((prev) => ({
+                                ...prev,
+                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !(value === 'true' || value === true),
+                              }))
+                            }
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                              (editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'bg-primary-600' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                (editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
                       ) : (
                         <input
                           type="text"

@@ -2,32 +2,30 @@
 
 namespace App\Services;
 
+use App\Events\CampaignStatusChanged;
+use App\Jobs\ProcessCampaignJob;
 use App\Models\Campaign;
 use App\Models\Content;
 use App\Models\Sender;
 use App\Models\User;
-use App\Events\CampaignStatusChanged;
-use App\Notifications\CampaignStatusChanged as CampaignStatusNotification;
-use App\Notifications\CampaignCreated;
 use App\Notifications\CampaignCompleted;
+use App\Notifications\CampaignCreated;
 use App\Notifications\CampaignFailed;
 use App\Notifications\CampaignMilestone;
+use App\Notifications\CampaignStatusChanged as CampaignStatusNotification;
 use App\Notifications\HighBounceRateAlert;
-use App\Jobs\ProcessCampaignJob;
-use App\Traits\LoggingTrait;
-use App\Traits\ValidationTrait;
 use App\Traits\CacheManagementTrait;
-use App\Traits\SuppressionListTrait;
 use App\Traits\FileProcessingTrait;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Cache;
+use App\Traits\LoggingTrait;
+use App\Traits\SuppressionListTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Support\Facades\Auth;
-
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class CampaignService
 {
-    use LoggingTrait, ValidationTrait, CacheManagementTrait, SuppressionListTrait, FileProcessingTrait;
+    use CacheManagementTrait, FileProcessingTrait, LoggingTrait, SuppressionListTrait, ValidationTrait;
 
     public function __construct(
         // FileUploadService $fileUploadService // This dependency is now handled by FileProcessingTrait
@@ -42,7 +40,7 @@ class CampaignService
     {
         $this->logMethodEntry(__METHOD__, [
             'campaign_name' => $data['name'] ?? 'unknown',
-            'has_recipient_file' => $recipientFile !== null
+            'has_recipient_file' => $recipientFile !== null,
         ]);
 
         try {
@@ -71,14 +69,14 @@ class CampaignService
             $recipientData = [];
             if ($recipientFile) {
                 $uploadResult = $this->uploadRecipientList($recipientFile, $data['name']);
-                
-                if (!$uploadResult['success']) {
+
+                if (! $uploadResult['success']) {
                     throw new \Exception($uploadResult['error']);
                 }
-                
+
                 $recipientPath = $uploadResult['path'];
                 $recipientData = $uploadResult['recipient_data'] ?? [];
-                
+
                 // Filter out suppressed emails from recipient list using trait
                 $recipientPath = $this->filterSuppressedEmails($recipientPath, $data['name']);
             }
@@ -103,12 +101,12 @@ class CampaignService
             ]);
 
             // Store recipient data in cache for template variable processing
-            if (!empty($recipientData)) {
+            if (! empty($recipientData)) {
                 $this->storeRecipientData($campaign, $recipientData);
             }
 
             // Store content variations in cache for content switching
-            if ($campaign->enable_content_switching && !empty($processedData['content_ids'])) {
+            if ($campaign->enable_content_switching && ! empty($processedData['content_ids'])) {
                 $this->storeContentVariations($campaign, $processedData['content_variations']);
             }
 
@@ -121,21 +119,22 @@ class CampaignService
             $campaign->user->notify(new CampaignCreated($campaign));
 
             $this->logInfo('Campaign created', [
-                'campaign_id' => $campaign->id, 
+                'campaign_id' => $campaign->id,
                 'user_id' => auth()->id(),
                 'sender_count' => $userSenders->count(),
                 'content_count' => count($processedData['content_ids']),
-                'enable_content_switching' => $campaign->enable_content_switching
+                'enable_content_switching' => $campaign->enable_content_switching,
             ]);
 
             $this->logMethodExit(__METHOD__, ['campaign_id' => $campaign->id]);
+
             return $campaign;
 
         } catch (\Exception $e) {
             DB::rollBack();
             $this->logError('Campaign creation failed', [
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -149,42 +148,43 @@ class CampaignService
         try {
             $originalContent = $this->readFile($originalPath, ['disk' => 'local']);
             $emails = array_filter(array_map('trim', explode("\n", $originalContent)));
-            
+
             $filteredEmails = [];
             $suppressedCount = 0;
-            
+
             foreach ($emails as $email) {
                 if ($this->validateEmail($email)) {
                     if ($this->shouldSuppressEmail($email)) {
                         $suppressedCount++;
+
                         continue;
                     }
                     $filteredEmails[] = $email;
                 }
             }
-            
+
             // Create filtered file
             $filteredContent = implode("\n", $filteredEmails);
-            $filteredPath = 'recipient_lists/filtered_' . $campaignName . '_' . time() . '.txt';
-            
+            $filteredPath = 'recipient_lists/filtered_'.$campaignName.'_'.time().'.txt';
+
             $this->writeFile($filteredPath, $filteredContent, ['disk' => 'local']);
-            
+
             $this->logInfo('Recipient list filtered', [
                 'original_count' => count($emails),
                 'filtered_count' => count($filteredEmails),
                 'suppressed_count' => $suppressedCount,
                 'original_path' => $originalPath,
-                'filtered_path' => $filteredPath
+                'filtered_path' => $filteredPath,
             ]);
-            
+
             return $filteredPath;
-            
+
         } catch (\Exception $e) {
             $this->logError('Failed to filter suppressed emails', [
                 'original_path' => $originalPath,
-                'error' => $e
+                'error' => $e,
             ]);
-            
+
             // Return original path if filtering fails
             return $originalPath;
         }
@@ -197,8 +197,8 @@ class CampaignService
     {
         $requiredFields = ['name'];
         $validation = $this->validateRequiredFields($data, $requiredFields);
-        
-        if (!$validation['is_valid']) {
+
+        if (! $validation['is_valid']) {
             throw new \Exception(implode(', ', $validation['errors']));
         }
 
@@ -215,11 +215,11 @@ class CampaignService
                 if (empty($variation['subject'])) {
                     throw new \Exception('Subject is required for each content variation');
                 }
-                
+
                 // Check if content is actually empty (handle Quill empty states)
                 $variationContent = $variation['content'] ?? '';
                 $cleanVariationContent = trim(strip_tags(str_replace(['<p><br></p>', '<p></p>', '<br>', '&nbsp;'], '', $variationContent)));
-                
+
                 if (empty($variationContent) || $cleanVariationContent === '') {
                     throw new \Exception('Content is required for each content variation');
                 }
@@ -232,7 +232,7 @@ class CampaignService
             // Check if content is actually empty (handle Quill empty states)
             $content = $data['content'] ?? '';
             $cleanContent = trim(strip_tags(str_replace(['<p><br></p>', '<p></p>', '<br>', '&nbsp;'], '', $content)));
-            
+
             if (empty($content) || $cleanContent === '') {
                 throw new \Exception('Content is required when content switching is disabled');
             }
@@ -245,22 +245,22 @@ class CampaignService
     private function checkUserCampaignLimits(int $userId): void
     {
         $user = User::find($userId);
-        
+
         // Check total campaigns limit (100 per user)
-        if (!$user->canCreateCampaign()) {
+        if (! $user->canCreateCampaign()) {
             $limits = $user->getPlanLimits();
-            throw new \Exception('Total campaign limit reached. Your plan allows ' . $limits['max_total_campaigns'] . ' campaigns maximum.');
+            throw new \Exception('Total campaign limit reached. Your plan allows '.$limits['max_total_campaigns'].' campaigns maximum.');
         }
-        
+
         // Check live campaigns limit (10 per user) - only when campaign status would be active
         $liveCampaigns = Campaign::where('user_id', $userId)
             ->whereIn('status', ['active', 'running', 'paused'])
             ->count();
 
         $limits = $user->getPlanLimits();
-        
+
         if ($liveCampaigns >= $limits['max_live_campaigns']) {
-            throw new \Exception('Live campaign limit reached. Your plan allows ' . $limits['max_live_campaigns'] . ' live campaigns maximum.');
+            throw new \Exception('Live campaign limit reached. Your plan allows '.$limits['max_live_campaigns'].' live campaigns maximum.');
         }
     }
 
@@ -272,15 +272,15 @@ class CampaignService
         $processedData = $data;
         $contentIds = [];
 
-        if (!empty($data['enable_content_switching']) && !empty($data['content_variations'])) {
+        if (! empty($data['enable_content_switching']) && ! empty($data['content_variations'])) {
             // Content switching mode - create Content records for each variation
             $firstVariation = $data['content_variations'][0];
             $processedData['subject'] = $firstVariation['subject'] ?? $data['subject'];
-            
+
             foreach ($data['content_variations'] as $index => $variation) {
                 $content = Content::create([
                     'user_id' => auth()->id(),
-                    'name' => $data['name'] . ' - Variation ' . ($index + 1),
+                    'name' => $data['name'].' - Variation '.($index + 1),
                     'subject' => $variation['subject'] ?? $data['subject'],
                     'html_body' => $variation['content'],
                     'text_body' => strip_tags($variation['content']),
@@ -288,16 +288,16 @@ class CampaignService
                 ]);
                 $contentIds[] = $content->id;
             }
-            
+
             $processedData['content_ids'] = $contentIds;
             $processedData['content_variations'] = $data['content_variations'];
             $processedData['enable_content_switching'] = true;
         } else {
             // Single content mode - create one Content record
-            if (!empty($data['content'])) {
+            if (! empty($data['content'])) {
                 $content = Content::create([
                     'user_id' => auth()->id(),
-                    'name' => $data['name'] . ' - Content',
+                    'name' => $data['name'].' - Content',
                     'subject' => $data['subject'],
                     'html_body' => $data['content'],
                     'text_body' => strip_tags($data['content']),
@@ -305,7 +305,7 @@ class CampaignService
                 ]);
                 $contentIds[] = $content->id;
             }
-            
+
             $processedData['enable_content_switching'] = false;
             $processedData['content_ids'] = $contentIds;
             $processedData['content_variations'] = [];
@@ -340,10 +340,10 @@ class CampaignService
     {
         $cacheKey = "campaign:{$campaign->id}:recipient_data";
         $this->cache($cacheKey, json_encode($recipientData), 3600); // 1 hour TTL
-        
+
         $this->logInfo('Recipient data stored for template variables', [
             'campaign_id' => $campaign->id,
-            'recipient_count' => count($recipientData)
+            'recipient_count' => count($recipientData),
         ]);
     }
 
@@ -362,7 +362,7 @@ class CampaignService
         })->toArray();
 
         $cacheKey = "campaign:{$campaign->id}:senders";
-        $this->cache($cacheKey, function() use ($senderList) {
+        $this->cache($cacheKey, function () use ($senderList) {
             return json_encode($senderList);
         }, 3600); // 1 hour TTL
     }
@@ -379,13 +379,13 @@ class CampaignService
                 'max_size' => 10240, // 10MB
                 'allowed_extensions' => ['txt', 'csv', 'xlsx', 'xls'],
                 'generate_unique_name' => true,
-                'preserve_original_name' => false
+                'preserve_original_name' => false,
             ]);
 
-            if (!$uploadResult['success']) {
+            if (! $uploadResult['success']) {
                 return [
                     'success' => false,
-                    'error' => $uploadResult['error']
+                    'error' => $uploadResult['error'],
                 ];
             }
 
@@ -398,18 +398,18 @@ class CampaignService
                 'filename' => $uploadResult['filename'],
                 'size' => $uploadResult['size'],
                 'mime_type' => $uploadResult['mime_type'],
-                'recipient_data' => $recipientData
+                'recipient_data' => $recipientData,
             ];
 
         } catch (\Exception $e) {
             $this->logError('Recipient list upload failed', [
                 'campaign_name' => $campaignName,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -419,12 +419,12 @@ class CampaignService
      */
     private function processRecipientData(array $processedData): array
     {
-        if (!$processedData['processed']) {
+        if (! $processedData['processed']) {
             return [];
         }
 
         $recipients = [];
-        
+
         switch ($processedData['type']) {
             case 'csv':
                 $recipients = $processedData['sample_data'] ?? [];
@@ -435,7 +435,7 @@ class CampaignService
                 break;
             case 'txt':
                 // For text files, assume one email per line
-                $recipients = array_map(function($email) {
+                $recipients = array_map(function ($email) {
                     return ['email' => trim($email)];
                 }, $processedData['sample_data'] ?? []);
                 break;
@@ -451,12 +451,13 @@ class CampaignService
     {
         $cacheKey = "campaign:{$campaignId}:recipient_data";
         $recipientData = Cache::get($cacheKey);
-        
+
         if ($recipientData) {
             $data = json_decode($recipientData, true);
+
             return $data[strtolower($email)] ?? [];
         }
-        
+
         return [];
     }
 
@@ -475,20 +476,20 @@ class CampaignService
 
             // Check live campaign limits before starting
             $user = $campaign->user;
-            if (!$user->canCreateLiveCampaign()) {
+            if (! $user->canCreateLiveCampaign()) {
                 $limits = $user->getPlanLimits();
-                throw new \Exception('Live campaign limit reached. Your plan allows ' . $limits['max_live_campaigns'] . ' live campaigns maximum.');
+                throw new \Exception('Live campaign limit reached. Your plan allows '.$limits['max_live_campaigns'].' live campaigns maximum.');
             }
 
             // Check if recipient list exists
-            if (!$campaign->recipient_list_path || !$this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
+            if (! $campaign->recipient_list_path || ! $this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
                 throw new \Exception('Recipient list not found');
             }
 
             // Update campaign status
             $campaign->update([
                 'status' => 'RUNNING',
-                'started_at' => now()
+                'started_at' => now(),
             ]);
 
             // Dispatch campaign processing job
@@ -503,23 +504,23 @@ class CampaignService
             $this->logInfo('Campaign started', [
                 'campaign_id' => $campaign->id,
                 'user_id' => $campaign->user_id,
-                'recipient_count' => $campaign->recipient_count
+                'recipient_count' => $campaign->recipient_count,
             ]);
 
             return [
                 'success' => true,
-                'message' => 'Campaign started successfully'
+                'message' => 'Campaign started successfully',
             ];
 
         } catch (\Exception $e) {
             $this->logError('Campaign start failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -533,14 +534,14 @@ class CampaignService
 
         try {
             // Validate campaign can be paused
-            if (!in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
+            if (! in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
                 throw new \Exception('Campaign can only be paused from RUNNING or SCHEDULED status');
             }
 
             // Update campaign status
             $campaign->update([
                 'status' => 'PAUSED',
-                'paused_at' => now()
+                'paused_at' => now(),
             ]);
 
             // Cancel any running jobs for this campaign
@@ -554,7 +555,7 @@ class CampaignService
 
             $this->logInfo('Campaign paused', [
                 'campaign_id' => $campaign->id,
-                'user_id' => $campaign->user_id
+                'user_id' => $campaign->user_id,
             ]);
 
             return ['success' => true, 'campaign' => $campaign];
@@ -562,8 +563,9 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Campaign pause failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -584,7 +586,7 @@ class CampaignService
             // Update campaign status
             $campaign->update([
                 'status' => 'RUNNING',
-                'resumed_at' => now()
+                'resumed_at' => now(),
             ]);
 
             // Dispatch campaign processing job
@@ -598,7 +600,7 @@ class CampaignService
 
             $this->logInfo('Campaign resumed', [
                 'campaign_id' => $campaign->id,
-                'user_id' => $campaign->user_id
+                'user_id' => $campaign->user_id,
             ]);
 
             return ['success' => true, 'campaign' => $campaign];
@@ -606,8 +608,9 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Campaign resume failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -621,14 +624,14 @@ class CampaignService
 
         try {
             // Validate campaign can be stopped
-            if (!in_array($campaign->status, ['RUNNING', 'PAUSED', 'SCHEDULED'])) {
+            if (! in_array($campaign->status, ['RUNNING', 'PAUSED', 'SCHEDULED'])) {
                 throw new \Exception('Campaign can only be stopped from RUNNING, PAUSED, or SCHEDULED status');
             }
 
             // Update campaign status
             $campaign->update([
                 'status' => 'STOPPED',
-                'stopped_at' => now()
+                'stopped_at' => now(),
             ]);
 
             // Cancel any running jobs for this campaign
@@ -642,7 +645,7 @@ class CampaignService
 
             $this->logInfo('Campaign stopped', [
                 'campaign_id' => $campaign->id,
-                'user_id' => $campaign->user_id
+                'user_id' => $campaign->user_id,
             ]);
 
             return ['success' => true, 'campaign' => $campaign];
@@ -650,8 +653,9 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Campaign stop failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -669,7 +673,7 @@ class CampaignService
             $newRecipientListPath = null;
             if ($originalCampaign->recipient_list_path && $this->fileExists($originalCampaign->recipient_list_path, ['disk' => 'local'])) {
                 $originalFileContent = $this->readFile($originalCampaign->recipient_list_path, ['disk' => 'local']);
-                $newFileName = 'recipient_lists/duplicated_' . time() . '_' . basename($originalCampaign->recipient_list_path);
+                $newFileName = 'recipient_lists/duplicated_'.time().'_'.basename($originalCampaign->recipient_list_path);
                 $this->writeFile($newFileName, $originalFileContent, ['disk' => 'local']);
                 $newRecipientListPath = $newFileName;
             }
@@ -677,7 +681,7 @@ class CampaignService
             // Get current user's senders to use for the duplicate
             $user = User::find(Auth::id());
             $userSenders = $user->senders()->where('is_active', true)->get();
-            
+
             if ($userSenders->isEmpty()) {
                 throw new \Exception('No active senders found for user. Cannot duplicate campaign.');
             }
@@ -685,7 +689,7 @@ class CampaignService
             // Create new campaign with duplicated data
             $duplicateData = [
                 'user_id' => Auth::id(),
-                'name' => $originalCampaign->name . ' (Copy)',
+                'name' => $originalCampaign->name.' (Copy)',
                 'subject' => $originalCampaign->subject,
                 'sender_ids' => $userSenders->pluck('id')->toArray(), // Use current user's senders
                 'content_ids' => $originalCampaign->content_ids,
@@ -728,10 +732,11 @@ class CampaignService
                 'duplicated_campaign_id' => $duplicatedCampaign->id,
                 'user_id' => Auth::id(),
                 'new_recipient_list_path' => $newRecipientListPath,
-                'sender_count' => $userSenders->count()
+                'sender_count' => $userSenders->count(),
             ]);
 
             $this->logMethodExit(__METHOD__, ['duplicated_campaign_id' => $duplicatedCampaign->id]);
+
             return $duplicatedCampaign;
 
         } catch (\Exception $e) {
@@ -739,7 +744,7 @@ class CampaignService
             $this->logError('Campaign duplication failed', [
                 'original_campaign_id' => $originalCampaign->id,
                 'user_id' => Auth::id(),
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -769,7 +774,7 @@ class CampaignService
 
             $this->logInfo('Campaign deleted', [
                 'campaign_id' => $campaign->id,
-                'user_id' => $campaign->user_id
+                'user_id' => $campaign->user_id,
             ]);
 
             return ['success' => true];
@@ -777,8 +782,9 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Campaign deletion failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -808,7 +814,7 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Failed to cleanup campaign files', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -820,7 +826,7 @@ class CampaignService
     {
         $this->logMethodEntry(__METHOD__, [
             'campaign_id' => $campaign->id,
-            'new_status' => $status
+            'new_status' => $status,
         ]);
 
         $oldStatus = $campaign->status;
@@ -835,7 +841,7 @@ class CampaignService
         $this->logInfo('Campaign status updated', [
             'campaign_id' => $campaign->id,
             'old_status' => $oldStatus,
-            'new_status' => $status
+            'new_status' => $status,
         ]);
 
         $this->logMethodExit(__METHOD__, ['success' => true]);
@@ -848,7 +854,7 @@ class CampaignService
     {
         $this->logMethodEntry(__METHOD__, [
             'campaign_id' => $campaign->id,
-            'batch_size' => $batchSize
+            'batch_size' => $batchSize,
         ]);
 
         $startTime = microtime(true);
@@ -858,21 +864,22 @@ class CampaignService
 
         try {
             // Check if campaign is still active/running
-            if (!in_array($campaign->status, ['RUNNING', 'active'])) {
+            if (! in_array($campaign->status, ['RUNNING', 'active'])) {
                 $this->logInfo('Campaign is not in running state, skipping processing', [
                     'campaign_id' => $campaign->id,
-                    'status' => $campaign->status
+                    'status' => $campaign->status,
                 ]);
+
                 return [
                     'emails_sent' => 0,
                     'emails_failed' => 0,
                     'remaining_recipients' => 0,
-                    'processing_time' => 0
+                    'processing_time' => 0,
                 ];
             }
 
             // Check if recipient list exists
-            if (!$campaign->recipient_list_path || !$this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
+            if (! $campaign->recipient_list_path || ! $this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
                 throw new \Exception('Recipient list file not found');
             }
 
@@ -906,19 +913,20 @@ class CampaignService
                 'total_recipients' => count($recipients),
                 'processed_count' => $processedCount,
                 'batch_size' => count($recipientsToProcess),
-                'remaining_recipients' => $remainingRecipients
+                'remaining_recipients' => $remainingRecipients,
             ]);
 
             // Process each recipient in this batch
             foreach ($recipientsToProcess as $index => $recipient) {
                 try {
                     // Validate email
-                    if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                    if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
                         $this->logWarning('Invalid email address skipped', [
                             'campaign_id' => $campaign->id,
-                            'recipient' => $recipient
+                            'recipient' => $recipient,
                         ]);
                         $emailsFailed++;
+
                         continue;
                     }
 
@@ -947,14 +955,14 @@ class CampaignService
                         'sender_id' => $sender->id,
                         'sender_name' => $sender->name,
                         'sender_email' => $sender->email,
-                        'content_id' => $content->id
+                        'content_id' => $content->id,
                     ]);
 
                 } catch (\Exception $e) {
                     $this->logError('Failed to dispatch email job', [
                         'campaign_id' => $campaign->id,
                         'recipient' => $recipient,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
                     ]);
                     $emailsFailed++;
                 }
@@ -963,7 +971,7 @@ class CampaignService
             // Update campaign statistics
             $campaign->update([
                 'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
-                'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed
+                'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
             ]);
 
             // Check for milestones and send notifications
@@ -973,7 +981,7 @@ class CampaignService
             if ($remainingRecipients <= 0) {
                 $campaign->update([
                     'status' => 'COMPLETED',
-                    'completed_at' => now()
+                    'completed_at' => now(),
                 ]);
 
                 // Send campaign completed notification
@@ -982,7 +990,7 @@ class CampaignService
                 $this->logInfo('Campaign completed', [
                     'campaign_id' => $campaign->id,
                     'total_sent' => $campaign->total_sent,
-                    'total_failed' => $campaign->total_failed
+                    'total_failed' => $campaign->total_failed,
                 ]);
             }
 
@@ -993,26 +1001,26 @@ class CampaignService
                 'emails_sent' => $emailsSent,
                 'emails_failed' => $emailsFailed,
                 'remaining_recipients' => $remainingRecipients,
-                'processing_time' => $processingTime
+                'processing_time' => $processingTime,
             ]);
 
             $this->logMethodExit(__METHOD__, [
                 'emails_sent' => $emailsSent,
                 'emails_failed' => $emailsFailed,
-                'remaining_recipients' => $remainingRecipients
+                'remaining_recipients' => $remainingRecipients,
             ]);
 
             return [
                 'emails_sent' => $emailsSent,
                 'emails_failed' => $emailsFailed,
                 'remaining_recipients' => $remainingRecipients,
-                'processing_time' => $processingTime
+                'processing_time' => $processingTime,
             ];
 
         } catch (\Exception $e) {
             $this->logError('Campaign processing failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             // Mark campaign as failed
@@ -1032,12 +1040,13 @@ class CampaignService
     {
         $cacheKey = "campaign:{$campaignId}:senders";
         $senderList = Cache::get($cacheKey);
-        
-        if (!$senderList) {
+
+        if (! $senderList) {
             return null;
         }
 
         $senders = json_decode($senderList, true);
+
         return $senders[$index % count($senders)] ?? null;
     }
 
@@ -1048,12 +1057,13 @@ class CampaignService
     {
         $cacheKey = "campaign:{$campaignId}:content_variations";
         $contentList = Cache::get($cacheKey);
-        
-        if (!$contentList) {
+
+        if (! $contentList) {
             return null;
         }
 
         $contents = json_decode($contentList, true);
+
         return $contents[$index % count($contents)] ?? null;
     }
 
@@ -1063,9 +1073,9 @@ class CampaignService
     public function updateSentList(Campaign $campaign, string $recipient): void
     {
         $sentListPath = $this->createSentList($campaign->name, [$recipient]);
-        
+
         // Update campaign with sent list path if not already set
-        if (!$campaign->sent_list_path) {
+        if (! $campaign->sent_list_path) {
             $campaign->update(['sent_list_path' => $sentListPath]);
         }
     }
@@ -1077,7 +1087,7 @@ class CampaignService
     {
         $this->logMethodEntry(__METHOD__, [
             'campaign_id' => $campaign->id,
-            'update_data' => array_keys($data)
+            'update_data' => array_keys($data),
         ]);
 
         try {
@@ -1097,7 +1107,7 @@ class CampaignService
 
             $this->logInfo('Campaign updated by admin', [
                 'campaign_id' => $campaign->id,
-                'updated_fields' => array_keys($data)
+                'updated_fields' => array_keys($data),
             ]);
 
             return ['success' => true, 'campaign' => $campaign];
@@ -1105,8 +1115,9 @@ class CampaignService
         } catch (\Exception $e) {
             $this->logError('Campaign update failed', [
                 'campaign_id' => $campaign->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1118,7 +1129,7 @@ class CampaignService
     {
         $this->logMethodEntry(__METHOD__, [
             'campaign_ids' => $campaignIds,
-            'update_data' => array_keys($data)
+            'update_data' => array_keys($data),
         ]);
 
         try {
@@ -1143,28 +1154,29 @@ class CampaignService
                     }
 
                 } catch (\Exception $e) {
-                    $errors[] = "Campaign {$campaign->id}: " . $e->getMessage();
+                    $errors[] = "Campaign {$campaign->id}: ".$e->getMessage();
                 }
             }
 
             $this->logInfo('Bulk campaign update completed', [
                 'total_campaigns' => count($campaignIds),
                 'updated_count' => $updatedCount,
-                'error_count' => count($errors)
+                'error_count' => count($errors),
             ]);
 
             return [
                 'success' => true,
                 'updated_count' => $updatedCount,
                 'total_count' => count($campaignIds),
-                'errors' => $errors
+                'errors' => $errors,
             ];
 
         } catch (\Exception $e) {
             $this->logError('Bulk campaign update failed', [
                 'campaign_ids' => $campaignIds,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1180,14 +1192,14 @@ class CampaignService
             'sending' => ['paused', 'completed', 'failed'],
             'paused' => ['sending', 'completed', 'failed'],
             'completed' => [],
-            'failed' => ['draft']
+            'failed' => ['draft'],
         ];
 
         $currentStatus = strtolower($campaign->status);
         $newStatus = strtolower($newStatus);
 
-        if (!isset($allowedTransitions[$currentStatus]) || 
-            !in_array($newStatus, $allowedTransitions[$currentStatus])) {
+        if (! isset($allowedTransitions[$currentStatus]) ||
+            ! in_array($newStatus, $allowedTransitions[$currentStatus])) {
             throw new \Exception("Invalid status transition from {$currentStatus} to {$newStatus}");
         }
     }
@@ -1199,19 +1211,20 @@ class CampaignService
     {
         try {
             $campaign = Campaign::find($campaignId);
-            if (!$campaign) {
+            if (! $campaign) {
                 return;
             }
 
             // Check if job_id column exists and has a value
-            if (!isset($campaign->job_id) || !$campaign->job_id) {
+            if (! isset($campaign->job_id) || ! $campaign->job_id) {
                 $this->logInfo('No job to cancel for campaign', ['campaign_id' => $campaignId]);
+
                 return;
             }
 
             // Get the queue connection
             $queue = app('queue');
-            
+
             // Try to cancel the specific job
             try {
                 // This is a simplified approach - in production you would implement proper job cancellation
@@ -1219,12 +1232,12 @@ class CampaignService
                 // 1. Store job IDs in the database
                 // 2. Implement a custom job cancellation mechanism
                 // 3. Use job tags or custom job handling
-                
+
                 $this->logInfo('Attempting to cancel job for campaign', [
-                   'campaign_id' => $campaignId,
-                   'job_id' => $campaign->job_id
+                    'campaign_id' => $campaignId,
+                    'job_id' => $campaign->job_id,
                 ]);
-                
+
                 // Clear the job ID from the campaign
                 try {
                     $campaign->update(['job_id' => null]);
@@ -1232,22 +1245,22 @@ class CampaignService
                     // If job_id column doesnt exist yet, just log it
                     $this->logWarning('job_id column not available for update', [
                         'campaign_id' => $campaignId,
-                        'job_id' => $campaign->job_id
+                        'job_id' => $campaign->job_id,
                     ]);
                 }
-                
+
             } catch (\Exception $e) {
                 $this->logError('Failed to cancel specific job', [
-                   'campaign_id' => $campaignId,
-                   'job_id' => $campaign->job_id,
-                   'error' => $e->getMessage()
+                    'campaign_id' => $campaignId,
+                    'job_id' => $campaign->job_id,
+                    'error' => $e->getMessage(),
                 ]);
             }
-            
+
         } catch (\Exception $e) {
             $this->logError('Failed to cancel campaign jobs', [
                 'campaign_id' => $campaignId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -1260,33 +1273,30 @@ class CampaignService
         try {
             $content = $this->readFile($filePath, ['disk' => 'local']);
             $lines = array_filter(array_map('trim', explode("\n", $content)));
-            
+
             $count = 0;
             foreach ($lines as $line) {
-                if (!empty($line) && $this->validateEmail($line)) {
+                if (! empty($line) && $this->validateEmail($line)) {
                     $count++;
                 }
             }
-            
+
             return $count;
-            
+
         } catch (\Exception $e) {
             $this->logError('Failed to count recipients', [
                 'file_path' => $filePath,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
-            
+
             return 0;
         }
     }
 
     /**
-     * Validate email format
+     * Validate email format - using ValidationTrait::validateEmail instead
      */
-    private function validateEmail(string $email): bool
-    {
-        return filter_var(trim($email), FILTER_VALIDATE_EMAIL) !== false;
-    }
+    // validateEmail method removed - using ValidationTrait::validateEmail
 
     /**
      * Check campaign milestones and send notifications
@@ -1298,23 +1308,23 @@ class CampaignService
         }
 
         $percentage = intval(($campaign->total_sent / $campaign->recipient_count) * 100);
-        
+
         // Check for milestone percentages (25%, 50%, 75%, 90%)
         $milestones = [25, 50, 75, 90];
-        
+
         foreach ($milestones as $milestone) {
             if ($percentage >= $milestone) {
                 $cacheKey = "campaign:{$campaign->id}:milestone:{$milestone}";
-                
+
                 // Only send notification once per milestone
-                if (!Cache::get($cacheKey)) {
+                if (! Cache::get($cacheKey)) {
                     $campaign->user->notify(new CampaignMilestone($campaign, $milestone));
                     Cache::put($cacheKey, true, now()->addDays(7)); // Cache for a week
-                    
+
                     $this->logInfo('Campaign milestone reached', [
                         'campaign_id' => $campaign->id,
                         'milestone' => $milestone,
-                        'percentage' => $percentage
+                        'percentage' => $percentage,
                     ]);
                 }
             }
@@ -1335,21 +1345,21 @@ class CampaignService
 
         $bounceRate = ($campaign->bounces / $campaign->total_sent) * 100;
         $threshold = 10.0; // 10% bounce rate threshold
-        
+
         if ($bounceRate >= $threshold) {
             $cacheKey = "campaign:{$campaign->id}:bounce_alert";
-            
+
             // Only send alert once per campaign
-            if (!Cache::get($cacheKey)) {
+            if (! Cache::get($cacheKey)) {
                 $campaign->user->notify(new HighBounceRateAlert($campaign, $bounceRate, $threshold));
                 Cache::put($cacheKey, true, now()->addDays(1)); // Cache for a day
-                
+
                 $this->logWarning('High bounce rate detected', [
                     'campaign_id' => $campaign->id,
                     'bounce_rate' => $bounceRate,
                     'threshold' => $threshold,
                     'bounces' => $campaign->bounces,
-                    'total_sent' => $campaign->total_sent
+                    'total_sent' => $campaign->total_sent,
                 ]);
             }
         }

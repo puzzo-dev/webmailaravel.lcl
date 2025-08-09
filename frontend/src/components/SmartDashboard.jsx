@@ -43,11 +43,11 @@ import '../styles/animations.css';
 
 const SmartDashboard = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const DISPATCH = useDispatch();
   const { handleSubscriptionError } = useSubscriptionError();
   
   // Redux state
-  const { isAuthenticated, user } = useSelector(state => state.auth);
+  const { isAuthenticated, USER } = useSelector(state => state.auth);
   const campaigns = useSelector(state => state.campaigns?.campaigns || []);
   const senders = useSelector(state => state.senders?.senders || []);
   const domains = useSelector(state => state.domains?.domains || []);
@@ -61,7 +61,7 @@ const SmartDashboard = () => {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
+  const [selectedPeriod, SET_SELECTED_PERIOD] = useState('7d');
 
   // Chart colors
   const chartColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
@@ -319,7 +319,7 @@ const SmartDashboard = () => {
 
   const performanceData = getPerformanceData();
   const campaignTypeData = getCampaignTypeData();
-  const deviceData = getDeviceData();
+  const DEVICE_DATA = getDeviceData();
   const summary = analyticsData.summary;
 
   return (
