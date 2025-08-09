@@ -6,24 +6,20 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
-use App\Services\ManualTrainingService;
-use App\Services\AutomaticTrainingService;
+use App\Services\UnifiedTrainingService;
 use App\Traits\ResponseTrait;
+use App\Traits\LoggingTrait;
 use App\Models\User;
 
 class TrainingController extends Controller
 {
-    use ResponseTrait;
+    use ResponseTrait, LoggingTrait;
 
-    protected $manualTrainingService;
-    protected $automaticTrainingService;
+    protected $trainingService;
 
-    public function __construct(
-        ManualTrainingService $manualTrainingService,
-        AutomaticTrainingService $automaticTrainingService
-    ) {
-        $this->manualTrainingService = $manualTrainingService;
-        $this->automaticTrainingService = $automaticTrainingService;
+    public function __construct(UnifiedTrainingService $trainingService)
+    {
+        $this->trainingService = $trainingService;
     }
 
     /**
@@ -31,7 +27,7 @@ class TrainingController extends Controller
      */
     public function getAdminTrainingSettings(int $userId): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($userId) {
+        try {
             if (!Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
@@ -48,46 +44,55 @@ class TrainingController extends Controller
                 'is_manual_training_due' => $user->isManualTrainingDue(),
             ];
 
-            return $this->successResponse($settings, 'User training settings retrieved successfully');
-        }, 'get_admin_training_settings');
+            return $this->successResponse($settings, 'Training settings retrieved successfully');
+        } catch (\Exception $e) {
+            $this->logError('Failed to get admin training settings', ['error' => $e->getMessage(), 'user_id' => $userId]);
+            return $this->errorResponse('Failed to retrieve training settings', 500);
+        }
     }
 
     /**
-     * Admin: Update training activation for a specific user
+     * Admin: Update training settings for a specific user
      */
     public function updateAdminTrainingSettings(Request $request, int $userId): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($request, $userId) {
+        try {
             if (!Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
 
-            $user = User::findOrFail($userId);
-
             $validator = Validator::make($request->all(), [
                 'training_enabled' => 'required|boolean',
+                'training_mode' => 'required|in:manual,automatic',
             ]);
 
             if ($validator->fails()) {
                 return $this->validationErrorResponse($validator->errors());
             }
 
-            // Only allow admin to enable/disable training
-            // Training mode and percentage are set automatically
+            $user = User::findOrFail($userId);
+            
+            // Update user training settings
             $user->update([
                 'training_enabled' => $request->training_enabled,
-                'training_mode' => 'manual', // Always use manual mode for internal training
-                'manual_training_percentage' => 10.0, // Fixed 10% increase
+                'training_mode' => $request->training_mode,
+            ]);
+
+            $this->logInfo('Admin updated training settings', [
+                'admin_id' => Auth::id(),
+                'target_user_id' => $userId,
+                'settings' => $request->only(['training_enabled', 'training_mode'])
             ]);
 
             return $this->successResponse([
                 'user_id' => $user->id,
-                'user_email' => $user->email,
-                'training_enabled' => $user->hasTrainingEnabled(),
+                'training_enabled' => $user->training_enabled,
                 'training_mode' => $user->training_mode,
-                'manual_training_percentage' => $user->getManualTrainingPercentage(),
-            ], 'User training activation updated successfully');
-        }, 'update_admin_training_settings');
+            ], 'Training settings updated successfully');
+        } catch (\Exception $e) {
+            $this->logError('Failed to update admin training settings', ['error' => $e->getMessage(), 'user_id' => $userId]);
+            return $this->errorResponse('Failed to update training settings', 500);
+        }
     }
 
     /**
@@ -95,18 +100,133 @@ class TrainingController extends Controller
      */
     public function getAdminTrainingStats(int $userId): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($userId) {
+        try {
             if (!Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Access denied');
             }
 
             $user = User::findOrFail($userId);
-            $stats = $this->manualTrainingService->getManualTrainingStats($user);
+            $stats = $this->trainingService->getTrainingStatistics($user);
             $stats['user_id'] = $user->id;
             $stats['user_email'] = $user->email;
 
-            return $this->successResponse($stats, 'User training statistics retrieved successfully');
-        }, 'get_admin_training_stats');
+            return $this->successResponse($stats, 'Training statistics retrieved successfully');
+        } catch (\Exception $e) {
+            $this->logError('Failed to get admin training stats', ['error' => $e->getMessage(), 'user_id' => $userId]);
+            return $this->errorResponse('Failed to retrieve training statistics', 500);
+        }
     }
 
+    /**
+     * Run training for all senders (admin only)
+     */
+    public function runTraining(): JsonResponse
+    {
+        try {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $results = $this->trainingService->runSystemTraining();
+            
+            $this->logInfo('System training completed by admin', [
+                'admin_id' => Auth::id(),
+                'results' => $results
+            ]);
+
+            return $this->successResponse($results, 'Training completed successfully');
+        } catch (\Exception $e) {
+            $this->logError('Training failed', ['error' => $e->getMessage(), 'admin_id' => Auth::id()]);
+            return $this->errorResponse('Training failed: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Run training for specific user (admin only)
+     */
+    public function runUserTraining(int $userId): JsonResponse
+    {
+        try {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $user = User::findOrFail($userId);
+            $results = $this->trainingService->runTrainingForUser($user);
+            
+            $this->logInfo('User training completed by admin', [
+                'admin_id' => Auth::id(),
+                'target_user_id' => $userId,
+                'results' => $results
+            ]);
+
+            return $this->successResponse($results, "Training completed for user: {$user->email}");
+        } catch (\Exception $e) {
+            $this->logError('User training failed', ['error' => $e->getMessage(), 'user_id' => $userId]);
+            return $this->errorResponse('Training failed: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Run training for specific domain (admin only)
+     */
+    public function runDomainTraining(string $domainId): JsonResponse
+    {
+        try {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $results = $this->trainingService->runTrainingForDomain($domainId);
+            
+            $this->logInfo('Domain training completed by admin', [
+                'admin_id' => Auth::id(),
+                'domain_id' => $domainId,
+                'results' => $results
+            ]);
+
+            return $this->successResponse($results, "Training completed for domain: {$domainId}");
+        } catch (\Exception $e) {
+            $this->logError('Domain training failed', ['error' => $e->getMessage(), 'domain_id' => $domainId]);
+            return $this->errorResponse('Training failed: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get training statistics (admin only)
+     */
+    public function getTrainingStatistics(): JsonResponse
+    {
+        try {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $stats = $this->trainingService->getTrainingStatistics();
+            
+            return $this->successResponse($stats, 'Training statistics retrieved successfully');
+        } catch (\Exception $e) {
+            $this->logError('Failed to get training statistics', ['error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to retrieve training statistics', 500);
+        }
+    }
+
+    /**
+     * Get training status (admin only)
+     */
+    public function getTrainingStatus(): JsonResponse
+    {
+        try {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied');
+            }
+
+            $status = $this->trainingService->getTrainingStatus();
+            
+            return $this->successResponse($status, 'Training status retrieved successfully');
+        } catch (\Exception $e) {
+            $this->logError('Failed to get training status', ['error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to retrieve training status', 500);
+        }
+    }
 }

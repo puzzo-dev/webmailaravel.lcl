@@ -6,7 +6,7 @@ export const fetchTrainingSettings = createAsyncThunk(
   'training/fetchSettings',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await trainingService.getTrainingSettings();
+      const response = await trainingService.getTrainingStatus();
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch training settings');
@@ -18,6 +18,7 @@ export const updateTrainingSettings = createAsyncThunk(
   'training/updateSettings',
   async (settings, { rejectWithValue }) => {
     try {
+      // This would need to be implemented in the backend if settings updates are needed
       const response = await trainingService.updateTrainingSettings(settings);
       return response.data;
     } catch (error) {
@@ -30,7 +31,7 @@ export const fetchTrainingStats = createAsyncThunk(
   'training/fetchStats',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await trainingService.getTrainingStats();
+      const response = await trainingService.getTrainingStatistics();
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch training statistics');
@@ -40,9 +41,9 @@ export const fetchTrainingStats = createAsyncThunk(
 
 export const runTraining = createAsyncThunk(
   'training/runTraining',
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await trainingService.runTraining();
+      const response = await trainingService.runTraining(params);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to run training');
@@ -89,12 +90,60 @@ export const fetchAdminTrainingStats = createAsyncThunk(
 
 export const runAdminTraining = createAsyncThunk(
   'training/runAdminTraining',
-  async (userId, { rejectWithValue }) => {
+  async ({ userId, params = {} }, { rejectWithValue }) => {
     try {
-      const response = await trainingService.runAdminTraining(userId);
+      const response = await trainingService.runUserTraining(userId, params);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to run user training');
+    }
+  }
+);
+
+export const runDomainTraining = createAsyncThunk(
+  'training/runDomainTraining',
+  async ({ domainId, params = {} }, { rejectWithValue }) => {
+    try {
+      const response = await trainingService.runDomainTraining(domainId, params);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to run domain training');
+    }
+  }
+);
+
+export const runSystemTraining = createAsyncThunk(
+  'training/runSystemTraining',
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const response = await trainingService.runSystemTraining(params);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to run system training');
+    }
+  }
+);
+
+export const fetchUserTrainingStats = createAsyncThunk(
+  'training/fetchUserStats',
+  async (userId, { rejectWithValue }) => {
+    try {
+      const response = await trainingService.getUserTrainingStats(userId);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch user training statistics');
+    }
+  }
+);
+
+export const fetchDomainTrainingStats = createAsyncThunk(
+  'training/fetchDomainStats',
+  async (domainId, { rejectWithValue }) => {
+    try {
+      const response = await trainingService.getDomainTrainingStats(domainId);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch domain training statistics');
     }
   }
 );

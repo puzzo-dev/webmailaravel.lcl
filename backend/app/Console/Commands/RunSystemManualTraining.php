@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\ManualTrainingService;
+use App\Services\UnifiedTrainingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -21,7 +21,7 @@ class RunSystemManualTraining extends Command
     /**
      * Execute the console command.
      */
-    public function handle(ManualTrainingService $manualTrainingService): int
+    public function handle(UnifiedTrainingService $trainingService): int
     {
         $isDryRun = $this->option('dry-run');
         
@@ -29,27 +29,31 @@ class RunSystemManualTraining extends Command
         
         if ($isDryRun) {
             $this->warn('DRY RUN MODE - No changes will be made');
+            $this->warn('Note: Dry run mode not fully implemented in unified service yet');
         }
         
         try {
-            $result = $manualTrainingService->runSystemManualTraining($isDryRun);
+            $result = $trainingService->runManualTraining();
             
             $this->info("System manual training completed successfully:");
-            $this->table(
-                ['Metric', 'Value'],
-                [
-                    ['Senders processed', $result['senders_processed']],
-                    ['Senders updated', $result['senders_updated']],
-                    ['Average increase', $result['average_increase'] . ' emails/day'],
-                    ['Processing time', $result['processing_time'] . ' seconds'],
-                ]
-            );
+            $this->info("Training type: {$result['type']}");
+            $this->info("Senders processed: {$result['senders_processed']}");
+            $this->info("Senders updated: {$result['senders_updated']}");
             
-            if ($result['senders_updated'] > 0) {
-                $this->info("✅ Successfully updated {$result['senders_updated']} sender limits");
-            } else {
-                $this->comment("ℹ️  No senders needed limit updates at this time");
+            if (!empty($result['errors'])) {
+                $this->warn("Errors encountered:");
+                foreach ($result['errors'] as $error) {
+                    $this->error("  - {$error}");
+                }
             }
+            
+            // Display training statistics
+            $stats = $trainingService->getTrainingStatistics();
+            $this->info("\nTraining Statistics:");
+            $this->info("Total active senders: {$stats['total_senders']}");
+            $this->info("Average reputation: " . round($stats['average_reputation'], 2));
+            $this->info("Total daily limits: {$stats['total_daily_limits']}");
+            $this->info("Total daily sent: {$stats['total_daily_sent']}");
             
             Log::info('System manual training completed via command', $result);
             

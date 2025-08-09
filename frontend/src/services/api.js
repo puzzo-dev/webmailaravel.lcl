@@ -890,6 +890,33 @@ export const adminService = {
 
     // BTCPay configuration is now handled through SystemSettings
 
+};
+
+// Performance monitoring service methods (Admin only)
+export const performanceService = {
+    async getSystemMetrics() {
+        const response = await api.get('/performance/system');
+        return response.data;
+    },
+
+    async getOperationMetrics(operation, hours = 24) {
+        const response = await api.get(`/performance/operation/${operation}`, { hours });
+        return response.data;
+    },
+
+    async generateReport(hours = 24) {
+        const response = await api.get('/performance/report', { hours });
+        return response.data;
+    },
+
+    async recordMetric(metricData) {
+        const response = await api.post('/performance/metric', metricData);
+        return response.data;
+    }
+};
+
+// PowerMTA service methods
+export const powerMTAService = {
     // PowerMTA configuration
     async getPowerMTAConfig() {
         const response = await api.get('/admin/system-config/powermta');

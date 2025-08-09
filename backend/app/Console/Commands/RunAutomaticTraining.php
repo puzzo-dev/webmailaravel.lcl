@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\AutomaticTrainingService;
+use App\Services\UnifiedTrainingService;
 
 class RunAutomaticTraining extends Command
 {
@@ -12,7 +12,7 @@ class RunAutomaticTraining extends Command
      *
      * @var string
      */
-    protected $signature = 'training:run-automatic {--domain= : Process specific domain}';
+    protected $signature = 'training:run-automatic {--domain= : Process specific domain} {--user= : Process specific user}';
 
     /**
      * The console command description.
@@ -21,12 +21,12 @@ class RunAutomaticTraining extends Command
      */
     protected $description = 'Run automatic training based on PowerMTA data and reputation scores';
 
-    protected $automaticTrainingService;
+    protected $trainingService;
 
-    public function __construct(AutomaticTrainingService $automaticTrainingService)
+    public function __construct(UnifiedTrainingService $trainingService)
     {
         parent::__construct();
-        $this->automaticTrainingService = $automaticTrainingService;
+        $this->trainingService = $trainingService;
     }
 
     /**
@@ -37,10 +37,22 @@ class RunAutomaticTraining extends Command
         $this->info('Starting automatic training process...');
 
         try {
-            $results = $this->automaticTrainingService->runAutomaticTraining();
+            $domainId = $this->option('domain');
+            $userId = $this->option('user');
+            
+            $user = null;
+            if ($userId) {
+                $user = \App\Models\User::find($userId);
+                if (!$user) {
+                    $this->error("User with ID {$userId} not found.");
+                    return Command::FAILURE;
+                }
+            }
 
-            $this->info("Training completed successfully!");
-            $this->info("Domains processed: {$results['domains_processed']}");
+            $results = $this->trainingService->runAutomaticTraining($user, $domainId);
+
+            $this->info("Automatic training completed successfully!");
+            $this->info("Senders processed: {$results['senders_processed']}");
             $this->info("Senders updated: {$results['senders_updated']}");
 
             if (!empty($results['errors'])) {
@@ -50,21 +62,19 @@ class RunAutomaticTraining extends Command
                 }
             }
 
-            // Show statistics
-            $stats = $this->automaticTrainingService->getTrainingStatistics();
+            // Display training statistics
+            $stats = $this->trainingService->getTrainingStatistics($user);
             $this->info("\nTraining Statistics:");
-            $this->info("  Total domains: {$stats['total_domains']}");
-            $this->info("  Total senders: {$stats['total_senders']}");
-            $this->info("  Recent updates: {$stats['recent_updates']}");
-            $this->info("  Initial limit: {$stats['initial_limit']}");
-            $this->info("  Max limit: {$stats['max_limit']}");
-            $this->info("  Min limit: {$stats['min_limit']}");
+            $this->info("Total active senders: {$stats['total_senders']}");
+            $this->info("Average reputation: " . round($stats['average_reputation'], 2));
+            $this->info("Total daily limits: {$stats['total_daily_limits']}");
+            $this->info("Total daily sent: {$stats['total_daily_sent']}");
+
+            return Command::SUCCESS;
 
         } catch (\Exception $e) {
-            $this->error("Training failed: " . $e->getMessage());
-            return 1;
+            $this->error("Automatic training failed: " . $e->getMessage());
+            return Command::FAILURE;
         }
-
-        return 0;
     }
 } 

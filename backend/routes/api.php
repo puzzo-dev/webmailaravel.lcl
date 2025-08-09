@@ -17,10 +17,12 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\SuppressionListController;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\TrainingController;
 use App\Http\Controllers\SystemSettingsController;
 use App\Http\Controllers\PublicConfigController;
 use App\Http\Controllers\BounceCredentialController;
+use App\Http\Controllers\PerformanceController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -348,16 +350,17 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::post('/process-bounces', [PowerMTAController::class, 'processBounceFiles']);
         });
         
-        // Automatic Training admin routes (admin only)
+        // Unified Training admin routes (admin only) - consolidated from PowerMTA and Training controllers
         Route::prefix('training')->group(function () {
-            Route::get('/status', [PowerMTAController::class, 'getTrainingStatus']);
-            Route::get('/statistics', [PowerMTAController::class, 'getTrainingStatistics']);
-            Route::post('/run', [PowerMTAController::class, 'runTraining']);
-            Route::post('/run/{domain}', [PowerMTAController::class, 'runDomainTraining']);
+            Route::get('/status', [\App\Http\Controllers\TrainingController::class, 'getTrainingStatus']);
+            Route::get('/statistics', [\App\Http\Controllers\TrainingController::class, 'getTrainingStatistics']);
+            Route::post('/run', [\App\Http\Controllers\TrainingController::class, 'runTraining']);
+            Route::post('/run/users/{user}', [\App\Http\Controllers\TrainingController::class, 'runUserTraining']);
+            Route::post('/run/domains/{domain}', [\App\Http\Controllers\TrainingController::class, 'runDomainTraining']);
             
-            // Per-user training activation (admin only)
+            // Per-user training management (admin only)
             Route::get('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingSettings']);
-            Route::put('/users/{user}/activation', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
+            Route::put('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
             Route::get('/users/{user}/stats', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingStats']);
         });
 
@@ -441,6 +444,14 @@ Route::delete('/{notification}', [NotificationController::class, 'destroy']);
             Route::get('/campaign/{campaign}/senders', [AnalyticsController::class, 'getCampaignSenderPerformance']);
             Route::get('/export', [AnalyticsController::class, 'export']);
         });
+    });
+
+    // Performance monitoring routes (admin only)
+    Route::prefix('performance')->middleware(['role:admin'])->group(function () {
+        Route::get('/system', [PerformanceController::class, 'getSystemMetrics']);
+        Route::get('/operation/{operation}', [PerformanceController::class, 'getOperationMetrics']);
+        Route::get('/report', [PerformanceController::class, 'generateReport']);
+        Route::post('/metric', [PerformanceController::class, 'recordMetric']);
     });
 
     // Security routes

@@ -2,8 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Services\ManualTrainingService;
 use Illuminate\Console\Command;
+use App\Services\UnifiedTrainingService;
+use App\Models\User;
 
 class RunManualTraining extends Command
 {
@@ -12,7 +13,7 @@ class RunManualTraining extends Command
      *
      * @var string
      */
-    protected $signature = 'training:run-manual {--user-id= : Run manual training for specific user ID}';
+    protected $signature = 'training:run-manual {--user-id= : Run manual training for specific user ID} {--domain= : Process specific domain}';
 
     /**
      * The console command description.
@@ -21,15 +22,15 @@ class RunManualTraining extends Command
      */
     protected $description = 'Run manual training to increase sender limits by percentage daily';
 
-    protected $manualTrainingService;
+    protected $trainingService;
 
     /**
      * Create a new command instance.
      */
-    public function __construct(ManualTrainingService $manualTrainingService)
+    public function __construct(UnifiedTrainingService $trainingService)
     {
         parent::__construct();
-        $this->manualTrainingService = $manualTrainingService;
+        $this->trainingService = $trainingService;
     }
 
     /**
@@ -41,43 +42,50 @@ class RunManualTraining extends Command
 
         try {
             $userId = $this->option('user-id');
-
+            $domainId = $this->option('domain');
+            
+            $user = null;
             if ($userId) {
-                // Run for specific user
-                $user = \App\Models\User::findOrFail($userId);
-                $results = $this->manualTrainingService->runManualTrainingForUser($user);
-
-                $this->info("Manual training completed for user: {$user->email}");
-                $this->info("Senders updated: {$results['senders_updated']}");
-                $this->info("Percentage applied: {$results['percentage_applied']}%");
-
-                if (!empty($results['errors'])) {
-                    $this->warn("Errors encountered:");
-                    foreach ($results['errors'] as $error) {
-                        $this->error("  - {$error}");
-                    }
-                }
-            } else {
-                // Run for all eligible users
-                $results = $this->manualTrainingService->runManualTrainingForAllUsers();
-
-                $this->info("Manual training completed successfully!");
-                $this->info("Users processed: {$results['users_processed']}");
-                $this->info("Senders updated: {$results['senders_updated']}");
-
-                if (!empty($results['errors'])) {
-                    $this->warn("Errors encountered:");
-                    foreach ($results['errors'] as $error) {
-                        $this->error("  - {$error}");
-                    }
+                $user = User::find($userId);
+                if (!$user) {
+                    $this->error("User with ID {$userId} not found.");
+                    return Command::FAILURE;
                 }
             }
-
+            
+            $results = $this->trainingService->runManualTraining($user, $domainId);
+            
+            if ($user) {
+                $this->info("Manual training completed for user: {$user->email}");
+            } elseif ($domainId) {
+                $this->info("Manual training completed for domain: {$domainId}");
+            } else {
+                $this->info("Manual training completed for all users");
+            }
+            
+            $this->info("Senders processed: {$results['senders_processed']}");
+            $this->info("Senders updated: {$results['senders_updated']}");
+            
+            if (!empty($results['errors'])) {
+                $this->warn("Errors encountered:");
+                foreach ($results['errors'] as $error) {
+                    $this->error("  - {$error}");
+                }
+            }
+            
+            // Display training statistics
+            $stats = $this->trainingService->getTrainingStatistics($user);
+            $this->info("\nTraining Statistics:");
+            $this->info("Total active senders: {$stats['total_senders']}");
+            $this->info("Average reputation: " . round($stats['average_reputation'], 2));
+            $this->info("Total daily limits: {$stats['total_daily_limits']}");
+            $this->info("Total daily sent: {$stats['total_daily_sent']}");
+            
+            return Command::SUCCESS;
+            
         } catch (\Exception $e) {
             $this->error("Manual training failed: " . $e->getMessage());
-            return 1;
+            return Command::FAILURE;
         }
-
-        return 0;
     }
 }

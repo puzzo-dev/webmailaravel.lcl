@@ -1,7 +1,41 @@
 import api from './api';
 
 const trainingService = {
-  // Admin training activation only
+  // Unified training endpoints using new TrainingController
+  
+  // Get training status and statistics
+  getTrainingStatus: async () => {
+    const response = await api.get('/training/status');
+    return response.data;
+  },
+
+  getTrainingStatistics: async () => {
+    const response = await api.get('/training/statistics');
+    return response.data;
+  },
+
+  // Run training operations
+  runTraining: async (params = {}) => {
+    const response = await api.post('/training/run', params);
+    return response.data;
+  },
+
+  runUserTraining: async (userId, params = {}) => {
+    const response = await api.post(`/training/run/user/${userId}`, params);
+    return response.data;
+  },
+
+  runDomainTraining: async (domainId, params = {}) => {
+    const response = await api.post(`/training/run/domain/${domainId}`, params);
+    return response.data;
+  },
+
+  runSystemTraining: async (params = {}) => {
+    const response = await api.post('/training/run/system', params);
+    return response.data;
+  },
+
+  // Admin training management
   getAdminTrainingSettings: async (userId) => {
     const response = await api.get(`/admin/training/users/${userId}/settings`);
     return response.data;
@@ -17,24 +51,14 @@ const trainingService = {
     return response.data;
   },
 
-  // Existing automatic training endpoints
-  getTrainingStatus: async () => {
-    const response = await api.get('/admin/training/status');
+  // User-specific training statistics
+  getUserTrainingStats: async (userId) => {
+    const response = await api.get(`/training/statistics/user/${userId}`);
     return response.data;
   },
 
-  getTrainingStatistics: async () => {
-    const response = await api.get('/admin/training/statistics');
-    return response.data;
-  },
-
-  runAutomaticTraining: async () => {
-    const response = await api.post('/admin/training/run');
-    return response.data;
-  },
-
-  runDomainTraining: async (domainId) => {
-    const response = await api.post(`/admin/training/run/${domainId}`);
+  getDomainTrainingStats: async (domainId) => {
+    const response = await api.get(`/training/statistics/domain/${domainId}`);
     return response.data;
   }
 };
