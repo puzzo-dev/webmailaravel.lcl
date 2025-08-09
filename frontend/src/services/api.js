@@ -1,6 +1,8 @@
 import { api } from '../utils/api';
 import axios from 'axios';
 
+// Cache-busting update: 2025-08-09T15:15:54Z - Fixed PowerMTA and Notifications methods
+
 // Auth service methods
 export const authService = {
     async login(credentials) {
@@ -579,13 +581,18 @@ export const billingService = {
     },
 
     async getPaymentRates() {
-        const response = await api.get('/billing/rates');
-        return response.data.data || response.data;
+        try {
+            const response = await api.get('/billing/rates');
+            return response.data.data || response.data;
+        } catch (error) {
+            console.warn('Payment rates endpoint not available:', error.message);
+            return []; // Return empty array if endpoint fails
+        }
     },
 
     // Plan management
     async getPlans() {
-        const response = await api.get('/billing/plans');
+        const response = await api.get('/plans'); // Public endpoint, no /billing prefix
         return response.data.data || response.data; // Handle both { data: [...] } and direct array responses
     },
 
@@ -1023,48 +1030,6 @@ export const performanceService = {
     async recordMetric(metricData) {
         const response = await api.post('/performance/metric', metricData);
         return response.data;
-    }
-};
-
-// PowerMTA service methods
-export const powerMTAService = {
-
-    // Environment variables
-    async getEnvVariables() {
-        const response = await api.get('/admin/system-settings/env-variables');
-        return response.data;
-    },
-
-    // Test SMTP
-    async testSystemSmtp(smtpData) {
-        const response = await api.post('/admin/system-settings/test-smtp', smtpData);
-        return response.data;
-    },
-
-    // Notification management
-    async getNotifications(params = {}) {
-        const response = await api.get('/admin/notifications', { params });
-        return response.data;
-    },
-
-    async createNotification(notificationData) {
-        const response = await api.post('/admin/notifications', notificationData);
-        return response.data;
-    },
-
-    async sendBulkNotification(notificationData) {
-        const response = await api.post('/admin/notifications/bulk', notificationData);
-        return response.data;
-    },
-
-    async deleteNotification(notificationId) {
-        const response = await api.delete(`/admin/notifications/${notificationId}`);
-        return response.data;
-    },
-
-    async markNotificationAsRead(notificationId) {
-        const response = await api.put(`/admin/notifications/${notificationId}/read`);
-        return response.data;
     },
 
     // PowerMTA Status and Management
@@ -1102,6 +1067,72 @@ export const powerMTAService = {
         const response = await api.get(`/admin/powermta/diagnostic-files/${filename}/download`, {
             responseType: 'blob'
         });
+        return response.data;
+    },
+
+    // Notification management
+    async getNotifications(params = {}) {
+        const response = await api.get('/admin/notifications', { params });
+        return response.data;
+    },
+
+    async createNotification(notificationData) {
+        const response = await api.post('/admin/notifications', notificationData);
+        return response.data;
+    },
+
+    async sendBulkNotification(notificationData) {
+        const response = await api.post('/admin/notifications/bulk', notificationData);
+        return response.data;
+    },
+
+    async deleteNotification(notificationId) {
+        const response = await api.delete(`/admin/notifications/${notificationId}`);
+        return response.data;
+    }
+};
+
+// PowerMTA service methods
+export const powerMTAService = {
+    async getConfig() {
+        const response = await api.get('/admin/powermta/config');
+        return response.data;
+    },
+
+    async updateConfig(configData) {
+        const response = await api.put('/admin/powermta/config', configData);
+        return response.data;
+    },
+
+    // Test SMTP
+    async testSystemSmtp(smtpData) {
+        const response = await api.post('/admin/system-settings/test-smtp', smtpData);
+        return response.data;
+    }
+};
+
+// User Activity service methods
+export const userActivityService = {
+    async getActivities(params = {}) {
+        const response = await api.get('/user/activities', { params });
+        return response.data;
+    },
+
+    async getActivityStats(params = {}) {
+        const response = await api.get('/user/activities/stats', { params });
+        return response.data;
+    },
+
+    async logActivity(activityData) {
+        const response = await api.post('/user/activities', activityData);
+        return response.data;
+    }
+};
+
+// Additional admin service methods
+export const adminNotificationService = {
+    async markNotificationAsRead(notificationId) {
+        const response = await api.put(`/admin/notifications/${notificationId}/read`);
         return response.data;
     },
 

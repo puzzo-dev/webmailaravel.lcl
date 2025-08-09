@@ -18,7 +18,9 @@ use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\SenderController;
 use App\Http\Controllers\SuppressionListController;
 use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\UserActivityController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SwaggerController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -63,9 +65,75 @@ Route::prefix('tracking')->group(function () {
 });
 
 // Public billing routes (no authentication required)
-Route::prefix('billing')->group(function () {
-    Route::get('/plans', [BillingController::class, 'plans']);
-    Route::get('/rates', [BillingController::class, 'rates']);
+Route::get('/plans', [BillingController::class, 'plans']);
+
+// API Documentation routes (public access)
+Route::get('/documentation', function () {
+    return response()->json([
+        'title' => 'Email Campaign Management API',
+        'version' => '1.0.0',
+        'description' => 'Comprehensive API for managing email campaigns, users, analytics, domains, senders, and more.',
+        'base_url' => request()->getSchemeAndHttpHost(),
+        'endpoints' => [
+            'Authentication' => [
+                'POST /api/auth/login' => 'User login',
+                'POST /api/auth/register' => 'User registration',
+                'POST /api/auth/logout' => 'User logout',
+                'POST /api/auth/refresh' => 'Refresh JWT token',
+                'POST /api/auth/forgot-password' => 'Request password reset',
+                'POST /api/auth/reset-password' => 'Reset password with token',
+            ],
+            'User Management' => [
+                'GET /api/user/profile' => 'Get user profile',
+                'PUT /api/user/profile' => 'Update user profile',
+                'PUT /api/user/password' => 'Change password',
+                'GET /api/user/settings' => 'Get user settings',
+            ],
+            'Campaigns' => [
+                'GET /api/campaigns' => 'List campaigns',
+                'POST /api/campaigns' => 'Create campaign',
+                'GET /api/campaigns/{id}' => 'Get campaign details',
+                'PUT /api/campaigns/{id}' => 'Update campaign',
+                'DELETE /api/campaigns/{id}' => 'Delete campaign',
+                'POST /api/campaigns/{id}/send' => 'Send campaign',
+            ],
+            'Analytics' => [
+                'GET /api/analytics/dashboard' => 'Get dashboard analytics',
+                'GET /api/analytics/campaigns/{id}' => 'Get campaign analytics',
+                'GET /api/analytics/performance' => 'Get performance metrics',
+            ],
+            'Domains' => [
+                'GET /api/domains' => 'List domains',
+                'POST /api/domains' => 'Add domain',
+                'GET /api/domains/{id}' => 'Get domain details',
+                'PUT /api/domains/{id}' => 'Update domain',
+                'DELETE /api/domains/{id}' => 'Delete domain',
+            ],
+            'Senders' => [
+                'GET /api/senders' => 'List senders',
+                'POST /api/senders' => 'Add sender',
+                'GET /api/senders/{id}' => 'Get sender details',
+                'PUT /api/senders/{id}' => 'Update sender',
+                'DELETE /api/senders/{id}' => 'Delete sender',
+            ],
+            'Billing' => [
+                'GET /api/plans' => 'Get available plans (public)',
+                'GET /api/billing/subscription' => 'Get user subscription',
+                'POST /api/billing/subscribe' => 'Subscribe to plan',
+                'GET /api/billing/history' => 'Get payment history',
+            ],
+            'Tracking' => [
+                'GET /api/tracking/open/{emailId}' => 'Track email open (public)',
+                'GET /api/tracking/click/{emailId}/{linkId}' => 'Track link click (public)',
+                'GET /api/tracking/unsubscribe/{emailId}' => 'Unsubscribe (public)',
+            ]
+        ],
+        'authentication' => [
+            'type' => 'Bearer Token (JWT)',
+            'header' => 'Authorization: Bearer {token}',
+            'note' => 'Most endpoints require authentication. Public endpoints are marked as (public).'
+        ]
+    ]);
 });
 
 // Protected routes (require JWT authentication)
@@ -97,6 +165,13 @@ Route::middleware(['auth:api'])->group(function () {
         Route::put('/settings/telegram', [UserController::class, 'updateTelegramSettings']);
         Route::post('/settings/api/generate-key', [UserController::class, 'generateApiKey']);
         Route::post('/settings/telegram/test', [UserController::class, 'testTelegram']);
+    });
+
+    // User Activity routes
+    Route::prefix('user/activities')->group(function () {
+        Route::get('/', [UserActivityController::class, 'index']);
+        Route::get('/stats', [UserActivityController::class, 'stats']);
+        Route::post('/', [UserActivityController::class, 'store']);
     });
 
     // Campaign routes (require active subscription)

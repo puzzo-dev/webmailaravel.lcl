@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { showSubscriptionOverlay } from '../../store/slices/uiSlice';
+import { useSubscription } from '../../hooks';
 
 /**
  * SubscriptionGuard component - shows subscription overlay for pages that require active subscription
@@ -18,43 +17,26 @@ const SubscriptionGuard = ({
   immediate = false,
   fallbackMessage
 }) => {
-  const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
-  const { subscriptions } = useSelector((state) => state.billing);
-
-  // Check if user has active subscription
-  const hasActiveSubscription = () => {
-    // Admin users bypass subscription checks
-    if (user?.role === 'admin') {
-      return true;
-    }
-
-    // Check if user has any active subscription
-    return subscriptions?.some(sub => sub.status === 'active') || false;
-  };
-
-  // Check if user meets role requirements
-  const hasRequiredRole = () => {
-    if (adminOnly) {
-      return user?.role === 'admin';
-    }
-    return true; // No role requirement
-  };
+  const { 
+    hasActiveSubscription, 
+    hasRequiredRole, 
+    showSubscriptionModal 
+  } = useSubscription();
 
   useEffect(() => {
-    if (immediate && (!hasActiveSubscription() || !hasRequiredRole())) {
+    if (immediate && (!hasActiveSubscription() || !hasRequiredRole(adminOnly))) {
       const message = fallbackMessage || 
         (adminOnly 
           ? 'Admin access required for this feature'
           : `Active subscription required to access ${feature}`
         );
       
-      dispatch(showSubscriptionOverlay({ message }));
+      showSubscriptionModal(message, feature);
     }
-  }, [immediate, feature, adminOnly, fallbackMessage, dispatch]);
+  }, [immediate, feature, adminOnly, fallbackMessage, hasActiveSubscription, hasRequiredRole, showSubscriptionModal]);
 
   // Show children if user has subscription and required role
-  if (hasActiveSubscription() && hasRequiredRole()) {
+  if (hasActiveSubscription() && hasRequiredRole(adminOnly)) {
     return children;
   }
 
@@ -84,32 +66,15 @@ export const withSubscriptionGuard = (WrappedComponent, guardOptions = {}) => {
 
 /**
  * Custom hook for handling subscription checks in components
+ * @deprecated Use useSubscription hook instead
  */
 export const useSubscriptionCheck = (feature = 'this feature') => {
-  const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
-  const { subscriptions } = useSelector((state) => state.billing);
-
-  const hasActiveSubscription = () => {
-    if (user?.role === 'admin') {
-      return true;
-    }
-    return subscriptions?.some(sub => sub.status === 'active') || false;
-  };
-
-  const requireSubscription = (customMessage) => {
-    if (!hasActiveSubscription()) {
-      const message = customMessage || `Active subscription required to access ${feature}`;
-      dispatch(showSubscriptionOverlay({ message }));
-      return false;
-    }
-    return true;
-  };
-
+  const { hasActiveSubscription, requireSubscription, isAdmin } = useSubscription();
+  
   return {
     hasActiveSubscription,
-    requireSubscription,
-    isAdmin: user?.role === 'admin'
+    requireSubscription: (customMessage) => requireSubscription(feature, customMessage),
+    isAdmin
   };
 };
 

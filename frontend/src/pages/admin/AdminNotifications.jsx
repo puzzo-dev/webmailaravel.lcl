@@ -23,7 +23,7 @@ import {
   HiUserGroup,
   HiChatAlt,
 } from 'react-icons/hi';
-import { adminService } from '../../services/api';
+import { adminService } from '../../services/api.js';
 import toast from 'react-hot-toast';
 
 // Create Notification Modal Component

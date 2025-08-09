@@ -37,7 +37,7 @@ import {
   HiCursorClick,
 } from 'react-icons/hi';
 import { analyticsService } from '../services/api';
-import { useSubscriptionError } from '../hooks/useSubscriptionError';
+import useSubscriptionError from '../hooks/useSubscriptionError';
 import toast from 'react-hot-toast';
 import '../styles/animations.css';
 

@@ -30,11 +30,7 @@ const RealTimeUpdates = () => {
           cluster: import.meta.env.VITE_PUSHER_CLUSTER || 'us2',
           encrypted: true,
           authEndpoint: '/api/broadcasting/auth',
-          auth: {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          },
+          // Auth handled by HTTP-only cookies automatically
         });
 
         // Subscribe to user-specific private channel

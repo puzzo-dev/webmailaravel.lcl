@@ -53,12 +53,12 @@ return Application::configure(basePath: dirname(__DIR__))
                  ->withoutOverlapping()
                  ->runInBackground();
 
-        // Training System
-        $schedule->command('training:run-automatic')
+        // Training System (unified)
+        $schedule->command('training:run automatic')
                  ->dailyAt('02:00')
                  ->name('automatic-training');
 
-        $schedule->command('system:manual-training')
+        $schedule->command('training:run system')
                  ->dailyAt('03:00')
                  ->when(function () {
                      return now()->diffInDays(now()->startOfWeek()->addDay()) % 2 === 0;

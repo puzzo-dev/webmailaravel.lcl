@@ -217,7 +217,9 @@ class BillingController extends Controller
     {
         try {
             // Find subscription by invoice ID
-            $subscription = Subscription::where('invoice', $invoiceId)->first();
+            $subscription = Subscription::where('invoice', $invoiceId)
+                ->with(['user', 'plan'])
+                ->first();
             
             if (!$subscription) {
                 return $this->errorResponse('Invoice not found', 404);
@@ -228,17 +230,20 @@ class BillingController extends Controller
                 return $this->errorResponse('Unauthorized', 403);
             }
 
-            // Generate invoice PDF
-            $invoiceData = $this->generateInvoicePDF($subscription);
+            // For now, return the HTML content as PDF
+            // In production, you'd want to use a proper PDF library like TCPDF or Dompdf
+            $invoiceHtml = $this->generateInvoiceHTML($subscription);
             
-            return response()->streamDownload(function() use ($invoiceData) {
-                echo $invoiceData;
-            }, "invoice-{$invoiceId}.pdf", [
-                'Content-Type' => 'application/pdf',
+            return response()->streamDownload(function() use ($invoiceHtml) {
+                echo $invoiceHtml;
+            }, "invoice-{$invoiceId}.html", [
+                'Content-Type' => 'text/html',
+                'Content-Disposition' => 'attachment; filename="invoice-' . $invoiceId . '.html"',
             ]);
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to download invoice', 500);
+            \Log::error('Invoice download error: ' . $e->getMessage());
+            return $this->errorResponse('Failed to download invoice: ' . $e->getMessage(), 500);
         }
     }
 
@@ -266,36 +271,37 @@ class BillingController extends Controller
                 'id' => $invoiceId,
                 'subscription_id' => $subscription->id,
                 'user' => [
-                    'name' => $subscription->user->name,
-                    'email' => $subscription->user->email,
+                    'name' => $subscription->user->name ?? 'N/A',
+                    'email' => $subscription->user->email ?? 'N/A',
                 ],
                 'plan' => [
-                    'name' => $subscription->plan->name,
-                    'price' => $subscription->plan->price,
-                    'currency' => $subscription->plan->currency,
-                    'duration_days' => $subscription->plan->duration_days,
+                    'name' => $subscription->plan->name ?? 'N/A',
+                    'price' => $subscription->plan->price ?? 0,
+                    'currency' => $subscription->plan->currency ?? 'USD',
+                    'duration_days' => $subscription->plan->duration_days ?? 0,
                 ],
-                'amount' => $subscription->payment_amount,
-                'currency' => $subscription->payment_currency,
-                'status' => $subscription->status,
-                'payment_method' => $subscription->payment_method,
+                'amount' => $subscription->payment_amount ?? 0,
+                'currency' => $subscription->payment_currency ?? 'USD',
+                'status' => $subscription->status ?? 'unknown',
+                'payment_method' => $subscription->payment_method ?? 'BTCPay',
                 'payment_reference' => $subscription->payment_reference,
-                'created_at' => $subscription->created_at,
-                'paid_at' => $subscription->paid_at,
-                'expiry' => $subscription->expiry,
+                'created_at' => $subscription->created_at?->format('Y-m-d H:i:s'),
+                'paid_at' => $subscription->paid_at?->format('Y-m-d H:i:s'),
+                'expiry' => $subscription->expiry?->format('Y-m-d H:i:s'),
             ];
 
             return $this->successResponse($invoiceData, 'Invoice details retrieved successfully');
 
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve invoice', 500);
+            \Log::error('Invoice view error: ' . $e->getMessage());
+            return $this->errorResponse('Failed to retrieve invoice: ' . $e->getMessage(), 500);
         }
     }
 
     /**
-     * Generate invoice PDF content
+     * Generate invoice HTML content
      */
-    private function generateInvoicePDF(Subscription $subscription): string
+    private function generateInvoiceHTML(Subscription $subscription): string
     {
         $html = "
         <!DOCTYPE html>
@@ -898,6 +904,44 @@ class BillingController extends Controller
                 'success' => false,
                 'error' => $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * Get payment history for a user
+     */
+    private function getPaymentHistory($user)
+    {
+        try {
+            // Get all subscriptions for the user with payment details
+            $subscriptions = Subscription::where('user_id', $user->id)
+                ->with(['plan'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $paymentHistory = [];
+            
+            foreach ($subscriptions as $subscription) {
+                if ($subscription->paid_at) {
+                    $paymentHistory[] = [
+                        'id' => $subscription->id,
+                        'date' => $subscription->paid_at,
+                        'amount' => $subscription->payment_amount,
+                        'currency' => $subscription->payment_currency,
+                        'status' => $subscription->status,
+                        'method' => $subscription->payment_method ?: 'BTCPay',
+                        'invoice' => $subscription->invoice,
+                        'plan_name' => $subscription->plan->name ?? 'Unknown Plan',
+                        'payment_reference' => $subscription->payment_reference,
+                    ];
+                }
+            }
+
+            return $paymentHistory;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error getting payment history: ' . $e->getMessage());
+            return [];
         }
     }
 

@@ -92,8 +92,10 @@ export const fetchPlans = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await billingService.getPlans();
+      console.log('fetchPlans - API response:', response);
       return response;
     } catch (error) {
+      console.error('fetchPlans - API error:', error);
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch plans');
     }
   }
@@ -340,7 +342,11 @@ const billingSlice = createSlice({
       })
       .addCase(fetchPlans.fulfilled, (state, action) => {
         state.loading.plans = false;
-        state.plans = action.payload || [];
+        console.log('fetchPlans.fulfilled - payload:', action.payload);
+        // Handle both direct array and nested data structure
+        const plansData = action.payload?.data || action.payload || [];
+        state.plans = Array.isArray(plansData) ? plansData : [];
+        console.log('fetchPlans.fulfilled - state.plans after update:', state.plans);
         state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchPlans.rejected, (state, action) => {

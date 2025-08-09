@@ -169,10 +169,8 @@ export const updateProfile = createAsyncThunk(
 // Check if we might be authenticated on app start (to prevent flash of unauthenticated content)
 const hasStoredAuth = () => {
   try {
-    // Check if we have any indication of being logged in
-    return document.cookie.includes('laravel_session') || 
-           localStorage.getItem('auth_token') || 
-           sessionStorage.getItem('auth_token');
+    // Check if we have JWT cookie (the actual authentication method)
+    return document.cookie.includes('laravel_session');
   } catch {
     return false;
   }

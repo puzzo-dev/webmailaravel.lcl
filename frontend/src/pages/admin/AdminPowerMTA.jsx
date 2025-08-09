@@ -18,6 +18,8 @@ import {
   HiGlobe,
 } from 'react-icons/hi';
 import { adminService } from '../../services/api';
+// Force cache refresh
+console.log('AdminPowerMTA: adminService imported at', new Date().toISOString());
 import toast from 'react-hot-toast';
 import { formatDate, formatNumber } from '../../utils/helpers';
 
@@ -41,6 +43,12 @@ const AdminPowerMTA = () => {
   const loadPowerMTAData = async () => {
     try {
       setLoading(true);
+      
+      // Debug logging
+      console.log('adminService object:', adminService);
+      console.log('adminService keys:', Object.keys(adminService));
+      console.log('getPowerMTAStatus exists:', typeof adminService.getPowerMTAStatus);
+      
       const [statusResponse, fblResponse, diagnosticResponse, reputationResponse] = await Promise.all([
         adminService.getPowerMTAStatus(),
         adminService.getPowerMTAFBLAccounts(),

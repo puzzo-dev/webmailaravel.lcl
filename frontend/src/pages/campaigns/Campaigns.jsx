@@ -29,7 +29,7 @@ import {
   HiDuplicate,
 } from 'react-icons/hi';
 import { debounce } from 'lodash';
-import { useSubscriptionError } from '../../hooks/useSubscriptionError';
+import useSubscriptionError from '../../hooks/useSubscriptionError';
 
 const Campaigns = () => {
   const dispatch = useDispatch();

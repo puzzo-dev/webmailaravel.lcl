@@ -32,7 +32,7 @@ import {
   testSenderConnection,
 } from '../../store/slices/senderSlice';
 import { domainService, senderService } from '../../services/api';
-import { useSubscriptionError } from '../../hooks/useSubscriptionError';
+import useSubscriptionError from '../../hooks/useSubscriptionError';
 
 const Domains = () => {
   const dispatch = useDispatch();

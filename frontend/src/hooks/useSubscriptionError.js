@@ -1,7 +1,7 @@
 import { useDispatch } from 'react-redux';
 import { showSubscriptionOverlay } from '../store/slices/uiSlice';
 
-export const useSubscriptionError = () => {
+const useSubscriptionError = () => {
   const dispatch = useDispatch();
 
   const handleSubscriptionError = (error) => {
@@ -15,4 +15,6 @@ export const useSubscriptionError = () => {
   };
 
   return { handleSubscriptionError };
-}; 
+};
+
+export default useSubscriptionError; 

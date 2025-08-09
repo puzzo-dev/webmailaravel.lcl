@@ -1,67 +1,52 @@
-import React, { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useEffect, useState, useRef } from 'react';
+import { useSelector } from 'react-redux';
 import {
   HiCreditCard,
   HiDocumentText,
   HiCalendar,
-  HiCurrencyDollar,
   HiCheckCircle,
   HiXCircle,
-  HiClock,
-  HiDownload,
-  HiEye,
-  HiPlus,
-
-  HiShieldCheck,
 } from 'react-icons/hi';
-import { formatDate, formatNumber } from '../../utils/helpers';
-import { toast } from 'react-hot-toast';
-import {
-  fetchSubscriptions,
-  fetchPaymentHistory,
-  fetchPaymentRates,
-  fetchPlans,
-  createSubscription,
-  cancelSubscription,
-  clearError,
-} from '../../store/slices/billingSlice';
+import { useSubscription, useBilling } from '../../hooks';
+import { 
+  SubscriptionStatus, 
+  PlanLimits, 
+  PlanCard, 
+  PaymentHistoryTable 
+} from '../../components/billing';
 
 const Billing = () => {
-  const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
   const {
-    SUBSCRIPTIONS,
     currentSubscription,
-    paymentHistory,
-    PAYMENT_RATES,
-    invoices,
-    plans,
     isLoading,
     error,
-  } = useSelector((state) => state.billing);
+    upgradeToPlan,
+    cancelUserSubscription,
+    clearBillingError,
+    isCurrentPlan,
+  } = useSubscription();
+
+  const {
+    plans,
+    loadBillingData,
+    downloadInvoice,
+    viewInvoice,
+    getFormattedPaymentHistory,
+    getFormattedInvoices,
+  } = useBilling();
   
   const [activeTab, setActiveTab] = useState('subscription');
   const [showWelcome, setShowWelcome] = useState(false);
 
-  const loadBillingData = async () => {
-    if (!user?.id || isLoading) return;
-    
-    try {
-      // Load data sequentially to avoid overwhelming the backend
-      await Promise.allSettled([
-        dispatch(fetchSubscriptions()),
-        dispatch(fetchPaymentHistory()),
-        dispatch(fetchPaymentRates()),
-        dispatch(fetchPlans())
-      ]);
-    } catch (error) {
-      console.error('Failed to load billing data:', error);
-    }
-  };
+  // Get billing-specific loading state
+  const billingState = useSelector((state) => state.billing);
+  const plansLoading = billingState.loading?.plans || false;
+
+  // Debug: Log plans data (remove in production)
+  console.log('Billing component - plans:', plans, 'plansLoading:', plansLoading, 'billingState:', billingState);
 
   useEffect(() => {
-    let _isMounted = true;
-    
+    // Load billing data on component mount
     loadBillingData();
     
     // Check if user just registered and came from pricing
@@ -71,93 +56,17 @@ const Billing = () => {
       // Clean up the URL
       window.history.replaceState({}, '', window.location.pathname);
     }
-    
-    return () => {
-      _isMounted = false;
-    };
-  }, [dispatch, user?.id]); // Add user.id as dependency
+  }, []); // Empty dependency array - only run on mount
 
   useEffect(() => {
     if (error) {
       // Auto-clear error after 5 seconds
       const timer = setTimeout(() => {
-        dispatch(clearError());
+        clearBillingError();
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [error, dispatch]);
-
-  const handleUpgrade = async (planId) => {
-    try {
-      const result = await dispatch(createSubscription({ plan_id: planId })).unwrap();
-      // Expecting checkout_url from backend to initiate BTCPay payment
-      if (result?.checkout_url) {
-        toast.success('Redirecting to BTCPay to complete payment...');
-        window.location.href = result.checkout_url;
-      } else {
-        // Fallback: show success but indicate manual follow-up if no URL present
-        toast.success('Subscription created. Please check your email for payment instructions.');
-        console.warn('No checkout_url returned from subscription creation result:', result);
-      }
-    } catch (error) {
-      console.error('Plan upgrade failed:', error);
-      toast.error('Failed to create subscription. Please try again.');
-    }
-  };
-
-  const handleCancelSubscription = async (subscriptionId) => {
-    if (!confirm('Are you sure you want to cancel your subscription? This action cannot be undone.')) return;
-    
-    try {
-      await dispatch(cancelSubscription(subscriptionId)).unwrap();
-      toast.success('Subscription cancelled successfully');
-      // Reload billing data to reflect changes
-      loadBillingData();
-    } catch (error) {
-      console.error('Subscription cancellation failed:', error);
-      toast.error(error.message || 'Failed to cancel subscription. Please try again.');
-    }
-  };
-
-  const handleDownloadInvoice = async (invoiceId) => {
-    try {
-      const response = await fetch(`/api/billing/invoice/${invoiceId}/download`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `invoice-${invoiceId}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        toast.success('Invoice downloaded successfully');
-      } else {
-        toast.error('Failed to download invoice');
-      }
-    } catch (error) {
-      console.error('Invoice download error:', error);
-      toast.error('Failed to download invoice');
-    }
-  };
-
-  const handleViewInvoice = async (invoiceId) => {
-    try {
-      const response = await api.get(`/billing/invoice/${invoiceId}/view`);
-      // You can implement a modal or new page to show invoice details
-      console.log('Invoice details:', response.data);
-      toast.success('Invoice details loaded');
-    } catch (error) {
-      console.error('Invoice view error:', error);
-      toast.error('Failed to load invoice details');
-    }
-  };
+  }, [error, clearBillingError]);
 
 
 
@@ -243,133 +152,15 @@ const Billing = () => {
           {activeTab === 'subscription' && (
             <div className="space-y-6">
               {/* Current Subscription */}
-              {currentSubscription && (
-                <div className="bg-gradient-to-r from-primary-50 to-primary-100 rounded-lg p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">Current Plan</h3>
-                      <p className="text-2xl font-bold text-primary-600">
-                        {(() => {
-                          const planName = currentSubscription.plan?.name || currentSubscription.plan_name;
-                          return (typeof planName === 'string' && planName) ? planName : 'Unknown Plan';
-                        })()}
-                      </p>
-                      <p className="text-gray-600 mt-1">
-                        {(() => {
-                          const amount = currentSubscription.payment_amount || currentSubscription.plan?.price || 0;
-                          const currency = currentSubscription.payment_currency || currentSubscription.plan?.currency || 'USD';
-                          const duration = currentSubscription.plan?.duration_days;
-                          
-                          return (
-                            <>
-                              ${formatNumber(typeof amount === 'number' ? amount : 0, 2)} {typeof currency === 'string' ? currency : 'USD'}
-                              {(typeof duration === 'number' && duration > 0) && (
-                                <span> / {duration} days</span>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </p>
-                      {currentSubscription.invoice && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          Invoice: {currentSubscription.invoice}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        currentSubscription.status === 'active' 
-                          ? 'bg-success-100 text-success-800' 
-                          : currentSubscription.status === 'pending'
-                          ? 'bg-warning-100 text-warning-800'
-                          : currentSubscription.status === 'processing'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {currentSubscription.status === 'active' ? (
-                          <HiCheckCircle className="h-4 w-4 mr-1" />
-                        ) : currentSubscription.status === 'processing' ? (
-                          <HiClock className="h-4 w-4 mr-1" />
-                        ) : (
-                          <HiClock className="h-4 w-4 mr-1" />
-                        )}
-                        {currentSubscription.status?.charAt(0).toUpperCase() + currentSubscription.status?.slice(1) || 'Unknown'}
-                      </span>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {currentSubscription.expiry ? (
-                          <>Expires: {formatDate(currentSubscription.expiry)}</>
-                        ) : currentSubscription.next_billing_date ? (
-                          <>Next billing: {formatDate(currentSubscription.next_billing_date)}</>
-                        ) : (
-                          'No expiry date'
-                        )}
-                      </p>
-                      {currentSubscription.paid_at && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          Paid: {formatDate(currentSubscription.paid_at)}
-                        </p>
-                      )}
-                      {/* Cancel Subscription Button */}
-                      {currentSubscription.status === 'active' && (
-                        <div className="mt-3">
-                          <button
-                            onClick={() => handleCancelSubscription(currentSubscription.id)}
-                            disabled={isLoading}
-                            className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <HiXCircle className="h-4 w-4 mr-1" />
-                            Cancel Subscription
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <SubscriptionStatus
+                subscription={currentSubscription}
+                isLoading={isLoading}
+                onCancel={cancelUserSubscription}
+              />
 
               {/* Plan Limits & Usage */}
-              {currentSubscription && currentSubscription.plan && (
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Limits</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-primary-600">
-                        {(() => {
-                          const value = currentSubscription.plan?.max_domains;
-                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
-                        })()}
-                      </div>
-                      <div className="text-sm text-gray-500">Max Domains</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-primary-600">
-                        {(() => {
-                          const value = currentSubscription.plan?.max_total_campaigns;
-                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
-                        })()}
-                      </div>
-                      <div className="text-sm text-gray-500">Max Campaigns</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-primary-600">
-                        {(() => {
-                          const value = currentSubscription.plan?.daily_sending_limit;
-                          return (typeof value === 'number' && value > 0) ? formatNumber(value) : 'Unlimited';
-                        })()}
-                      </div>
-                      <div className="text-sm text-gray-500">Daily Limit</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-primary-600">
-                        {(() => {
-                          const value = currentSubscription.plan?.max_senders_per_domain;
-                          return (typeof value === 'number' && value > 0) ? value : 'Unlimited';
-                        })()}
-                      </div>
-                      <div className="text-sm text-gray-500">Senders/Domain</div>
-                    </div>
-                  </div>
-                </div>
+              {currentSubscription?.plan && (
+                <PlanLimits plan={currentSubscription.plan} />
               )}
 
               {/* Payment Information */}
@@ -458,283 +249,76 @@ const Billing = () => {
               {/* Available Plans */}
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Available Plans</h3>
-                {isLoading ? (
+                {plansLoading ? (
                   <div className="flex items-center justify-center h-32">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                   </div>
                 ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {Array.isArray(plans) && plans.length > 0 ? (
                       plans.map((plan, index) => (
-                    <div
+                        <PlanCard
                           key={plan.id || `plan-${index}`}
-                      className={`border rounded-lg p-6 ${
-                            currentSubscription?.plan?.id === plan.id
-                          ? 'border-primary-500 bg-primary-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <h4 className="text-lg font-medium text-gray-900">{plan.name}</h4>
-                        <div className="mt-2">
-                          <span className="text-3xl font-bold text-gray-900">
-                                ${formatNumber(plan.price, 2)}
-                          </span>
-                              <span className="text-gray-500">/{plan.duration_days} days</span>
-                        </div>
-                            {currentSubscription?.plan?.id === plan.id && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 mt-2">
-                            Current Plan
-                          </span>
-                        )}
-                      </div>
-                          <div className="mt-6 space-y-3">
-                            <div className="text-sm text-gray-700">
-                              <div className="flex justify-between">
-                                <span>Max Domains:</span>
-                                <span className="font-medium">{plan.max_domains}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Max Campaigns:</span>
-                                <span className="font-medium">{plan.max_total_campaigns}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Daily Limit:</span>
-                                <span className="font-medium">{formatNumber(plan.daily_sending_limit)}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span>Max Senders/Domain:</span>
-                                <span className="font-medium">{plan.max_senders_per_domain}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-6">
-                            {currentSubscription?.plan?.id === plan.id ? (
-                              <button
-                                disabled
-                                className="w-full btn btn-secondary disabled:opacity-50"
-                              >
-                                Current Plan
-                              </button>
-                            ) : (
-                        <button
-                                onClick={() => handleUpgrade(plan.id)}
-                                className="w-full btn btn-primary"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? 'Processing...' : `Upgrade to ${plan.name}`}
-                        </button>
-                      )}
-                    </div>
-                        </div>
+                          plan={plan}
+                          isCurrentPlan={isCurrentPlan(plan.id)}
+                          isLoading={plansLoading}
+                          onUpgrade={upgradeToPlan}
+                        />
                       ))
                     ) : (
                       <div className="col-span-full text-center py-8">
-                        <p className="text-gray-500">No plans available</p>
+                        <p className="text-gray-500">
+                          {billingState.error ? 
+                            `Error loading plans: ${billingState.error}` : 
+                            'No plans available'
+                          }
+                        </p>
+                        {billingState.error && (
+                          <button 
+                            onClick={loadBillingData}
+                            className="mt-2 text-primary-600 hover:text-primary-800 text-sm font-medium"
+                          >
+                            Retry
+                          </button>
+                        )}
                       </div>
                     )}
-                </div>
+                  </div>
                 )}
               </div>
 
-              {/* Cancel Subscription */}
-              {currentSubscription && currentSubscription.status === 'active' && (
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cancel Subscription</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Cancel your subscription to stop future billing. You'll continue to have access until the end of your current billing period.
-                  </p>
-                  <button
-                    onClick={handleCancelSubscription}
-                    className="btn btn-danger"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
-                  </button>
-                </div>
-              )}
+
             </div>
           )}
 
           {/* Payment History Tab */}
           {activeTab === 'payment-history' && (
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900">Payment History</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Method
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Invoice
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {Array.isArray(paymentHistory) && paymentHistory.length > 0 ? (
-                        paymentHistory.map((payment, index) => (
-                          <tr key={payment.id || `payment-${index}`}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {payment.date ? formatDate(payment.date) : 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ${payment.amount ? formatNumber(payment.amount, 2) : '0.00'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                payment.status === 'completed' || payment.status === 'active'
-                                  ? 'bg-success-100 text-success-800'
-                                  : 'bg-warning-100 text-warning-800'
-                              }`}>
-                                {payment.status === 'completed' || payment.status === 'active' ? (
-                                  <HiCheckCircle className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <HiClock className="h-3 w-3 mr-1" />
-                                )}
-                                {typeof payment.status === 'string' ? payment.status : 'pending'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {typeof payment.method === 'string' ? payment.method : 'BTCPay'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {typeof payment.invoice === 'string' ? payment.invoice : payment.invoice?.id || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <button
-                                onClick={() => handleViewInvoice(payment.invoice)}
-                                className="text-primary-600 hover:text-primary-900 mr-3"
-                              >
-                                <HiEye className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadInvoice(payment.invoice)}
-                                className="text-primary-600 hover:text-primary-900"
-                              >
-                                <HiDownload className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr key="no-payment-history">
-                          <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
-                            No payment history found
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <PaymentHistoryTable
+                paymentHistory={getFormattedPaymentHistory()}
+                isLoading={isLoading}
+                onViewInvoice={viewInvoice}
+                onDownloadInvoice={downloadInvoice}
+              />
             </div>
           )}
 
           {/* Invoices Tab */}
           {activeTab === 'invoices' && (
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900">Invoices</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Invoice Number
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Due Date
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {Array.isArray(invoices) && invoices.length > 0 ? (
-                        invoices.map((invoice, index) => (
-                          <tr key={invoice.id || `invoice-${index}`}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {invoice.id}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(invoice.date)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ${formatNumber(invoice.amount, 2)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                invoice.status === 'paid'
-                                  ? 'bg-success-100 text-success-800'
-                                  : 'bg-warning-100 text-warning-800'
-                              }`}>
-                                {invoice.status === 'paid' ? (
-                                  <HiCheckCircle className="h-3 w-3 mr-1" />
-                                ) : (
-                                  <HiClock className="h-3 w-3 mr-1" />
-                                )}
-                                {invoice.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(invoice.due_date)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <button
-                                onClick={() => handleViewInvoice(invoice.id)}
-                                className="text-primary-600 hover:text-primary-900 mr-3"
-                              >
-                                <HiEye className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadInvoice(invoice.id)}
-                                className="text-primary-600 hover:text-primary-900"
-                              >
-                                <HiDownload className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr key="no-invoices">
-                          <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
-                            No invoices found
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <PaymentHistoryTable
+                paymentHistory={getFormattedInvoices().map(invoice => ({
+                  id: invoice.id,
+                  date: invoice.date,
+                  amount: invoice.amount,
+                  status: invoice.status,
+                  method: 'Invoice',
+                  invoice: invoice.id,
+                }))}
+                isLoading={isLoading}
+                onViewInvoice={viewInvoice}
+                onDownloadInvoice={downloadInvoice}
+              />
             </div>
           )}
         </div>

@@ -85,8 +85,9 @@ class SchedulerController extends Controller
             'app:process-fblfile', 
             'app:monitor-domains',
             'app:analyze-reputation-command',
-            'training:run-automatic',
-            'system:manual-training',
+            'training:run automatic',
+            'training:run manual',
+            'training:run system',
             'queue:restart',
             'queue:flush',
             'model:prune'
@@ -200,13 +201,18 @@ class SchedulerController extends Controller
                 'frequency' => 'Hourly'
             ],
             [
-                'command' => 'training:run-automatic',
-                'description' => 'Run automatic ML training',
+                'command' => 'training:run automatic',
+                'description' => 'Run automatic ML training based on PowerMTA data',
                 'frequency' => 'Daily at 2:00 AM'
             ],
             [
-                'command' => 'system:manual-training',
-                'description' => 'Run manual system training',
+                'command' => 'training:run manual',
+                'description' => 'Run manual training to increase sender limits',
+                'frequency' => 'On-demand'
+            ],
+            [
+                'command' => 'training:run system',
+                'description' => 'Run system training based on configuration',
                 'frequency' => 'Every 2 days at 3:00 AM'
             ]
         ];

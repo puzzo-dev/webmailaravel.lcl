@@ -433,8 +433,8 @@ class AdminController extends Controller
             if ($request->has('btcpay')) {
                 $btcpaySettings = $request->input('btcpay');
                 foreach ($btcpaySettings as $key => $value) {
-                    $configKey = 'btcpay_'.$key;
-                    SystemConfig::setValue($configKey, $value);
+                    $configKey = 'BTCPAY_'.strtoupper($key);
+                    SystemConfig::set($configKey, $value);
                     $updatedSettings["btcpay.{$key}"] = $value;
                 }
             }
