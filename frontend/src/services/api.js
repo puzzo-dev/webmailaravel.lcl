@@ -896,6 +896,17 @@ export const adminService = {
         return response.data;
     },
 
+    // Scheduler and queue management
+    async runScheduler() {
+        const response = await api.post('/admin/run-scheduler');
+        return response.data;
+    },
+
+    async processQueue() {
+        const response = await api.post('/admin/process-queue');
+        return response.data;
+    },
+
     // Backup management methods
     async getBackups(params = {}) {
         const response = await api.get('/admin/backups', { params });
@@ -1006,32 +1017,6 @@ export const adminService = {
         return response.data;
     },
 
-    // BTCPay configuration is now handled through SystemSettings
-
-};
-
-// Performance monitoring service methods (Admin only)
-export const performanceService = {
-    async getSystemMetrics() {
-        const response = await api.get('/performance/system');
-        return response.data;
-    },
-
-    async getOperationMetrics(operation, hours = 24) {
-        const response = await api.get(`/performance/operation/${operation}`, { hours });
-        return response.data;
-    },
-
-    async generateReport(hours = 24) {
-        const response = await api.get('/performance/report', { hours });
-        return response.data;
-    },
-
-    async recordMetric(metricData) {
-        const response = await api.post('/performance/metric', metricData);
-        return response.data;
-    },
-
     // PowerMTA Status and Management
     async getPowerMTAStatus() {
         const response = await api.get('/admin/powermta/status');
@@ -1088,6 +1073,32 @@ export const performanceService = {
 
     async deleteNotification(notificationId) {
         const response = await api.delete(`/admin/notifications/${notificationId}`);
+        return response.data;
+    }
+
+    // BTCPay configuration is now handled through SystemSettings
+
+};
+
+// Performance monitoring service methods (Admin only)
+export const performanceService = {
+    async getSystemMetrics() {
+        const response = await api.get('/performance/system');
+        return response.data;
+    },
+
+    async getOperationMetrics(operation, hours = 24) {
+        const response = await api.get(`/performance/operation/${operation}`, { hours });
+        return response.data;
+    },
+
+    async generateReport(hours = 24) {
+        const response = await api.get('/performance/report', { hours });
+        return response.data;
+    },
+
+    async recordMetric(metricData) {
+        const response = await api.post('/performance/metric', metricData);
         return response.data;
     }
 };

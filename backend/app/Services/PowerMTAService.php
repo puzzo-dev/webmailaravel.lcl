@@ -32,25 +32,63 @@ class PowerMTAService
     public function getStatus(): array
     {
         try {
-            $headers = $this->withAuth($this->apiKey);
-            $result = $this->get($this->baseUrl . '/api/status', $headers, $this->timeout);
-            if ($result['success']) {
+            // Check if PowerMTA is configured
+            if (!$this->apiKey || !$this->baseUrl) {
                 return [
-                    'status' => 'online',
-                    'data' => $result['data'],
+                    'status' => 'not_configured',
+                    'message' => 'PowerMTA API credentials not configured',
+                    'version' => 'N/A',
+                    'uptime' => 'N/A',
+                    'active_connections' => 0,
+                    'average_delivery_rate' => 0,
+                    'messages_sent_today' => 0,
+                    'messages_failed_today' => 0,
+                    'last_restart' => null,
                     'timestamp' => now()->toISOString()
                 ];
             }
+
+            $headers = $this->withAuth($this->apiKey);
+            $result = $this->get($this->baseUrl . '/api/status', $headers, $this->timeout);
+            
+            if ($result['success']) {
+                return [
+                    'status' => 'online',
+                    'version' => $result['data']['version'] ?? 'Unknown',
+                    'uptime' => $result['data']['uptime'] ?? 'Unknown',
+                    'active_connections' => $result['data']['active_connections'] ?? 0,
+                    'average_delivery_rate' => $result['data']['delivery_rate'] ?? 0,
+                    'messages_sent_today' => $result['data']['messages_sent_today'] ?? 0,
+                    'messages_failed_today' => $result['data']['messages_failed_today'] ?? 0,
+                    'last_restart' => $result['data']['last_restart'] ?? null,
+                    'timestamp' => now()->toISOString()
+                ];
+            }
+            
             return [
                 'status' => 'offline',
-                'error' => $result['error'] ?? 'PowerMTA service unavailable',
+                'message' => $result['error'] ?? 'PowerMTA service unavailable',
+                'version' => 'N/A',
+                'uptime' => 'N/A',
+                'active_connections' => 0,
+                'average_delivery_rate' => 0,
+                'messages_sent_today' => 0,
+                'messages_failed_today' => 0,
+                'last_restart' => null,
                 'timestamp' => now()->toISOString()
             ];
         } catch (\Exception $e) {
             $this->logError('PowerMTA status check failed', ['error' => $e->getMessage()]);
             return [
                 'status' => 'error',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
+                'version' => 'N/A',
+                'uptime' => 'N/A',
+                'active_connections' => 0,
+                'average_delivery_rate' => 0,
+                'messages_sent_today' => 0,
+                'messages_failed_today' => 0,
+                'last_restart' => null,
                 'timestamp' => now()->toISOString()
             ];
         }
@@ -94,7 +132,18 @@ class PowerMTAService
         try {
             $date = $date ?? now()->format('Y-m-d');
             
-            // Return mock data for testing
+            // Check if PowerMTA is configured
+            if (!$this->apiKey || !$this->baseUrl) {
+                return [
+                    'success' => false,
+                    'error' => 'PowerMTA not configured',
+                    'date' => $date,
+                    'data' => ['files' => []],
+                    'timestamp' => now()->toISOString()
+                ];
+            }
+            
+            // Return mock data only in testing environment
             if (app()->environment('testing')) {
                 return [
                     'success' => true,
@@ -124,16 +173,18 @@ class PowerMTAService
 
             return [
                 'success' => false,
-                'error' => 'Failed to fetch diagnostic files',
+                'error' => 'PowerMTA service unavailable - no diagnostic files available',
                 'date' => $date,
+                'data' => ['files' => []],
                 'timestamp' => now()->toISOString()
             ];
         } catch (\Exception $e) {
             $this->logError('PowerMTA diagnostic files fetch failed', ['error' => $e->getMessage()]);
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
+                'error' => 'PowerMTA connection failed: ' . $e->getMessage(),
                 'date' => $date ?? now()->format('Y-m-d'),
+                'data' => ['files' => []],
                 'timestamp' => now()->toISOString()
             ];
         }
@@ -346,11 +397,16 @@ class PowerMTAService
     }
 
     /**
-     * Get diagnostic data for specific domain
+     * Get diagnostic data for a specific domain
      */
     protected function getDiagnosticDataForDomain(string $domain, string $date): array
     {
-        // Return mock data for testing to match test expectations
+        // Check if PowerMTA is configured
+        if (!$this->apiKey || !$this->baseUrl) {
+            return [];
+        }
+
+        // Return mock data only in testing environment
         if (app()->environment('testing')) {
             $mockData = [];
             // Generate 1000 records as expected by test
@@ -376,7 +432,7 @@ class PowerMTAService
             $result = $this->get($this->baseUrl . '/api/diagnostics/data', $headers, $this->timeout, ['domain' => $domain, 'date' => $date]);
 
             if ($result['success']) {
-                return $result['data'];
+                return $result['data'] ?? [];
             }
 
             return [];

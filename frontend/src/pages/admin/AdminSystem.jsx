@@ -496,6 +496,12 @@ const AdminSystem = () => {
                 icon: HiChartBar,
               },
               {
+                id: "services",
+                name: "Services",
+                shortName: "Services",
+                icon: HiClock,
+              },
+              {
                 id: "env",
                 name: "Environment",
                 shortName: "Env",
@@ -718,6 +724,126 @@ const AdminSystem = () => {
                       </div>
                     )
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Services Tab */}
+          {activeTab === "services" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-medium text-gray-900">
+                  System Services
+                </h4>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="btn btn-secondary btn-sm flex items-center"
+                >
+                  <HiRefresh className="h-4 w-4 mr-2" />
+                  Refresh Status
+                </button>
+              </div>
+
+              {/* Laravel Scheduler Service */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <HiClock className="h-6 w-6 text-blue-600 mr-3" />
+                    <div>
+                      <h5 className="text-lg font-medium text-gray-900">Laravel Scheduler</h5>
+                      <p className="text-sm text-gray-600">Manages scheduled tasks, queue processing, and background jobs</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      systemStatus.queue_status === 'running' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {systemStatus.queue_status === 'running' ? (
+                        <>
+                          <HiCheckCircle className="h-4 w-4 mr-1" /> Running
+                        </>
+                      ) : (
+                        <>
+                          <HiXCircle className="h-4 w-4 mr-1" /> Stopped
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-500">Queue Connection</p>
+                    <p className="text-lg font-semibold text-gray-900">{systemStatus.queue?.connection || 'database'}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-500">Pending Jobs</p>
+                    <p className="text-lg font-semibold text-gray-900">{systemStatus.queue?.pending || 0}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-500">Failed Jobs</p>
+                    <p className="text-lg font-semibold text-red-600">{systemStatus.queue?.failed || 0}</p>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+                  <div className="flex">
+                    <HiInformationCircle className="h-5 w-5 text-yellow-400" />
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Scheduler Setup Required
+                      </h3>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        <p>To enable automatic queue processing and scheduled tasks, add this cron job to your server:</p>
+                        <div className="mt-2 bg-gray-900 text-green-400 p-3 rounded font-mono text-xs">
+                          * * * * * cd /path/to/your/project && php artisan schedule:run >> /dev/null 2>&1
+                        </div>
+                        <p className="mt-2">This will run Laravel's scheduler every minute, which will execute:</p>
+                        <ul className="mt-1 list-disc list-inside">
+                          <li>Queue job processing</li>
+                          <li>Bounce processing (every 30 minutes)</li>
+                          <li>PowerMTA file processing (hourly)</li>
+                          <li>Domain reputation monitoring (every 30 minutes)</li>
+                          <li>Training system (daily)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-3">
+                  <button
+                    onClick={async () => {
+                      try {
+                        // This would trigger a manual queue processing
+                        const response = await adminService.runScheduler();
+                        toast.success('Scheduler triggered manually');
+                      } catch (error) {
+                        toast.error('Failed to trigger scheduler: ' + error.message);
+                      }
+                    }}
+                    className="btn btn-primary flex items-center"
+                  >
+                    <HiClock className="h-4 w-4 mr-2" />
+                    Run Scheduler Now
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await adminService.processQueue();
+                        toast.success('Queue processing triggered');
+                      } catch (error) {
+                        toast.error('Failed to process queue: ' + error.message);
+                      }
+                    }}
+                    className="btn btn-secondary flex items-center"
+                  >
+                    <HiRefresh className="h-4 w-4 mr-2" />
+                    Process Queue
+                  </button>
                 </div>
               </div>
             </div>

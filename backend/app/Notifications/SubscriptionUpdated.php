@@ -13,13 +13,19 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
     use Queueable;
 
     public $subscription;
+    public $oldStatus;
+    public $newStatus;
+    public $context;
 
     /**
      * Create a new notification instance.
      */
-    public function __construct(Subscription $subscription)
+    public function __construct(Subscription $subscription, ?string $oldStatus = null, ?string $newStatus = null, array $context = [])
     {
         $this->subscription = $subscription;
+        $this->oldStatus = $oldStatus;
+        $this->newStatus = $newStatus ?? $subscription->status;
+        $this->context = $context;
     }
 
     /**
@@ -53,12 +59,82 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
      */
     public function toArray(object $notifiable): array
     {
+        // Enhanced status messages with more detailed context
+        $statusConfig = [
+            'active' => [
+                'message' => 'is now active and ready to use',
+                'title' => 'Subscription Activated',
+                'type' => 'success'
+            ],
+            'cancelled' => [
+                'message' => 'has been cancelled',
+                'title' => 'Subscription Cancelled',
+                'type' => 'warning'
+            ],
+            'expired' => [
+                'message' => 'has expired',
+                'title' => 'Subscription Expired',
+                'type' => 'error'
+            ],
+            'renewed' => [
+                'message' => 'has been successfully renewed',
+                'title' => 'Subscription Renewed',
+                'type' => 'success'
+            ],
+            'suspended' => [
+                'message' => 'has been suspended',
+                'title' => 'Subscription Suspended',
+                'type' => 'warning'
+            ],
+            'pending' => [
+                'message' => 'is pending activation',
+                'title' => 'Subscription Pending',
+                'type' => 'info'
+            ],
+            'trial' => [
+                'message' => 'trial period has started',
+                'title' => 'Trial Started',
+                'type' => 'info'
+            ],
+            'trial_expired' => [
+                'message' => 'trial period has expired',
+                'title' => 'Trial Expired',
+                'type' => 'warning'
+            ],
+        ];
+
+        $config = $statusConfig[$this->newStatus] ?? [
+            'message' => "status has been updated to {$this->newStatus}",
+            'title' => 'Subscription Updated',
+            'type' => 'info'
+        ];
+
+        // Add specific context for certain statuses
+        $additionalContext = '';
+        if ($this->newStatus === 'expired' && $this->subscription->expiry) {
+            $additionalContext = " Expired on: {$this->subscription->expiry->format('Y-m-d')}";
+        } elseif ($this->newStatus === 'renewed' && isset($this->context['next_billing_date'])) {
+            $additionalContext = " Next billing: {$this->context['next_billing_date']}";
+        } elseif ($this->newStatus === 'cancelled' && isset($this->context['reason'])) {
+            $additionalContext = " Reason: {$this->context['reason']}";
+        } elseif ($this->newStatus === 'cancelled' && isset($this->context['access_until'])) {
+            $additionalContext = " Access until: {$this->context['access_until']}";
+        } elseif (in_array($this->newStatus, ['renewed', 'active']) && isset($this->context['amount'])) {
+            $additionalContext = " Amount: \${$this->context['amount']}";
+        }
+
         return [
+            'title' => $config['title'],
+            'message' => "Your subscription to '{$this->subscription->plan->name}' {$config['message']}.{$additionalContext}",
+            'type' => 'subscription_updated',
+            'notification_type' => $config['type'],
             'subscription_id' => $this->subscription->id,
             'plan_name' => $this->subscription->plan->name,
-            'status' => $this->subscription->status,
+            'old_status' => $this->oldStatus,
+            'new_status' => $this->newStatus,
             'expiry' => $this->subscription->expiry,
-            'type' => 'subscription_updated',
+            'context' => $this->context,
+            'status_changed_at' => now()->toISOString(),
         ];
     }
 

@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Sender;
 use App\Services\CampaignService;
 use App\Services\UnifiedEmailSendingService;
+use App\Services\NotificationService;
 use App\Traits\LoggingTrait;
 use App\Traits\ResponseTrait;
 use App\Traits\ValidationTrait;
@@ -24,7 +25,8 @@ class CampaignController extends Controller
 
     public function __construct(
         private CampaignService $campaignService,
-        private UnifiedEmailSendingService $emailSendingService
+        private UnifiedEmailSendingService $emailSendingService,
+        private NotificationService $notificationService
     ) {}
 
     /**
@@ -255,6 +257,7 @@ class CampaignController extends Controller
             }
             
             $campaign = Campaign::findOrFail($id);
+            $oldStatus = $campaign->status;
             
             $validator = Validator::make($request->all(), [
                 'name' => 'sometimes|string|max:255',
@@ -273,6 +276,11 @@ class CampaignController extends Controller
             }
             
             $campaign->update($validator->validated());
+            
+            // Send notification if status changed
+            if ($request->has('status') && $oldStatus !== $campaign->status) {
+                $this->notificationService->sendCampaignStatusNotification($campaign, $oldStatus, $campaign->status);
+            }
             
             // Load related data manually
             $campaign->senders = $campaign->getSenders();

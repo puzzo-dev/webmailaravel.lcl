@@ -64,15 +64,17 @@ class HighBounceRateAlert extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
+            'title' => 'High Bounce Rate Alert',
+            'message' => "Your campaign '{$this->campaign->name}' has a high bounce rate of {$this->bounceRate}% (threshold: {$this->threshold}%). Please review your email list quality.",
+            'type' => 'high_bounce_rate_alert',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'bounce_rate' => $this->bounceRate,
             'threshold' => $this->threshold,
             'bounces' => $this->campaign->bounces,
             'total_sent' => $this->campaign->total_sent,
-            'type' => 'high_bounce_rate_alert',
             'priority' => 'high',
-            'message' => "High bounce rate alert: {$this->bounceRate}% for campaign '{$this->campaign->name}'",
+            'alert_triggered_at' => now()->toISOString(),
         ];
     }
 

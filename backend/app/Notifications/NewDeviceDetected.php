@@ -55,11 +55,14 @@ class NewDeviceDetected extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
+            'title' => 'New Device Detected',
+            'message' => "A new device '{$this->device->device_name}' has been detected and registered to your account from IP {$this->device->ip_address}.",
+            'type' => 'new_device_detected',
             'device_id' => $this->device->device_id,
             'device_name' => $this->device->device_name,
             'ip_address' => $this->device->ip_address,
             'last_seen' => $this->device->last_seen,
-            'type' => 'new_device_detected',
+            'detected_at' => now()->toISOString(),
         ];
     }
 

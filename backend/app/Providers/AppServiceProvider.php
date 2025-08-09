@@ -16,7 +16,8 @@ use App\Services\BackupService;
 use App\Services\AnalyticsService;
 use App\Services\SecurityService;
 use App\Services\AdminService;
-use App\Services\AutomaticTrainingService;
+use App\Services\UnifiedTrainingService;
+use App\Services\UnifiedEmailSendingService;
 use App\Services\SuppressionListService;
 use App\Traits\CacheManagementTrait;
 use App\Traits\LoggingTrait;
@@ -45,7 +46,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AnalyticsService::class);
         $this->app->singleton(SecurityService::class);
         $this->app->singleton(AdminService::class);
-        $this->app->singleton(AutomaticTrainingService::class);
+        $this->app->singleton(UnifiedTrainingService::class);
+        $this->app->singleton(UnifiedEmailSendingService::class);
         $this->app->singleton(SuppressionListService::class);
 
         // Register CampaignService (no dependencies needed, uses traits)

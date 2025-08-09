@@ -5,21 +5,17 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Services\ManualTrainingService;
-use App\Services\AutomaticTrainingService;
+use App\Services\UnifiedTrainingService;
 use Illuminate\Support\Facades\Log;
 
 class TrainingCheckMiddleware
 {
-    protected $manualTrainingService;
-    protected $automaticTrainingService;
+    protected $unifiedTrainingService;
 
     public function __construct(
-        ManualTrainingService $manualTrainingService,
-        AutomaticTrainingService $automaticTrainingService
+        UnifiedTrainingService $unifiedTrainingService
     ) {
-        $this->manualTrainingService = $manualTrainingService;
-        $this->automaticTrainingService = $automaticTrainingService;
+        $this->unifiedTrainingService = $unifiedTrainingService;
     }
 
     /**
@@ -72,7 +68,7 @@ class TrainingCheckMiddleware
                         'user_id' => $user->id
                     ]);
                     
-                    $result = $this->manualTrainingService->runManualTrainingForUser($user);
+                    $result = $this->unifiedTrainingService->runManualTrainingForUser($user);
                     
                     Log::info('Training middleware: Manual training completed', [
                         'user_id' => $user->id,
@@ -100,7 +96,7 @@ class TrainingCheckMiddleware
                         ]);
                         
                         // Run automatic training for this specific domain
-                        $this->automaticTrainingService->runDomainTraining($domain->id);
+                        $this->unifiedTrainingService->runTraining(null, $domain->id);
                     }
                 }
             }

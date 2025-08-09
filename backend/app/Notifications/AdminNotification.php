@@ -55,6 +55,7 @@ class AdminNotification extends Notification implements ShouldQueue
 
     /**
      * Get the array representation of the notification.
+     * This data will be stored in the 'data' column of the notifications table.
      */
     public function toArray(object $notifiable): array
     {
@@ -62,7 +63,7 @@ class AdminNotification extends Notification implements ShouldQueue
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
-            'data' => $this->data,
+            'additional_data' => $this->data,
         ];
     }
 }

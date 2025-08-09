@@ -56,11 +56,14 @@ class TrainingAnalysisCompleted extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
+            'title' => 'Training Analysis Completed',
+            'message' => "Training analysis has been completed for domain '{$this->trainingConfig->domain->name}'. Review the results to optimize your email delivery performance.",
+            'type' => 'training_analysis_completed',
             'domain_name' => $this->trainingConfig->domain->name,
             'daily_limit' => $this->trainingConfig->daily_limit,
             'last_analysis' => $this->trainingConfig->last_analysis,
             'analysis_data' => $this->analysisData,
-            'type' => 'training_analysis_completed',
+            'completed_at' => now()->toISOString(),
         ];
     }
 

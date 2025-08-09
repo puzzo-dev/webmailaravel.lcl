@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\SystemConfig;
+use App\Services\NotificationService;
 use App\Traits\BillingTrait;
 use App\Traits\ResponseTrait;
 use App\Traits\LoggingTrait;
@@ -20,6 +21,10 @@ class BillingController extends Controller
     // Alias the trait's processManualPayment to avoid name collision with the controller's public method
     use BillingTrait { processManualPayment as protected traitProcessManualPayment; }
     use ResponseTrait, LoggingTrait;
+
+    public function __construct(
+        private NotificationService $notificationService
+    ) {}
 
     /**
      * Get user subscriptions

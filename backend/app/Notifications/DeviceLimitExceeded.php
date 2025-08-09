@@ -54,10 +54,13 @@ class DeviceLimitExceeded extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
+            'title' => 'Device Limit Exceeded',
+            'message' => "Device limit exceeded. The device '{$this->device->device_name}' could not be added. Maximum 2 devices allowed per account.",
+            'type' => 'device_limit_exceeded',
             'device_id' => $this->device->device_id,
             'device_name' => $this->device->device_name,
             'ip_address' => $this->device->ip_address,
-            'type' => 'device_limit_exceeded',
+            'detected_at' => now()->toISOString(),
         ];
     }
 

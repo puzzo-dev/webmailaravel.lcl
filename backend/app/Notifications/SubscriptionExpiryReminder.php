@@ -63,11 +63,25 @@ class SubscriptionExpiryReminder extends Notification implements ShouldQueue
 
     public function toArray($notifiable)
     {
+        $days = $this->getDaysUntilExpiry();
+        $urgencyLevel = match ($this->reminderType) {
+            '7_days' => 'Reminder',
+            '3_days' => 'Important Reminder',
+            '1_day' => 'Urgent Reminder',
+            default => 'Subscription Reminder'
+        };
+
         return [
+            'title' => "Subscription Expiry {$urgencyLevel}",
+            'message' => "Your subscription to '{$this->subscription->plan->name}' will expire in {$days} day(s). Renew now to continue enjoying premium features.",
+            'type' => 'subscription_expiry_reminder',
             'subscription_id' => $this->subscription->id,
             'reminder_type' => $this->reminderType,
             'expires_at' => $this->subscription->expiry,
             'plan_name' => $this->subscription->plan->name ?? $this->subscription->plan_name,
+            'days_until_expiry' => $days,
+            'urgency_level' => $urgencyLevel,
+            'reminder_sent_at' => now()->toISOString(),
         ];
     }
 }

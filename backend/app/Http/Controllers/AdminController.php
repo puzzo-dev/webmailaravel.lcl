@@ -845,4 +845,58 @@ class AdminController extends Controller
             return 1;
         }
     }
+
+    /**
+     * Run Laravel scheduler manually
+     */
+    public function runScheduler(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            try {
+                // Run the scheduler command
+                \Illuminate\Support\Facades\Artisan::call('schedule:run');
+                $output = \Illuminate\Support\Facades\Artisan::output();
+
+                return $this->successResponse([
+                    'output' => $output,
+                    'timestamp' => now()->toISOString()
+                ], 'Scheduler executed successfully');
+            } catch (\Exception $e) {
+                return $this->errorResponse('Failed to run scheduler: ' . $e->getMessage(), 500);
+            }
+        }, 'run_scheduler');
+    }
+
+    /**
+     * Process queue manually
+     */
+    public function processQueue(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (! Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+
+            try {
+                // Process queue jobs
+                \Illuminate\Support\Facades\Artisan::call('queue:work', [
+                    '--stop-when-empty' => true,
+                    '--tries' => 3,
+                    '--timeout' => 60
+                ]);
+                $output = \Illuminate\Support\Facades\Artisan::output();
+
+                return $this->successResponse([
+                    'output' => $output,
+                    'timestamp' => now()->toISOString()
+                ], 'Queue processed successfully');
+            } catch (\Exception $e) {
+                return $this->errorResponse('Failed to process queue: ' . $e->getMessage(), 500);
+            }
+        }, 'process_queue');
+    }
 }

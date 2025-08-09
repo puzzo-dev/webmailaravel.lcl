@@ -227,39 +227,76 @@ const AdminPowerMTA = () => {
           <h3 className="text-lg font-medium text-gray-900">PowerMTA Status</h3>
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-${getStatusColor(powerMTAStatus.status)}-100 text-${getStatusColor(powerMTAStatus.status)}-800`}>
             {getStatusIcon(powerMTAStatus.status)}
-            <span className="ml-1">{powerMTAStatus.status}</span>
+            <span className="ml-1">{powerMTAStatus.status || 'Unknown'}</span>
           </span>
         </div>
+
+        {/* Show configuration message if PowerMTA is not configured */}
+        {powerMTAStatus.status === 'not_configured' && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <HiExclamation className="h-5 w-5 text-yellow-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">PowerMTA Not Configured</h3>
+                <p className="mt-1 text-sm text-yellow-700">
+                  PowerMTA API credentials are not configured. Please configure the PowerMTA service to view real analytics data.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Show offline message if PowerMTA is offline/error */}
+        {(powerMTAStatus.status === 'offline' || powerMTAStatus.status === 'error') && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+            <div className="flex">
+              <HiXCircle className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">PowerMTA Service Unavailable</h3>
+                <p className="mt-1 text-sm text-red-700">
+                  {powerMTAStatus.message || 'PowerMTA service is currently unavailable. Analytics data cannot be retrieved.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div>
             <p className="text-sm font-medium text-gray-500">Version</p>
-            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.version}</p>
+            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.version || 'N/A'}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Uptime</p>
-            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.uptime}</p>
+            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.uptime || 'N/A'}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Active Connections</p>
-            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.active_connections}</p>
+            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.active_connections || 0}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Delivery Rate</p>
-            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.average_delivery_rate}%</p>
+            <p className="text-lg font-semibold text-gray-900">{powerMTAStatus.average_delivery_rate || 0}%</p>
           </div>
         </div>
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <p className="text-sm font-medium text-gray-500">Messages Sent Today</p>
-            <p className="text-2xl font-bold text-gray-900">{formatNumber(powerMTAStatus.messages_sent_today)}</p>
+            <p className="text-2xl font-bold text-gray-900">{formatNumber(powerMTAStatus.messages_sent_today || 0)}</p>
+            {powerMTAStatus.status !== 'online' && (
+              <p className="text-xs text-gray-400 mt-1">Data unavailable</p>
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Messages Failed Today</p>
-            <p className="text-2xl font-bold text-red-600">{formatNumber(powerMTAStatus.messages_failed_today)}</p>
+            <p className="text-2xl font-bold text-red-600">{formatNumber(powerMTAStatus.messages_failed_today || 0)}</p>
+            {powerMTAStatus.status !== 'online' && (
+              <p className="text-xs text-gray-400 mt-1">Data unavailable</p>
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Last Restart</p>
-            <p className="text-lg font-semibold text-gray-900">{formatDate(powerMTAStatus.last_restart)}</p>
+            <p className="text-lg font-semibold text-gray-900">{formatDate(powerMTAStatus.last_restart) || 'N/A'}</p>
           </div>
         </div>
       </div>

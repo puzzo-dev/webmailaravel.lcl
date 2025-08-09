@@ -6,9 +6,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use App\Services\NotificationService;
 use App\Models\User;
-use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
-use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
 use OpenApi\Annotations as OA;
 
 class AuthController extends Controller
@@ -107,6 +108,16 @@ class AuthController extends Controller
                 false, // Raw
                 'Lax' // SameSite
             );
+
+            // Send login notification
+            $notificationService = app(NotificationService::class);
+            $loginData = [
+                'device' => $request->header('User-Agent') ?? 'Unknown',
+                'ip' => $request->ip(),
+                'location' => 'Unknown', // Could be enhanced with IP geolocation
+                'time' => now()->format('Y-m-d H:i:s')
+            ];
+            $notificationService->sendLoginNotification($user, $loginData);
 
             return response()->json([
                 'success' => true,
