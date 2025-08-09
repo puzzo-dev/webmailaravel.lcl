@@ -200,6 +200,8 @@ Route::middleware(['auth:api'])->group(function () {
         // Payment & Invoice management
         Route::post('/invoice', [BillingController::class, 'createInvoice']);
         Route::get('/invoice/{invoice_id}/status', [BillingController::class, 'invoiceStatus']);
+        Route::get('/invoice/{invoice_id}/view', [BillingController::class, 'viewInvoice']);
+        Route::get('/invoice/{invoice_id}/download', [BillingController::class, 'downloadInvoice']);
         Route::get('/payment-history', [BillingController::class, 'paymentHistory']);
 
         // Webhook for payment processing
@@ -363,6 +365,15 @@ Route::middleware(['auth:api'])->group(function () {
             Route::put('/plans/{plan}', [BillingController::class, 'updatePlan']);
             Route::delete('/plans/{plan}', [BillingController::class, 'deletePlan']);
             Route::post('/subscriptions/{subscription}/manual-payment', [BillingController::class, 'processManualPayment']);
+        });
+
+        // Admin scheduler management routes (admin only)
+        Route::prefix('scheduler')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\SchedulerController::class, 'index']);
+            Route::post('/run', [\App\Http\Controllers\Admin\SchedulerController::class, 'runScheduler']);
+            Route::post('/command', [\App\Http\Controllers\Admin\SchedulerController::class, 'runCommand']);
+            Route::get('/queue-status', [\App\Http\Controllers\Admin\SchedulerController::class, 'queueStatus']);
+            Route::post('/test', [\App\Http\Controllers\Admin\SchedulerController::class, 'testScheduler']);
         });
     });
 

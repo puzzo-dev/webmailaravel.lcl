@@ -119,14 +119,44 @@ const Billing = () => {
     }
   };
 
-  const handleDownloadInvoice = (invoiceId) => {
-    // Implement invoice download
-    console.log('Downloading invoice:', invoiceId);
+  const handleDownloadInvoice = async (invoiceId) => {
+    try {
+      const response = await fetch(`/api/billing/invoice/${invoiceId}/download`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice-${invoiceId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('Invoice downloaded successfully');
+      } else {
+        toast.error('Failed to download invoice');
+      }
+    } catch (error) {
+      console.error('Invoice download error:', error);
+      toast.error('Failed to download invoice');
+    }
   };
 
-  const handleViewInvoice = (invoiceId) => {
-    // Implement invoice view
-    console.log('Viewing invoice:', invoiceId);
+  const handleViewInvoice = async (invoiceId) => {
+    try {
+      const response = await api.get(`/billing/invoice/${invoiceId}/view`);
+      // You can implement a modal or new page to show invoice details
+      console.log('Invoice details:', response.data);
+      toast.success('Invoice details loaded');
+    } catch (error) {
+      console.error('Invoice view error:', error);
+      toast.error('Failed to load invoice details');
+    }
   };
 
 
@@ -405,7 +435,7 @@ const Billing = () => {
                       } else if (typeof currentSubscription.features === 'string') {
                         try {
                           features = JSON.parse(currentSubscription.features);
-                        } catch (_e) {
+                        } catch {
                           features = [currentSubscription.features];
                         }
                       }

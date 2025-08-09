@@ -62,6 +62,30 @@ trait BillingTrait
     }
 
     /**
+     * Make POST request to BTCPay API
+     */
+    private function post(string $url, array $data = [], array $headers = [], int $timeout = 30): array
+    {
+        try {
+            $response = Http::timeout($timeout)
+                ->withHeaders($headers)
+                ->post($url, $data);
+
+            return [
+                'success' => $response->successful(),
+                'data' => $response->json(),
+                'status' => $response->status()
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'status' => 0
+            ];
+        }
+    }
+
+    /**
      * Get BTCPay configuration with validation and caching
      */
     private function getBTCPayConfiguration(): array
@@ -134,8 +158,8 @@ trait BillingTrait
                 'invoice' => $invoiceResult['data']['id'],
                 'payment_url' => $invoiceResult['data']['checkoutLink'] ?? null,
                 'payment_method' => 'btcpay',
-                'payment_currency' => $data['currency'] ?? 'USD',
-                'payment_amount' => $data['amount']
+                'payment_currency' => $plan->currency ?? 'USD',
+                'payment_amount' => $plan->price
             ]);
 
             $this->logInfo('BTCPay invoice created', [
@@ -424,9 +448,18 @@ trait BillingTrait
                     'max_total_campaigns' => 10,
                     'max_live_campaigns' => 1,
                     'daily_sending_limit' => 1000,
+                ],
+                'usage' => [
+                    'domains_count' => 0,
+                    'campaigns_count' => 0,
+                    'live_campaigns_count' => 0,
+                    'emails_sent_today' => 0,
                 ]
             ];
         }
+
+        // Get current usage
+        $usage = $this->getUserUsage($user);
 
         return [
             'has_active_subscription' => true,
@@ -439,8 +472,133 @@ trait BillingTrait
                 'max_total_campaigns' => $subscription->plan->max_total_campaigns ?? 100,
                 'max_live_campaigns' => $subscription->plan->max_live_campaigns ?? 10,
                 'daily_sending_limit' => $subscription->plan->daily_sending_limit ?? 10000,
+            ],
+            'usage' => $usage,
+            'percentage_used' => [
+                'domains' => $this->calculatePercentage($usage['domains_count'], $subscription->plan->max_domains),
+                'campaigns' => $this->calculatePercentage($usage['campaigns_count'], $subscription->plan->max_total_campaigns),
+                'live_campaigns' => $this->calculatePercentage($usage['live_campaigns_count'], $subscription->plan->max_live_campaigns),
+                'daily_sending' => $this->calculatePercentage($usage['emails_sent_today'], $subscription->plan->daily_sending_limit),
             ]
         ];
+    }
+
+    /**
+     * Get user's current usage statistics
+     */
+    protected function getUserUsage(User $user): array
+    {
+        try {
+            // Get domains count
+            $domainsCount = DB::table('domains')->where('user_id', $user->id)->count();
+
+            // Get campaigns count
+            $campaignsCount = DB::table('campaigns')->where('user_id', $user->id)->count();
+
+            // Get live campaigns count
+            $liveCampaignsCount = DB::table('campaigns')
+                ->where('user_id', $user->id)
+                ->whereIn('status', ['running', 'paused', 'scheduled'])
+                ->count();
+
+            // Get emails sent today
+            $emailsSentToday = DB::table('campaign_emails')
+                ->join('campaigns', 'campaign_emails.campaign_id', '=', 'campaigns.id')
+                ->where('campaigns.user_id', $user->id)
+                ->where('campaign_emails.sent_at', '>=', now()->startOfDay())
+                ->count();
+
+            return [
+                'domains_count' => $domainsCount,
+                'campaigns_count' => $campaignsCount,
+                'live_campaigns_count' => $liveCampaignsCount,
+                'emails_sent_today' => $emailsSentToday,
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Failed to get user usage', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'domains_count' => 0,
+                'campaigns_count' => 0,
+                'live_campaigns_count' => 0,
+                'emails_sent_today' => 0,
+            ];
+        }
+    }
+
+    /**
+     * Calculate percentage used
+     */
+    private function calculatePercentage($used, $limit): float
+    {
+        if (!$limit || $limit <= 0) {
+            return 0.0;
+        }
+        
+        return round(($used / $limit) * 100, 1);
+    }
+
+    /**
+     * Check if user can perform action based on limits
+     */
+    protected function canPerformAction(User $user, string $action): array
+    {
+        $limits = $this->checkSubscriptionLimits($user);
+        
+        if (!$limits['has_active_subscription']) {
+            return [
+                'allowed' => false,
+                'reason' => 'No active subscription'
+            ];
+        }
+
+        switch ($action) {
+            case 'create_domain':
+                $allowed = $limits['usage']['domains_count'] < $limits['limits']['max_domains'];
+                return [
+                    'allowed' => $allowed,
+                    'reason' => $allowed ? null : 'Domain limit reached',
+                    'current' => $limits['usage']['domains_count'],
+                    'limit' => $limits['limits']['max_domains']
+                ];
+
+            case 'create_campaign':
+                $allowed = $limits['usage']['campaigns_count'] < $limits['limits']['max_total_campaigns'];
+                return [
+                    'allowed' => $allowed,
+                    'reason' => $allowed ? null : 'Campaign limit reached',
+                    'current' => $limits['usage']['campaigns_count'],
+                    'limit' => $limits['limits']['max_total_campaigns']
+                ];
+
+            case 'start_campaign':
+                $allowed = $limits['usage']['live_campaigns_count'] < $limits['limits']['max_live_campaigns'];
+                return [
+                    'allowed' => $allowed,
+                    'reason' => $allowed ? null : 'Live campaign limit reached',
+                    'current' => $limits['usage']['live_campaigns_count'],
+                    'limit' => $limits['limits']['max_live_campaigns']
+                ];
+
+            case 'send_email':
+                $allowed = $limits['usage']['emails_sent_today'] < $limits['limits']['daily_sending_limit'];
+                return [
+                    'allowed' => $allowed,
+                    'reason' => $allowed ? null : 'Daily sending limit reached',
+                    'current' => $limits['usage']['emails_sent_today'],
+                    'limit' => $limits['limits']['daily_sending_limit']
+                ];
+
+            default:
+                return [
+                    'allowed' => true,
+                    'reason' => null
+                ];
+        }
     }
 
     /**
@@ -531,8 +689,8 @@ trait BillingTrait
                 'orderId' => $data['orderId'] ?? null,
                 'metadata' => $data['metadata'] ?? [],
                 'checkout' => $data['checkout'] ?? [
-                    'redirectURL' => url('/billing?payment=success'),
-                    'closeURL' => url('/billing?payment=cancelled'),
+                    'redirectURL' => url('/billing/payment-status?status=success'),
+                    'closeURL' => url('/billing/payment-status?status=cancelled'),
                 ],
                 'notificationURL' => $data['notificationURL'] ?? url('/api/billing/webhook'),
                 'buyer' => $data['buyer'] ?? [],
@@ -590,6 +748,7 @@ trait BillingTrait
 
             $url = "{$baseUrl}/api/v1/stores/{$storeId}/invoices/{$invoiceId}";
             $headers = $this->withApiKey($apiKey);
+            $timeout = 30;
             
             $result = $this->get($url, $headers, $timeout);
 
@@ -939,6 +1098,7 @@ trait BillingTrait
             $url = "{$baseUrl}/api/v1/stores/{$storeId}/rates";
             
             $headers = $this->withApiKey($apiKey);
+            $timeout = 30;
             
             $result = $this->get($url, $headers, $timeout);
 

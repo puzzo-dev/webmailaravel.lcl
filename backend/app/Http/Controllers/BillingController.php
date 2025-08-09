@@ -163,7 +163,7 @@ class BillingController extends Controller
             'orderId' => 'subscription_' . $subscription->id,
             'itemDesc' => $plan->name . ' Subscription',
             'notificationURL' => url('/api/btcpay/webhook'),
-            'redirectURL' => url('/billing?payment=success'),
+            'redirectURL' => url('/billing/payment-status?status=success'),
             'buyer' => [
                 'email' => $subscription->user->email,
                 'name' => $subscription->user->name,
@@ -208,6 +208,147 @@ class BillingController extends Controller
         $status = $this->getBTCPayInvoiceStatus($request->invoice_id);
 
         return $this->successResponse($status, 'Invoice status retrieved successfully');
+    }
+
+    /**
+     * Download invoice PDF
+     */
+    public function downloadInvoice(Request $request, $invoiceId)
+    {
+        try {
+            // Find subscription by invoice ID
+            $subscription = Subscription::where('invoice', $invoiceId)->first();
+            
+            if (!$subscription) {
+                return $this->errorResponse('Invoice not found', 404);
+            }
+
+            // Check authorization
+            if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                return $this->errorResponse('Unauthorized', 403);
+            }
+
+            // Generate invoice PDF
+            $invoiceData = $this->generateInvoicePDF($subscription);
+            
+            return response()->streamDownload(function() use ($invoiceData) {
+                echo $invoiceData;
+            }, "invoice-{$invoiceId}.pdf", [
+                'Content-Type' => 'application/pdf',
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to download invoice', 500);
+        }
+    }
+
+    /**
+     * View invoice details
+     */
+    public function viewInvoice(Request $request, $invoiceId): JsonResponse
+    {
+        try {
+            // Find subscription by invoice ID
+            $subscription = Subscription::where('invoice', $invoiceId)
+                ->with(['user', 'plan'])
+                ->first();
+            
+            if (!$subscription) {
+                return $this->errorResponse('Invoice not found', 404);
+            }
+
+            // Check authorization
+            if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+                return $this->errorResponse('Unauthorized', 403);
+            }
+
+            $invoiceData = [
+                'id' => $invoiceId,
+                'subscription_id' => $subscription->id,
+                'user' => [
+                    'name' => $subscription->user->name,
+                    'email' => $subscription->user->email,
+                ],
+                'plan' => [
+                    'name' => $subscription->plan->name,
+                    'price' => $subscription->plan->price,
+                    'currency' => $subscription->plan->currency,
+                    'duration_days' => $subscription->plan->duration_days,
+                ],
+                'amount' => $subscription->payment_amount,
+                'currency' => $subscription->payment_currency,
+                'status' => $subscription->status,
+                'payment_method' => $subscription->payment_method,
+                'payment_reference' => $subscription->payment_reference,
+                'created_at' => $subscription->created_at,
+                'paid_at' => $subscription->paid_at,
+                'expiry' => $subscription->expiry,
+            ];
+
+            return $this->successResponse($invoiceData, 'Invoice details retrieved successfully');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve invoice', 500);
+        }
+    }
+
+    /**
+     * Generate invoice PDF content
+     */
+    private function generateInvoicePDF(Subscription $subscription): string
+    {
+        $html = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Invoice - {$subscription->invoice}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .header { text-align: center; margin-bottom: 40px; }
+                .invoice-details { margin-bottom: 30px; }
+                .table { width: 100%; border-collapse: collapse; }
+                .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+                .total { font-weight: bold; font-size: 18px; }
+            </style>
+        </head>
+        <body>
+            <div class='header'>
+                <h1>INVOICE</h1>
+                <p>Invoice ID: {$subscription->invoice}</p>
+                <p>Date: {$subscription->created_at->format('F j, Y')}</p>
+            </div>
+            
+            <div class='invoice-details'>
+                <h3>Bill To:</h3>
+                <p>{$subscription->user->name}<br>
+                {$subscription->user->email}</p>
+                
+                <h3>Service Details:</h3>
+                <table class='table'>
+                    <tr>
+                        <th>Description</th>
+                        <th>Period</th>
+                        <th>Amount</th>
+                    </tr>
+                    <tr>
+                        <td>{$subscription->plan->name} Subscription</td>
+                        <td>{$subscription->plan->duration_days} days</td>
+                        <td>\${$subscription->payment_amount} {$subscription->payment_currency}</td>
+                    </tr>
+                    <tr class='total'>
+                        <td colspan='2'>Total</td>
+                        <td>\${$subscription->payment_amount} {$subscription->payment_currency}</td>
+                    </tr>
+                </table>
+                
+                <p><strong>Payment Status:</strong> " . ucfirst($subscription->status) . "</p>
+                " . ($subscription->paid_at ? "<p><strong>Paid Date:</strong> {$subscription->paid_at->format('F j, Y')}</p>" : "") . "
+                <p><strong>Payment Method:</strong> " . ucfirst($subscription->payment_method ?: 'BTCPay') . "</p>
+            </div>
+        </body>
+        </html>";
+
+        return $html;
     }
 
     /**
@@ -658,8 +799,8 @@ class BillingController extends Controller
                     'itemDesc' => $plan->name . ' Subscription'
                 ],
                 'checkout' => [
-                    'redirectURL' => url('/billing/payment/success?subscription=' . $subscription->id),
-                    'closeURL' => url('/billing/payment/cancelled?subscription=' . $subscription->id),
+                    'redirectURL' => url('/billing/payment-status?subscription=' . $subscription->id . '&status=success'),
+                    'closeURL' => url('/billing/payment-status?subscription=' . $subscription->id . '&status=cancelled'),
                 ],
                 'notificationURL' => url('/api/billing/webhook'),
                 'buyer' => [
@@ -673,14 +814,16 @@ class BillingController extends Controller
             if ($invoiceResult['success']) {
                 // Update subscription with payment details
                 $subscription->update([
-                    'payment_id' => $invoiceResult['data']['invoice_id'] ?? null,
+                    'invoice' => $invoiceResult['data']['id'] ?? null,
+                    'payment_id' => $invoiceResult['data']['id'] ?? null,
+                    'payment_url' => $invoiceResult['data']['checkoutLink'] ?? null,
                 ]);
 
                 return [
                     'success' => true,
                     'subscription_id' => $subscription->id,
-                    'checkout_url' => $invoiceResult['data']['invoice_url'] ?? null,
-                    'invoice_id' => $invoiceResult['data']['invoice_id'] ?? null,
+                    'checkout_url' => $invoiceResult['data']['checkoutLink'] ?? null,
+                    'invoice_id' => $invoiceResult['data']['id'] ?? null,
                 ];
             }
 

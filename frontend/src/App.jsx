@@ -44,6 +44,7 @@ const UserActivity = lazy(() => import('./pages/UserActivity'));
 
 // Lazy-loaded User Feature Pages
 const Billing = lazy(() => import('./pages/billing/Billing'));
+const PaymentStatus = lazy(() => import('./pages/billing/PaymentStatus'));
 const SuppressionList = lazy(() => import('./pages/suppression/SuppressionList'));
 const Senders = lazy(() => import('./pages/senders/Senders'));
 const Domains = lazy(() => import('./pages/domains/Domains'));
@@ -62,6 +63,7 @@ const AdminLogsAndQueues = lazy(() => import('./pages/admin/AdminLogsAndQueues')
 const AdminPowerMTA = lazy(() => import('./pages/admin/AdminPowerMTA'));
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
 const AdminBilling = lazy(() => import('./pages/admin/AdminBilling'));
+const AdminScheduler = lazy(() => import('./pages/admin/AdminScheduler'));
 
 function App() {
   const { isAuthenticated, user, isLoading, currentView } = useSelector((state) => state.auth);
@@ -148,6 +150,7 @@ function App() {
               <Route path="/account" element={<Account />} />
               <Route path="/activity" element={<UserActivity />} />
               <Route path="/billing" element={<Billing />} />
+              <Route path="/billing/payment-status" element={<PaymentStatus />} />
               <Route path="/senders" element={<Senders />} />
               <Route path="/domains" element={<Domains />} />
               <Route path="/bounce-credentials" element={<BounceCredentials />} />
@@ -167,6 +170,7 @@ function App() {
               <Route path="/admin/powermta" element={<AdminPowerMTA />} />
               <Route path="/admin/notifications" element={<AdminNotifications />} />
               <Route path="/admin/billing" element={<AdminBilling />} />
+              <Route path="/admin/scheduler" element={<AdminScheduler />} />
             </Route>
           </Route>
 
