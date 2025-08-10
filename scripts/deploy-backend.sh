@@ -75,7 +75,7 @@ fi
 
 # Move rsynced directory to final location
 echo "📦 Moving backend files..."
-sudo mv /tmp/${RELEASE_NAME}_backend ${BACKEND_PATH}
+mv /tmp/${RELEASE_NAME}_backend ${BACKEND_PATH}
 if [ ! -f "${BACKEND_PATH}/public/index.php" ]; then
     echo "ERROR: Backend transfer failed, public/index.php not found"
     exit 1
@@ -83,12 +83,12 @@ fi
 
 # Fix ownership for the entire backend directory
 echo "🔧 Fixing directory ownership..."
-sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
-sudo chmod -R 755 ${BACKEND_PATH}
+chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
+chmod -R 755 ${BACKEND_PATH}
 
 # Create .htaccess file in document root to redirect to Laravel public directory
 echo "🔧 Creating .htaccess to redirect to Laravel public directory..."
-sudo tee ${BACKEND_PATH}/.htaccess > /dev/null <<'EOF'
+cat > ${BACKEND_PATH}/.htaccess << 'HTACCESS_EOF'
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
@@ -106,10 +106,10 @@ sudo tee ${BACKEND_PATH}/.htaccess > /dev/null <<'EOF'
 <IfModule !mod_rewrite.c>
     DirectoryIndex public/index.php
 </IfModule>
-EOF
+HTACCESS_EOF
 
 # Create a fallback index.php in document root
-sudo tee ${BACKEND_PATH}/index.php > /dev/null <<'EOF'
+cat > ${BACKEND_PATH}/index.php << 'INDEX_EOF'
 <?php
 // Fallback redirection to Laravel public directory
 if (file_exists(__DIR__ . '/public/index.php')) {
@@ -119,10 +119,10 @@ if (file_exists(__DIR__ . '/public/index.php')) {
     http_response_code(500);
     echo "Laravel application not properly installed. Public directory not found.";
 }
-EOF
+INDEX_EOF
 
-sudo chown ${APP_USER}:${APP_USER} ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
-sudo chmod 644 ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
+chown ${APP_USER}:${APP_USER} ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
+chmod 644 ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
 
 # Copy and configure environment file
 echo "🔧 Configuring .env file..."
@@ -159,9 +159,9 @@ fi
 
 # Fix database and storage permissions
 echo "🔧 Setting up Laravel-specific permissions..."
-sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache $(dirname ${DB_PATH}) 2>/dev/null || true
-sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache 2>/dev/null || true
-sudo chmod 664 ${DB_PATH} 2>/dev/null || true
+chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache $(dirname ${DB_PATH}) 2>/dev/null || true
+chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache 2>/dev/null || true
+chmod 664 ${DB_PATH} 2>/dev/null || true
 
 # Run migrations and optimizations
 echo "🔄 Running migrations and optimizations..."
@@ -175,8 +175,8 @@ ${PHP_CMD} artisan view:cache
 ${PHP_CMD} artisan queue:restart
 ${PHP_CMD} artisan storage:link
 ${PHP_CMD} artisan up
-sudo systemctl reload apache2 || echo "Web server reload failed"
-sudo systemctl restart php8.3-fpm || echo "PHP-FPM restart failed"
+systemctl reload apache2 2>/dev/null || service apache2 reload 2>/dev/null || echo "Web server reload failed"
+systemctl restart php8.3-fpm 2>/dev/null || service php8.3-fpm restart 2>/dev/null || echo "PHP-FPM restart failed"
 
 echo "✅ Backend deployment completed!"
 EOF
