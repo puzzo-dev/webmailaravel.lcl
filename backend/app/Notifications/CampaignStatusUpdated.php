@@ -132,12 +132,19 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
             $additionalContext = " Error: {$this->campaign->error_message}";
         } elseif ($this->newStatus === 'completed' && isset($this->campaign->total_sent)) {
             $additionalContext = " Total emails sent: {$this->campaign->total_sent}";
+        }
+        
+        return [
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,
             'type' => 'campaign_status',
             'action_url' => '/campaigns/' . $this->campaign->id,
+            'message' => "Campaign '{$this->campaign->name}' {$config['message']}{$additionalContext}",
+            'title' => $config['title'],
+            'notification_type' => $config['type'],
+            'timestamp' => now()->toISOString(),
         ];
     }
 

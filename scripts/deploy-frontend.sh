@@ -6,13 +6,12 @@ echo "🎨 Starting frontend deployment..."
 # Configuration variables
 APP_NAME="Campaign Pro X"
 APP_USER="campaignprox"
-# WEB_GROUP="www-data"  # Adjust if web server uses a different group (e.g., apache, nginx)
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
 FRONTEND_PATH="/home/campaignprox/public_html"
 RELEASE_NAME="${RELEASE_NAME}"
-RELEASE_PACKAGE="deployment/${RELEASE_NAME}_frontend.tar.gz"
+RELEASE_DIR="deployment/frontend"
 
 # Check if required environment variables are set
 if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ] || [ -z "${RELEASE_NAME}" ]; then
@@ -20,22 +19,21 @@ if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]
     exit 1
 fi
 
-# Check if release package exists
-if [ ! -f "${RELEASE_PACKAGE}" ]; then
-    echo "ERROR: Release package ${RELEASE_PACKAGE} not found"
+# Check if release directory exists
+if [ ! -d "${RELEASE_DIR}" ]; then
+    echo "ERROR: Release directory ${RELEASE_DIR} not found"
     exit 1
 fi
 
-# SSH and SCP commands using sshpass
+# SSH command using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
-SCP="sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no"
+RSYNC="sshpass -p ${PROD_PASSWORD} rsync -avz --no-perms --no-owner --no-group -e 'ssh -o StrictHostKeyChecking=no'"
 
-# Upload release package
-echo "📤 Uploading frontend package..."
-${SCP} ${RELEASE_PACKAGE} ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_frontend.tar.gz
+# Upload release directory with rsync
+echo "📤 Uploading frontend directory..."
+${RSYNC} ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_frontend/
 
 # Deploy via SSH
-echo "🚀 Deploying frontend..."
 ${SSH} bash -s << EOF
 set -e
 
@@ -53,15 +51,13 @@ if [ -d "${FRONTEND_PATH}" ]; then
     mv ${FRONTEND_PATH} ${FRONTEND_PATH}_old || true
 fi
 
-# Extract release
-echo "📦 Extracting frontend release..."
-if [ ! -f "/tmp/${RELEASE_NAME}_frontend.tar.gz" ]; then
-    echo "ERROR: Release package /tmp/${RELEASE_NAME}_frontend.tar.gz not found"
+# Move rsynced directory to final location
+echo "📦 Moving frontend files..."
+sudo mv /tmp/${RELEASE_NAME}_frontend ${FRONTEND_PATH}
+if [ ! -f "${FRONTEND_PATH}/index.html" ]; then
+    echo "ERROR: Frontend transfer failed, index.html not found"
     exit 1
 fi
-tar -xzf /tmp/${RELEASE_NAME}_frontend.tar.gz -C /tmp
-sudo mv /tmp/frontend ${FRONTEND_PATH}
-rm /tmp/${RELEASE_NAME}_frontend.tar.gz
 
 # Create .htaccess for React Router
 echo "📝 Creating .htaccess for React Router support..."
@@ -76,10 +72,10 @@ cat << HTACCESS | sudo tee ${FRONTEND_PATH}/.htaccess
 </IfModule>
 HTACCESS
 
-# Set permissions
+# Set permissions (Virtualmin handles most, but ensure ownership)
 echo "🔒 Setting permissions..."
 sudo chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH}
-sudo chmod -R 775 ${FRONTEND_PATH}
+sudo chmod -R 755 ${FRONTEND_PATH}
 sudo chmod 664 ${FRONTEND_PATH}/.htaccess
 
 # Restart services

@@ -118,38 +118,34 @@ pipeline {
         }
         
         stage('📦 Create Deployment Package') {
-            steps {
-                script {
-                    echo "📦 Creating deployment packages..."
-                    
-                    sh '''
-                        mkdir -p deployment/backend
-                        cp -r backend/* deployment/backend/
-                        cp backend/.env.production.example deployment/backend/.env
-                        cp build-info.json deployment/backend/
-                        rm -rf deployment/backend/tests
-                        rm -rf deployment/backend/storage/logs/*
-                        rm -rf deployment/backend/.git*
-                        rm -f deployment/backend/phpunit.xml
-                        cd deployment
-                        tar -czf ${RELEASE_NAME}_backend.tar.gz backend/
-                    '''
-                    
-                    sh '''
-                        mkdir -p deployment/frontend
-                        cp -r frontend/dist/* deployment/frontend/
-                        cp build-info.json deployment/frontend/
-                        cd deployment
-                        tar -czf ${RELEASE_NAME}_frontend.tar.gz frontend/
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'deployment/*.tar.gz', allowEmptyArchive: false
-                }
+        steps {
+            script {
+                echo "📦 Creating deployment directories..."
+                
+                sh '''
+                    mkdir -p deployment/backend
+                    cp -r backend/* deployment/backend/
+                    cp backend/.env.production.example deployment/backend/.env
+                    cp build-info.json deployment/backend/
+                    rm -rf deployment/backend/tests
+                    rm -rf deployment/backend/storage/logs/*
+                    rm -rf deployment/backend/.git*
+                    rm -f deployment/backend/phpunit.xml
+                '''
+                
+                sh '''
+                    mkdir -p deployment/frontend
+                    cp -r frontend/dist/* deployment/frontend/
+                    cp build-info.json deployment/frontend/
+                '''
             }
         }
+        post {
+            always {
+                archiveArtifacts artifacts: 'deployment/**/*', allowEmptyArchive: false
+            }
+        }
+    }
         
         stage('🔍 Debug Scripts') {
             steps {

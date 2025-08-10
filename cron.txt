@@ -1,0 +1,1 @@
+* * * * * cd ${BACKEND_PATH} && php artisan schedule:run >> /dev/null 2>&1
