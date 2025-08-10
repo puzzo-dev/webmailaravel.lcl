@@ -81,6 +81,11 @@ if [ ! -f "${BACKEND_PATH}/public/index.php" ]; then
     exit 1
 fi
 
+# Fix ownership for the entire backend directory
+echo "🔧 Fixing directory ownership..."
+sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
+sudo chmod -R 755 ${BACKEND_PATH}
+
 # Copy and configure environment file
 echo "🔧 Configuring .env file..."
 if [ -f "${BACKEND_PATH}/.env" ]; then
@@ -112,9 +117,13 @@ if [ ! -f "${DB_PATH}" ]; then
     echo "Creating new SQLite database..."
     mkdir -p $(dirname ${DB_PATH})
     touch ${DB_PATH}
-    sudo chown ${APP_USER}:${APP_USER} ${DB_PATH}
-    sudo chmod 664 ${DB_PATH}
 fi
+
+# Fix database and storage permissions
+echo "🔧 Setting up Laravel-specific permissions..."
+sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache $(dirname ${DB_PATH}) 2>/dev/null || true
+sudo chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache 2>/dev/null || true
+sudo chmod 664 ${DB_PATH} 2>/dev/null || true
 
 # Run migrations and optimizations
 echo "🔄 Running migrations and optimizations..."

@@ -48,14 +48,16 @@ fi
 systemctl restart apache2
 print_status "Apache restarted"
 
-print_step "5. Setting up base directories..."
+print_step "5. Setting up base directories and ownership..."
 mkdir -p ${BACKUP_PATH}
 mkdir -p ${LOG_PATH}
+# Ensure subdomain directory has correct ownership from creation
+mkdir -p "/home/${APP_USER}/domains/${SUB_DOMAIN}"
 # Note: Application directories will be created during deployment
-chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
-chmod -R 755 ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
-chmod -R 775 ${LOG_PATH}
-print_status "Base directories set up"
+sudo chown -R ${APP_USER}:${APP_USER} "/home/${APP_USER}/domains" ${FRONTEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
+sudo chmod -R 755 "/home/${APP_USER}/domains" ${FRONTEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
+sudo chmod -R 775 ${LOG_PATH}
+print_status "Base directories and ownership set up correctly"
 
 print_step "6. Installing rsync..."
 if ! command -v rsync &>/dev/null; then
