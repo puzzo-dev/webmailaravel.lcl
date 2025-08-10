@@ -48,28 +48,14 @@ fi
 systemctl restart apache2
 print_status "Apache restarted"
 
-print_step "5. Setting up directories..."
+print_step "5. Setting up base directories..."
 mkdir -p ${BACKUP_PATH}
 mkdir -p ${LOG_PATH}
-mkdir -p ${BACKEND_PATH}/storage/app/public
-mkdir -p ${BACKEND_PATH}/storage/framework/cache
-mkdir -p ${BACKEND_PATH}/storage/framework/sessions
-mkdir -p ${BACKEND_PATH}/storage/framework/views
-mkdir -p ${BACKEND_PATH}/storage/logs
-mkdir -p ${BACKEND_PATH}/bootstrap/cache
-
-# Verify directories exist before setting permissions
-for dir in "${FRONTEND_PATH}" "${BACKEND_PATH}" "${BACKUP_PATH}" "${LOG_PATH}" "${BACKEND_PATH}/storage" "${BACKEND_PATH}/bootstrap/cache"; do
-    if [ ! -d "$dir" ]; then
-        print_error "Failed to create directory: $dir"
-    fi
-done
-
-chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH}
-chmod -R 755 ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH}
-chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache ${LOG_PATH}
-[ -f "${DB_PATH}" ] && chmod 664 ${DB_PATH}
-print_status "Directories set up"
+# Note: Application directories will be created during deployment
+chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
+chmod -R 755 ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
+chmod -R 775 ${LOG_PATH}
+print_status "Base directories set up"
 
 print_step "6. Installing rsync..."
 if ! command -v rsync &>/dev/null; then
