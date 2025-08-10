@@ -10,7 +10,7 @@ BACKEND_PATH="/home/${APP_USER}/domains/${SUB_DOMAIN}/public_html"
 BACKUP_PATH="/home/${APP_USER}/domains/${SUB_DOMAIN}/public_html/backups"
 DB_PATH="${BACKEND_PATH}/database/database.sqlite"
 LOG_PATH="/home/${APP_USER}/logs"
-PHP_VERSION="8.2"
+PHP_VERSION="8.3"
 
 print_status() { echo "✅ $1"; }
 print_step() { echo "📌 $1"; }

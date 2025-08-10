@@ -27,11 +27,10 @@ fi
 
 # SSH command using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
-RSYNC="sshpass -p ${PROD_PASSWORD} rsync -avz --no-perms --no-owner --no-group -e 'ssh -o StrictHostKeyChecking=no'"
 
 # Upload release directory with rsync
 echo "📤 Uploading frontend directory..."
-${RSYNC} ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_frontend/
+sshpass -p "${PROD_PASSWORD}" rsync -avz --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no" ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_frontend/
 
 # Deploy via SSH
 ${SSH} bash -s << EOF

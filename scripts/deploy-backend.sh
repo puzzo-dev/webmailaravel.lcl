@@ -14,7 +14,7 @@ BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/backups"
 DB_PATH="${BACKEND_PATH}/database/database.sqlite"
 RELEASE_NAME="${RELEASE_NAME}"
 RELEASE_DIR="deployment/backend"
-PHP_CMD="php8.2"
+PHP_CMD="php8.3"
 
 # Check if required environment variables are set
 if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ] || [ -z "${RELEASE_NAME}" ]; then
@@ -30,15 +30,14 @@ fi
 
 # SSH and rsync commands using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
-RSYNC="sshpass -p ${PROD_PASSWORD} rsync -avz --no-perms --no-owner --no-group -e 'ssh -o StrictHostKeyChecking=no'"
 
 # Verify PHP and SQLite extension
 echo "🔍 Checking PHP and SQLite extension..."
 ${SSH} bash -s << EOF
 if ! command -v ${PHP_CMD} &>/dev/null; then
-    for version in php8.3 php8.1 php7.1; do
+    for version in php8.2 php8.1 php7.1; do
         if command -v \$version &>/dev/null; then
-            echo "Using \$version instead of php8.2"
+            echo "Using \$version instead of php8.3"
             exit 0
         fi
     done
@@ -46,14 +45,14 @@ if ! command -v ${PHP_CMD} &>/dev/null; then
     exit 1
 fi
 if ! ${PHP_CMD} -m | grep -q pdo_sqlite; then
-    echo "ERROR: php8.2-sqlite3 extension not installed"
+    echo "ERROR: php8.3-sqlite3 extension not installed"
     exit 1
 fi
 EOF
 
 # Upload release directory with rsync
 echo "📤 Uploading backend directory..."
-${RSYNC} ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend/
+sshpass -p "${PROD_PASSWORD}" rsync -avz --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no" ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend/
 
 # Deploy via SSH
 ${SSH} bash -s << EOF
@@ -129,7 +128,7 @@ ${PHP_CMD} artisan queue:restart
 ${PHP_CMD} artisan storage:link
 ${PHP_CMD} artisan up
 sudo systemctl reload apache2 || echo "Web server reload failed"
-sudo systemctl restart php8.2-fpm || echo "PHP-FPM restart failed"
+sudo systemctl restart php8.3-fpm || echo "PHP-FPM restart failed"
 
 echo "✅ Backend deployment completed!"
 EOF

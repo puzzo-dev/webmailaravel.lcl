@@ -799,7 +799,7 @@ const AdminSystem = () => {
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>To enable automatic queue processing and scheduled tasks, add this cron job to your server:</p>
                         <div className="mt-2 bg-gray-900 text-green-400 p-3 rounded font-mono text-xs">
-                          * * * * * cd /path/to/your/project && php artisan schedule:run >> /dev/null 2>&1
+                          * * * * * cd /path/to/your/project && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&1
                         </div>
                         <p className="mt-2">This will run Laravel's scheduler every minute, which will execute:</p>
                         <ul className="mt-1 list-disc list-inside">

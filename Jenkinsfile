@@ -1,7 +1,19 @@
 pipeline {
     agent { label 'docker-agent-php' }
     
-    environment {
+                        sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
+                            set -e
+                            if ! command -v php8.3 &>/dev/null; then
+                                echo "ERROR: PHP 8.3 not found, checking alternatives..."
+                                for ver in php8.2 php8.1 php7.1; do
+                                    if command -v $ver &>/dev/null; then
+                                        echo "Found $ver"
+                                        exit 0
+                                    fi
+                                done
+                                echo "ERROR: No compatible PHP version found"
+                                exit 1
+                            fint {
         PROD_SERVER = credentials('prod-server-host')
         PROD_USER = credentials('prod-ssh-user')
         PROD_PASSWORD = credentials('prod-ssh-password')
@@ -13,7 +25,7 @@ pipeline {
         BACKUP_PATH = "/home/campaignprox/domains/${SUB_DOMAIN}/public_html/backups"
         BUILD_TIMESTAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M%S').trim()
         RELEASE_NAME = "${APP_NAME}_${BUILD_TIMESTAMP}"
-        PHP_CMD = 'php8.2'
+        PHP_CMD = 'php8.3'
     }
     
     options {
@@ -35,7 +47,7 @@ pipeline {
                     sh """
                         sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
                             set -e
-                            if ! command -v virtualmin &>/dev/null || ! virtualmin list-domains | grep -q "${PRIMARY_DOMAIN}" || ! virtualmin list-domains | grep -q "${SUB_DOMAIN}" || ! command -v rsync &>/dev/null || ! command -v sqlite3 &>/dev/null || ! dpkg -l | grep -q php8.2-sqlite3 || ! [ -f /etc/supervisor/conf.d/laravel-worker.conf ]; then
+                            if ! command -v virtualmin &>/dev/null || ! virtualmin list-domains | grep -q "${PRIMARY_DOMAIN}" || ! virtualmin list-domains | grep -q "${SUB_DOMAIN}" || ! command -v rsync &>/dev/null || ! command -v sqlite3 &>/dev/null || ! dpkg -l | grep -q php8.3-sqlite3 || ! [ -f /etc/supervisor/conf.d/laravel-worker.conf ]; then
                                 echo "Infrastructure setup required, running setup-production.sh..."
                                 sudo bash /tmp/setup-production.sh
                                 rm /tmp/setup-production.sh
