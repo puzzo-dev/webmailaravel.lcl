@@ -45,6 +45,7 @@ else
     print_status "${SUB_DOMAIN} already exists"
 fi
 
+print_step "4. Restarting Apache..."
 systemctl restart apache2
 print_status "Apache restarted"
 
@@ -57,9 +58,37 @@ mkdir -p "/home/${APP_USER}/domains/${SUB_DOMAIN}"
 sudo chown -R ${APP_USER}:${APP_USER} "/home/${APP_USER}/domains" ${FRONTEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
 sudo chmod -R 755 "/home/${APP_USER}/domains" ${FRONTEND_PATH} ${BACKUP_PATH} ${LOG_PATH} 2>/dev/null || true
 sudo chmod -R 775 ${LOG_PATH}
+
+# Create initial .htaccess for Laravel routing in subdomain document root
+print_step "6. Setting up Laravel routing for subdomain..."
+mkdir -p "${BACKEND_PATH}"
+sudo tee ${BACKEND_PATH}/.htaccess > /dev/null <<'EOF'
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect requests to public directory if file doesn't exist in root
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ /public/$1 [L,QSA]
+    
+    # If accessing root, redirect to public/index.php
+    RewriteRule ^$ /public/index.php [L]
+</IfModule>
+
+# Fallback for servers without mod_rewrite
+<IfModule !mod_rewrite.c>
+    DirectoryIndex public/index.php
+</IfModule>
+EOF
+
+sudo chown ${APP_USER}:${APP_USER} ${BACKEND_PATH}/.htaccess
+sudo chmod 644 ${BACKEND_PATH}/.htaccess
+print_status "Laravel routing configured for subdomain"
+
 print_status "Base directories and ownership set up correctly"
 
-print_step "6. Installing rsync..."
+print_step "7. Installing rsync..."
 if ! command -v rsync &>/dev/null; then
     apt update
     apt install -y rsync
@@ -68,7 +97,7 @@ else
     print_status "rsync already installed"
 fi
 
-print_step "7. Installing PHP ${PHP_VERSION} and dependencies..."
+print_step "8. Installing PHP ${PHP_VERSION} and dependencies..."
 if ! dpkg -l | grep -q "php${PHP_VERSION}-sqlite3"; then
     apt install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-fpm php${PHP_VERSION}-sqlite3 php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-zip php${PHP_VERSION}-curl
     print_status "PHP ${PHP_VERSION} and extensions installed"
@@ -76,7 +105,7 @@ else
     print_status "PHP ${PHP_VERSION} and extensions already installed"
 fi
 
-print_step "8. Installing SQLite..."
+print_step "9. Installing SQLite..."
 if ! command -v sqlite3 &>/dev/null; then
     apt install -y sqlite3
     print_status "SQLite installed"
@@ -84,7 +113,7 @@ else
     print_status "SQLite already installed"
 fi
 
-print_step "9. Installing and configuring Supervisor..."
+print_step "10. Installing and configuring Supervisor..."
 if ! command -v supervisorctl &>/dev/null; then
     apt install -y supervisor
     
@@ -139,7 +168,7 @@ EOC
     print_status "Supervisor already configured"
 fi
 
-print_step "10. Setting up cron jobs with Virtualmin CLI..."
+print_step "11. Setting up cron jobs with Virtualmin CLI..."
 CRON_FILE="/tmp/cron-${APP_USER}"
 if ! virtualmin list-crons --user ${APP_USER} | grep -q "Campaign-Pro-X-backup"; then
     cat > ${CRON_FILE} <<EOC
@@ -155,7 +184,7 @@ else
     print_status "Cron jobs already set up"
 fi
 
-print_step "11. Setting up backup script..."
+print_step "12. Setting up backup script..."
 mkdir -p /home/${APP_USER}/scripts
 cat > /home/${APP_USER}/scripts/Campaign-Pro-X-backup <<EOC
 #!/bin/bash
@@ -170,7 +199,7 @@ chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/Campaign-Pro-X-backup
 chmod 755 /home/${APP_USER}/scripts/Campaign-Pro-X-backup
 print_status "Backup script created"
 
-print_step "12. Setting up monitoring script..."
+print_step "13. Setting up monitoring script..."
 cat > /home/${APP_USER}/scripts/Campaign-Pro-X-monitor <<EOC
 #!/bin/bash
 echo "System Load:"
@@ -188,7 +217,7 @@ chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/Campaign-Pro-X-monitor
 chmod 755 /home/${APP_USER}/scripts/Campaign-Pro-X-monitor
 print_status "Monitoring script created"
 
-print_step "13. Configuring log rotation..."
+print_step "14. Configuring log rotation..."
 cat > /etc/logrotate.d/Campaign-Pro-X <<EOC
 ${BACKEND_PATH}/storage/logs/*.log ${LOG_PATH}/*.log {
     daily

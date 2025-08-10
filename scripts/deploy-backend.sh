@@ -86,6 +86,44 @@ echo "🔧 Fixing directory ownership..."
 sudo chown -R ${APP_USER}:${APP_USER} ${BACKEND_PATH}
 sudo chmod -R 755 ${BACKEND_PATH}
 
+# Create .htaccess file in document root to redirect to Laravel public directory
+echo "🔧 Creating .htaccess to redirect to Laravel public directory..."
+sudo tee ${BACKEND_PATH}/.htaccess > /dev/null <<'EOF'
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect requests to public directory if file doesn't exist in root
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ /public/$1 [L,QSA]
+    
+    # If accessing root, redirect to public/index.php
+    RewriteRule ^$ /public/index.php [L]
+</IfModule>
+
+# Fallback for servers without mod_rewrite
+<IfModule !mod_rewrite.c>
+    DirectoryIndex public/index.php
+</IfModule>
+EOF
+
+# Create a fallback index.php in document root
+sudo tee ${BACKEND_PATH}/index.php > /dev/null <<'EOF'
+<?php
+// Fallback redirection to Laravel public directory
+if (file_exists(__DIR__ . '/public/index.php')) {
+    require_once __DIR__ . '/public/index.php';
+} else {
+    // If public/index.php doesn't exist, show error
+    http_response_code(500);
+    echo "Laravel application not properly installed. Public directory not found.";
+}
+EOF
+
+sudo chown ${APP_USER}:${APP_USER} ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
+sudo chmod 644 ${BACKEND_PATH}/.htaccess ${BACKEND_PATH}/index.php
+
 # Copy and configure environment file
 echo "🔧 Configuring .env file..."
 if [ -f "${BACKEND_PATH}/.env" ]; then
