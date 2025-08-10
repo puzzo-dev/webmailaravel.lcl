@@ -4,7 +4,31 @@ pipeline {
     environment {
         PROD_SERVER = credentials('prod-server-host')
         PROD_USER = credentials('prod-ssh-user')
-        PROD_PASSWORD = credentials('prod-ssh-password')
+        PROD_PASSWORD = credentials('pr        stage('� Production Diagnostics') {
+            steps {
+                sh """
+                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/diagnose-production.sh ${PROD_USER}@${PROD_SERVER}:/tmp/diagnose-production.sh
+                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
+                        chmod +x /tmp/diagnose-production.sh
+                        /tmp/diagnose-production.sh
+                        rm /tmp/diagnose-production.sh
+                    '
+                """
+            }
+        }
+        
+        stage('🔧 Fix Production Issues') {
+            steps {
+                sh """
+                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/fix-production-issues.sh ${PROD_USER}@${PROD_SERVER}:/tmp/fix-production-issues.sh
+                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
+                        chmod +x /tmp/fix-production-issues.sh
+                        /tmp/fix-production-issues.sh
+                        rm /tmp/fix-production-issues.sh
+                    '
+                """
+            }
+        }ord')
         APP_NAME = 'campaignprox.msz-pl.com'
         PRIMARY_DOMAIN = 'msz-pl.com'
         SUB_DOMAIN = 'api.msz-pl.com'
