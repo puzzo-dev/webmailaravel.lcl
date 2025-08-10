@@ -1,19 +1,26 @@
 #!/bin/bash
 
 # Production Issue Fix Script
-# Addresses supervisor worker failures and cache table issues
+# Addresses supervisor worker failures, cache table issues, and ownership problems
 
 set -e
 
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
+APP_USER="campaignprox"
 
 echo "🔧 Fixing Production Issues"
 echo "=========================="
 
+echo "🔐 Step 1: Fixing directory ownership..."
+# Ensure all files have correct ownership
+sudo chown -R $APP_USER:$APP_USER "$BACKEND_PATH"
+sudo chmod -R 755 "$BACKEND_PATH"
+sudo chmod -R 775 "$BACKEND_PATH/storage" "$BACKEND_PATH/bootstrap/cache" 2>/dev/null || true
+
 # Navigate to backend directory
 cd "$BACKEND_PATH"
 
-echo "📋 Step 1: Fixing cache table issue..."
+echo "📋 Step 2: Fixing cache table issue..."
 # The cache table should have been created, but let's ensure cache is properly configured
 php8.3 artisan cache:clear
 php8.3 artisan config:clear
@@ -25,7 +32,7 @@ php8.3 artisan config:cache
 php8.3 artisan route:cache
 php8.3 artisan view:cache
 
-echo "🗄️ Step 2: Verifying database tables..."
+echo "🗄️ Step 3: Verifying database tables..."
 # Check if cache table exists and create if missing
 php8.3 artisan migrate --force
 
