@@ -50,6 +50,21 @@ print_status "Apache restarted"
 
 print_step "5. Setting up directories..."
 mkdir -p ${BACKUP_PATH}
+mkdir -p ${LOG_PATH}
+mkdir -p ${BACKEND_PATH}/storage/app/public
+mkdir -p ${BACKEND_PATH}/storage/framework/cache
+mkdir -p ${BACKEND_PATH}/storage/framework/sessions
+mkdir -p ${BACKEND_PATH}/storage/framework/views
+mkdir -p ${BACKEND_PATH}/storage/logs
+mkdir -p ${BACKEND_PATH}/bootstrap/cache
+
+# Verify directories exist before setting permissions
+for dir in "${FRONTEND_PATH}" "${BACKEND_PATH}" "${BACKUP_PATH}" "${LOG_PATH}" "${BACKEND_PATH}/storage" "${BACKEND_PATH}/bootstrap/cache"; do
+    if [ ! -d "$dir" ]; then
+        print_error "Failed to create directory: $dir"
+    fi
+done
+
 chown -R ${APP_USER}:${APP_USER} ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH}
 chmod -R 755 ${FRONTEND_PATH} ${BACKEND_PATH} ${BACKUP_PATH} ${LOG_PATH}
 chmod -R 775 ${BACKEND_PATH}/storage ${BACKEND_PATH}/bootstrap/cache ${LOG_PATH}
@@ -105,10 +120,10 @@ fi
 
 print_step "10. Setting up cron jobs with Virtualmin CLI..."
 CRON_FILE="/tmp/cron-${APP_USER}"
-if ! virtualmin list-crons --user ${APP_USER} | grep -q "${APP_NAME}-backup"; then
+if ! virtualmin list-crons --user ${APP_USER} | grep -q "Campaign-Pro-X-backup"; then
     cat > ${CRON_FILE} <<EOC
 # Daily backup for ${APP_NAME}
-0 2 * * * /bin/bash /home/${APP_USER}/scripts/${APP_NAME}-backup
+0 2 * * * /bin/bash /home/${APP_USER}/scripts/Campaign-Pro-X-backup
 # Laravel scheduler
 * * * * * php${PHP_VERSION} ${BACKEND_PATH}/artisan schedule:run >> ${LOG_PATH}/scheduler.log 2>&1
 EOC
@@ -121,7 +136,7 @@ fi
 
 print_step "11. Setting up backup script..."
 mkdir -p /home/${APP_USER}/scripts
-cat > /home/${APP_USER}/scripts/${APP_NAME}-backup <<EOC
+cat > /home/${APP_USER}/scripts/Campaign-Pro-X-backup <<EOC
 #!/bin/bash
 BACKUP_DIR="${BACKUP_PATH}"
 TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
@@ -130,12 +145,12 @@ tar -czf \${BACKUP_DIR}/backup_\${TIMESTAMP}.tar.gz -C ${BACKEND_PATH} .
 find \${BACKUP_DIR} -name "backup_*.tar.gz" -mtime +10 -delete
 find \${BACKUP_DIR} -name "db_backup_*.sqlite" -mtime +10 -delete
 EOC
-chown ${APP_USER}:${APP_USER} /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-backup
-chmod 755 /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-backup
+chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/Campaign-Pro-X-backup
+chmod 755 /home/${APP_USER}/scripts/Campaign-Pro-X-backup
 print_status "Backup script created"
 
 print_step "12. Setting up monitoring script..."
-cat > /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor <<EOC
+cat > /home/${APP_USER}/scripts/Campaign-Pro-X-monitor <<EOC
 #!/bin/bash
 echo "System Load:"
 uptime
@@ -148,12 +163,12 @@ supervisorctl status
 echo "Disk Usage:"
 df -h ${BACKEND_PATH}
 EOC
-chown ${APP_USER}:${APP_USER} /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor
-chmod 755 /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor
+chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/Campaign-Pro-X-monitor
+chmod 755 /home/${APP_USER}/scripts/Campaign-Pro-X-monitor
 print_status "Monitoring script created"
 
 print_step "13. Configuring log rotation..."
-cat > /etc/logrotate.d/${APP_NAME} <<EOC
+cat > /etc/logrotate.d/Campaign-Pro-X <<EOC
 ${BACKEND_PATH}/storage/logs/*.log ${LOG_PATH}/*.log {
     daily
     missingok

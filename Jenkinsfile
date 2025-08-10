@@ -195,25 +195,48 @@ pipeline {
     
     post {
         success {
-            sh """
-                if [ -n "${SLACK_WEBHOOK_URL}" ]; then
-                    curl -X POST -H 'Content-type: application/json' \
-                    --data "{\"text\":\"✅ Deployment successful!\\n🚀 Release: ${RELEASE_NAME}\\n📅 Time: ${BUILD_TIMESTAMP}\\n🔗 Build: ${BUILD_URL}\"}" \
-                    "${SLACK_WEBHOOK_URL}" || echo "Notification failed"
-                fi
-            """
+            script {
+                try {
+                    def slackWebhook = env.SLACK_WEBHOOK_URL ?: ''
+                    if (slackWebhook) {
+                        sh """
+                            curl -X POST -H 'Content-type: application/json' \
+                            --data "{\\"text\\":\\"✅ Deployment successful!\\\\n🚀 Release: ${RELEASE_NAME}\\\\n📅 Time: ${BUILD_TIMESTAMP}\\\\n🔗 Build: ${BUILD_URL}\\"}" \
+                            "${slackWebhook}" || echo "Notification failed"
+                        """
+                    } else {
+                        echo "✅ Deployment successful! (Slack webhook not configured)"
+                    }
+                } catch (Exception e) {
+                    echo "Notification failed: ${e.getMessage()}"
+                }
+            }
         }
         failure {
-            sh """
-                if [ -n "${SLACK_WEBHOOK_URL}" ]; then
-                    curl -X POST -H 'Content-type: application/json' \
-                    --data "{\"text\":\"❌ Deployment FAILED!\\n🚨 Release: ${RELEASE_NAME}\\n📅 Time: ${BUILD_TIMESTAMP}\\n🔗 Build: ${BUILD_URL}\"}" \
-                    "${SLACK_WEBHOOK_URL}" || echo "Notification failed"
-                fi
-                if [ -f scripts/rollback.sh ]; then
-                    RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo "Rollback failed"
-                fi
-            """
+            script {
+                try {
+                    def slackWebhook = env.SLACK_WEBHOOK_URL ?: ''
+                    if (slackWebhook) {
+                        sh """
+                            curl -X POST -H 'Content-type: application/json' \
+                            --data "{\\"text\\":\\"❌ Deployment FAILED!\\\\n🚨 Release: ${RELEASE_NAME}\\\\n📅 Time: ${BUILD_TIMESTAMP}\\\\n🔗 Build: ${BUILD_URL}\\"}" \
+                            "${slackWebhook}" || echo "Notification failed"
+                        """
+                    } else {
+                        echo "❌ Deployment FAILED! (Slack webhook not configured)"
+                    }
+                } catch (Exception e) {
+                    echo "Notification failed: ${e.getMessage()}"
+                }
+                
+                try {
+                    if (fileExists('scripts/rollback.sh')) {
+                        sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/rollback.sh || echo 'Rollback failed'"
+                    }
+                } catch (Exception e) {
+                    echo "Rollback failed: ${e.getMessage()}"
+                }
+            }
         }
         always {
             cleanWs()
