@@ -28,7 +28,7 @@ class AnalyticsService
     }
 
     /**
-     * Get dashboard analytics
+     * Get dashboard analytics (admin-only - system-wide)
      */
     public function getDashboardAnalytics(): array
     {
@@ -44,12 +44,91 @@ class AnalyticsService
             'reputation' => $this->getReputationAnalytics(),
             'performance' => $this->getPerformanceMetrics($now, $lastMonth),
             'bounce_processing' => $this->getBounceProcessingAnalytics($now, $lastMonth),
-            'suppression' => $this->getSuppressionAnalytics($now, $lastMonth)
+            'suppression' => $this->getSuppressionAnalytics($now, $lastMonth),
+            
+            // Add time-series chart data for frontend
+            'charts' => [
+                'campaign_performance' => $this->getCampaignPerformanceChartData($now, $lastWeek),
+                'user_growth' => $this->getUserGrowthChartData($now, $lastMonth),
+                'email_volume' => $this->getEmailVolumeChartData($now, $lastWeek),
+                'deliverability_trends' => $this->getDeliverabilityTrendsChartData($now, $lastWeek),
+                'campaign_status_distribution' => $this->getCampaignStatusDistribution(),
+                'bounce_trends' => $this->getBounceTrendsChartData($now, $lastWeek),
+            ]
         ];
     }
 
     /**
-     * Get campaign analytics
+     * Get user-specific dashboard analytics (filtered by user)
+     */
+    public function getUserDashboardAnalytics(User $user): array
+    {
+        $now = now();
+        $lastMonth = $now->copy()->subMonth();
+        $lastWeek = $now->copy()->subWeek();
+
+        return [
+            'campaigns' => $this->getUserCampaignAnalytics($user, $now, $lastMonth),
+            'deliverability' => $this->getUserDeliverabilityAnalytics($user, $now, $lastWeek),
+            'performance' => $this->getUserPerformanceMetrics($user, $now, $lastMonth),
+            'engagement' => $this->getUserEngagementAnalytics($user, $now, $lastMonth),
+            'recent_activity' => $this->getUserRecentActivity($user, 10),
+            
+            // Add time-series chart data for user dashboard
+            'charts' => [
+                'email_performance' => $this->getUserEmailPerformanceChartData($user, $now, $lastWeek),
+                'campaign_trends' => $this->getUserCampaignTrendsChartData($user, $now, $lastMonth),
+                'engagement_trends' => $this->getUserEngagementTrendsChartData($user, $now, $lastWeek),
+            ]
+        ];
+    }
+
+    /**
+     * Get user-specific campaign analytics
+     */
+    public function getUserCampaignAnalytics(User $user, Carbon $now, Carbon $lastMonth): array
+    {
+        $userCampaigns = $user->campaigns();
+        
+        $totalCampaigns = $userCampaigns->count();
+        $activeCampaigns = $userCampaigns->where('status', 'active')->count();
+        $completedCampaigns = $userCampaigns->where('status', 'completed')->count();
+        $failedCampaigns = $userCampaigns->where('status', 'failed')->count();
+
+        $monthlyCampaigns = $userCampaigns->whereBetween('created_at', [$lastMonth, $now])->count();
+        $weeklyCampaigns = $userCampaigns->whereBetween('created_at', [$now->copy()->subWeek(), $now])->count();
+
+        $totalEmailsSent = $userCampaigns->sum('total_sent');
+        $totalEmailsDelivered = $userCampaigns->sum('total_sent') - $userCampaigns->sum('total_failed');
+        $totalBounces = $userCampaigns->sum('bounces');
+        $totalComplaints = $userCampaigns->sum('complaints');
+        $totalOpens = $userCampaigns->sum('opens');
+        $totalClicks = $userCampaigns->sum('clicks');
+
+        return [
+            'total' => $totalCampaigns,
+            'active' => $activeCampaigns,
+            'completed' => $completedCampaigns,
+            'failed' => $failedCampaigns,
+            'monthly_created' => $monthlyCampaigns,
+            'weekly_created' => $weeklyCampaigns,
+            'emails_sent' => $totalEmailsSent,
+            'emails_delivered' => $totalEmailsDelivered,
+            'bounces' => $totalBounces,
+            'complaints' => $totalComplaints,
+            'opens' => $totalOpens,
+            'clicks' => $totalClicks,
+            'delivery_rate' => $totalEmailsSent > 0 ? ($totalEmailsDelivered / $totalEmailsSent) * 100 : 0,
+            'bounce_rate' => $totalEmailsSent > 0 ? ($totalBounces / $totalEmailsSent) * 100 : 0,
+            'complaint_rate' => $totalEmailsSent > 0 ? ($totalComplaints / $totalEmailsSent) * 100 : 0,
+            'open_rate' => $totalEmailsSent > 0 ? ($totalOpens / $totalEmailsSent) * 100 : 0,
+            'click_rate' => $totalEmailsSent > 0 ? ($totalClicks / $totalEmailsSent) * 100 : 0,
+            'click_through_rate' => $totalOpens > 0 ? ($totalClicks / $totalOpens) * 100 : 0
+        ];
+    }
+
+    /**
+     * Get campaign analytics (admin-only - system-wide)
      */
     public function getCampaignAnalytics(Carbon $now, Carbon $lastMonth): array
     {
@@ -61,8 +140,8 @@ class AnalyticsService
         $monthlyCampaigns = Campaign::whereBetween('created_at', [$lastMonth, $now])->count();
         $weeklyCampaigns = Campaign::whereBetween('created_at', [$now->copy()->subWeek(), $now])->count();
 
-        $totalEmailsSent = Campaign::sum('emails_sent');
-        $totalEmailsDelivered = Campaign::sum('emails_delivered');
+        $totalEmailsSent = Campaign::sum('total_sent');
+        $totalEmailsDelivered = Campaign::sum('total_sent') - Campaign::sum('total_failed');
         $totalBounces = Campaign::sum('bounces');
         $totalComplaints = Campaign::sum('complaints');
 
@@ -84,14 +163,230 @@ class AnalyticsService
     }
 
     /**
-     * Get performance metrics
+     * Get user-specific deliverability analytics
+     */
+    public function getUserDeliverabilityAnalytics(User $user, Carbon $now, Carbon $lastWeek): array
+    {
+        $userCampaigns = $user->campaigns()->whereBetween('created_at', [$lastWeek, $now]);
+        
+        $totalSent = $userCampaigns->sum('total_sent');
+        $totalDelivered = $totalSent - $userCampaigns->sum('total_failed');
+        $totalBounces = $userCampaigns->sum('bounces');
+        $totalComplaints = $userCampaigns->sum('complaints');
+
+        return [
+            'emails_sent' => $totalSent,
+            'emails_delivered' => $totalDelivered,
+            'bounces' => $totalBounces,
+            'complaints' => $totalComplaints,
+            'delivery_rate' => $totalSent > 0 ? ($totalDelivered / $totalSent) * 100 : 0,
+            'bounce_rate' => $totalSent > 0 ? ($totalBounces / $totalSent) * 100 : 0,
+            'complaint_rate' => $totalSent > 0 ? ($totalComplaints / $totalSent) * 100 : 0,
+        ];
+    }
+
+    /**
+     * Get user-specific performance metrics
+     */
+    public function getUserPerformanceMetrics(User $user, Carbon $now, Carbon $lastMonth): array
+    {
+        $campaigns = $user->campaigns()->whereBetween('created_at', [$lastMonth, $now])->get();
+        
+        $avgEmailsPerCampaign = $campaigns->count() > 0 ? $campaigns->avg('total_sent') : 0;
+        $avgDeliveryRate = $campaigns->count() > 0 ? $campaigns->map(function($c) {
+            return $c->total_sent > 0 ? (($c->total_sent - $c->total_failed) / $c->total_sent) * 100 : 0;
+        })->avg() : 0;
+        $avgOpenRate = $campaigns->count() > 0 ? $campaigns->avg('open_rate') : 0;
+        $avgClickRate = $campaigns->count() > 0 ? $campaigns->avg('click_rate') : 0;
+
+        return [
+            'avg_emails_per_campaign' => round($avgEmailsPerCampaign ?: 0),
+            'avg_delivery_rate' => round($avgDeliveryRate ?: 0, 2),
+            'avg_open_rate' => round($avgOpenRate ?: 0, 2),
+            'avg_click_rate' => round($avgClickRate ?: 0, 2),
+            'total_campaigns_analyzed' => $campaigns->count()
+        ];
+    }
+
+    /**
+     * Get user-specific engagement analytics
+     */
+    public function getUserEngagementAnalytics(User $user, Carbon $now, Carbon $lastMonth): array
+    {
+        $userCampaigns = $user->campaigns()->whereBetween('created_at', [$lastMonth, $now]);
+        
+        $totalOpens = $userCampaigns->sum('opens');
+        $totalClicks = $userCampaigns->sum('clicks');
+        $totalSent = $userCampaigns->sum('total_sent');
+        $uniqueOpens = $userCampaigns->sum('unique_opens');
+        $uniqueClicks = $userCampaigns->sum('unique_clicks');
+
+        return [
+            'total_opens' => $totalOpens,
+            'total_clicks' => $totalClicks,
+            'unique_opens' => $uniqueOpens,
+            'unique_clicks' => $uniqueClicks,
+            'open_rate' => $totalSent > 0 ? ($totalOpens / $totalSent) * 100 : 0,
+            'click_rate' => $totalSent > 0 ? ($totalClicks / $totalSent) * 100 : 0,
+            'click_through_rate' => $totalOpens > 0 ? ($totalClicks / $totalOpens) * 100 : 0,
+        ];
+    }
+
+    /**
+     * Get user recent activity
+     */
+    public function getUserRecentActivity(User $user, int $limit = 10): array
+    {
+        $recentCampaigns = $user->campaigns()
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get(['id', 'name', 'status', 'total_sent', 'opens', 'clicks', 'created_at'])
+            ->map(function($campaign) {
+                return [
+                    'id' => $campaign->id,
+                    'name' => $campaign->name,
+                    'status' => $campaign->status,
+                    'emails_sent' => $campaign->total_sent,
+                    'opens' => $campaign->opens,
+                    'clicks' => $campaign->clicks,
+                    'created_at' => $campaign->created_at->format('Y-m-d H:i:s'),
+                    'type' => 'campaign'
+                ];
+            });
+
+        return $recentCampaigns->toArray();
+    }
+
+    /**
+     * Get user-specific trending metrics
+     */
+    public function getUserTrendingMetrics(User $user, int $days = 7): array
+    {
+        $now = now();
+        $startDate = $now->copy()->subDays($days);
+        
+        $campaigns = $user->campaigns()
+            ->whereBetween('created_at', [$startDate, $now])
+            ->get();
+
+        $totalSent = $campaigns->sum('total_sent');
+        $totalOpens = $campaigns->sum('opens');
+        $totalClicks = $campaigns->sum('clicks');
+        $totalBounces = $campaigns->sum('bounces');
+
+        // Calculate trends by comparing with previous period
+        $previousStartDate = $startDate->copy()->subDays($days);
+        $previousCampaigns = $user->campaigns()
+            ->whereBetween('created_at', [$previousStartDate, $startDate])
+            ->get();
+
+        $previousSent = $previousCampaigns->sum('total_sent');
+        $previousOpens = $previousCampaigns->sum('opens');
+        $previousClicks = $previousCampaigns->sum('clicks');
+
+        return [
+            'current_period' => [
+                'emails_sent' => $totalSent,
+                'opens' => $totalOpens,
+                'clicks' => $totalClicks,
+                'bounces' => $totalBounces,
+                'campaigns' => $campaigns->count(),
+                'open_rate' => $totalSent > 0 ? ($totalOpens / $totalSent) * 100 : 0,
+                'click_rate' => $totalSent > 0 ? ($totalClicks / $totalSent) * 100 : 0,
+            ],
+            'previous_period' => [
+                'emails_sent' => $previousSent,
+                'opens' => $previousOpens,
+                'clicks' => $previousClicks,
+                'campaigns' => $previousCampaigns->count(),
+            ],
+            'trends' => [
+                'emails_sent_change' => $previousSent > 0 ? (($totalSent - $previousSent) / $previousSent) * 100 : 0,
+                'opens_change' => $previousOpens > 0 ? (($totalOpens - $previousOpens) / $previousOpens) * 100 : 0,
+                'clicks_change' => $previousClicks > 0 ? (($totalClicks - $previousClicks) / $previousClicks) * 100 : 0,
+                'campaigns_change' => $previousCampaigns->count() > 0 ? (($campaigns->count() - $previousCampaigns->count()) / $previousCampaigns->count()) * 100 : 0,
+            ],
+            'period_days' => $days
+        ];
+    }
+
+    /**
+     * Get user email performance chart data
+     */
+    public function getUserEmailPerformanceChartData(User $user, Carbon $now, Carbon $lastWeek): array
+    {
+        $campaigns = $user->campaigns()
+            ->whereBetween('created_at', [$lastWeek, $now])
+            ->orderBy('created_at')
+            ->get(['name', 'total_sent', 'opens', 'clicks', 'bounces', 'created_at']);
+
+        return $campaigns->map(function($campaign) {
+            return [
+                'date' => $campaign->created_at->format('Y-m-d'),
+                'campaign' => $campaign->name,
+                'sent' => $campaign->total_sent,
+                'opens' => $campaign->opens,
+                'clicks' => $campaign->clicks,
+                'bounces' => $campaign->bounces,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get user campaign trends chart data
+     */
+    public function getUserCampaignTrendsChartData(User $user, Carbon $now, Carbon $lastMonth): array
+    {
+        $campaigns = $user->campaigns()
+            ->whereBetween('created_at', [$lastMonth, $now])
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count, SUM(total_sent) as emails_sent')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $campaigns->map(function($item) {
+            return [
+                'date' => $item->date,
+                'campaigns' => $item->count,
+                'emails_sent' => $item->emails_sent,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get user engagement trends chart data
+     */
+    public function getUserEngagementTrendsChartData(User $user, Carbon $now, Carbon $lastWeek): array
+    {
+        $campaigns = $user->campaigns()
+            ->whereBetween('created_at', [$lastWeek, $now])
+            ->selectRaw('DATE(created_at) as date, SUM(opens) as opens, SUM(clicks) as clicks, SUM(total_sent) as sent')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $campaigns->map(function($item) {
+            return [
+                'date' => $item->date,
+                'opens' => $item->opens,
+                'clicks' => $item->clicks,
+                'open_rate' => $item->sent > 0 ? ($item->opens / $item->sent) * 100 : 0,
+                'click_rate' => $item->sent > 0 ? ($item->clicks / $item->sent) * 100 : 0,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get performance metrics (admin-only - system-wide)
      */
     public function getPerformanceMetrics(Carbon $now, Carbon $lastMonth): array
     {
         $campaigns = Campaign::whereBetween('created_at', [$lastMonth, $now])->get();
         
-        $avgEmailsPerCampaign = $campaigns->count() > 0 ? $campaigns->avg('emails_sent') : 0;
-        $avgDeliveryRate = $campaigns->count() > 0 ? $campaigns->avg('delivery_rate') : 0;
+        $avgEmailsPerCampaign = $campaigns->count() > 0 ? $campaigns->avg('total_sent') : 0;
+        $avgDeliveryRate = $campaigns->count() > 0 ? $campaigns->map(function($c) {
+            return $c->total_sent > 0 ? (($c->total_sent - $c->total_failed) / $c->total_sent) * 100 : 0;
+        })->avg() : 0;
         $avgOpenRate = $campaigns->count() > 0 ? $campaigns->avg('open_rate') : 0;
         $avgClickRate = $campaigns->count() > 0 ? $campaigns->avg('click_rate') : 0;
 
@@ -121,13 +416,13 @@ class AnalyticsService
                 'id' => $campaign->id,
                 'name' => $campaign->name,
                 'status' => $campaign->status,
-                'emails_sent' => $campaign->emails_sent,
-                'emails_delivered' => $campaign->emails_delivered,
+                'emails_sent' => $campaign->total_sent,
+                'emails_delivered' => $campaign->total_sent - $campaign->total_failed,
                 'bounces' => $campaign->bounces,
                 'complaints' => $campaign->complaints,
                 'opens' => $campaign->opens,
                 'clicks' => $campaign->clicks,
-                'delivery_rate' => $campaign->delivery_rate,
+                'delivery_rate' => $campaign->total_sent > 0 ? (($campaign->total_sent - $campaign->total_failed) / $campaign->total_sent) * 100 : 0,
                 'bounce_rate' => $campaign->bounce_rate,
                 'complaint_rate' => $campaign->complaint_rate,
                 'open_rate' => $campaign->open_rate,
@@ -550,8 +845,8 @@ class AnalyticsService
         
         $recentCampaigns = Campaign::whereBetween('created_at', [$startDate, $endDate])->get();
 
-        $totalSent = $recentCampaigns->sum('emails_sent');
-        $totalDelivered = $recentCampaigns->sum('emails_delivered');
+        $totalSent = $recentCampaigns->sum('total_sent');
+        $totalDelivered = $recentCampaigns->sum('total_sent') - $recentCampaigns->sum('total_failed');
         $totalBounces = $recentCampaigns->sum('bounces');
         $totalComplaints = $recentCampaigns->sum('complaints');
 
@@ -859,7 +1154,7 @@ class AnalyticsService
         $failedCampaigns = $campaigns->where('status', 'FAILED')->count();
         
         $totalEmailsSent = $campaigns->sum('total_sent');
-        $totalEmailsDelivered = $campaigns->sum('emails_delivered');
+        $totalEmailsDelivered = $campaigns->sum('total_sent') - $campaigns->sum('total_failed');
         $totalOpens = $campaigns->sum('opens');
         $totalClicks = $campaigns->sum('clicks');
         $totalBounces = $campaigns->sum('bounces');
@@ -1103,6 +1398,148 @@ class AnalyticsService
                 'daily' => $dailyTrend,
             ]
         ];
+    }
+
+    /**
+     * Get campaign performance chart data (time-series)
+     */
+    public function getCampaignPerformanceChartData(Carbon $endDate, Carbon $startDate): array
+    {
+        $campaigns = Campaign::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, 
+                        SUM(total_sent) as sent, 
+                        SUM(total_sent - total_failed) as delivered,
+                        SUM(opens) as opened,
+                        SUM(clicks) as clicked')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $campaigns->map(function ($campaign) {
+            return [
+                'date' => Carbon::parse($campaign->date)->format('M j'),
+                'sent' => (int) $campaign->sent,
+                'delivered' => (int) $campaign->delivered,
+                'opened' => (int) $campaign->opened,
+                'clicked' => (int) $campaign->clicked,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get user growth chart data (time-series)
+     */
+    public function getUserGrowthChartData(Carbon $endDate, Carbon $startDate): array
+    {
+        $users = User::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        $cumulativeCount = 0;
+        return $users->map(function ($user) use (&$cumulativeCount) {
+            $cumulativeCount += (int) $user->count;
+            return [
+                'date' => Carbon::parse($user->date)->format('M j'),
+                'value' => $cumulativeCount,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get email volume chart data (time-series)
+     */
+    public function getEmailVolumeChartData(Carbon $endDate, Carbon $startDate): array
+    {
+        $emailVolume = Campaign::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, SUM(total_sent) as volume')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $emailVolume->map(function ($volume) {
+            return [
+                'date' => Carbon::parse($volume->date)->format('M j'),
+                'value' => (int) $volume->volume,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get deliverability trends chart data (time-series)
+     */
+    public function getDeliverabilityTrendsChartData(Carbon $endDate, Carbon $startDate): array
+    {
+        $deliverability = Campaign::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, 
+                        AVG(CASE WHEN total_sent > 0 THEN ((total_sent - total_failed) / total_sent) * 100 ELSE 0 END) as delivery_rate,
+                        AVG(bounce_rate) as bounce_rate,
+                        AVG(open_rate) as open_rate,
+                        AVG(click_rate) as click_rate')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $deliverability->map(function ($data) {
+            return [
+                'date' => Carbon::parse($data->date)->format('M j'),
+                'delivery_rate' => round((float) $data->delivery_rate, 2),
+                'bounce_rate' => round((float) $data->bounce_rate, 2),
+                'open_rate' => round((float) $data->open_rate, 2),
+                'click_rate' => round((float) $data->click_rate, 2),
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get campaign status distribution for pie chart
+     */
+    public function getCampaignStatusDistribution(): array
+    {
+        $statusCounts = Campaign::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->get();
+
+        $colors = [
+            'active' => '#10B981',
+            'completed' => '#3B82F6',
+            'failed' => '#EF4444',
+            'paused' => '#F59E0B',
+            'draft' => '#6B7280',
+        ];
+
+        return $statusCounts->map(function ($status) use ($colors) {
+            return [
+                'name' => ucfirst($status->status),
+                'value' => (int) $status->count,
+                'color' => $colors[$status->status] ?? '#6B7280',
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get bounce trends chart data (time-series)
+     */
+    public function getBounceTrendsChartData(Carbon $endDate, Carbon $startDate): array
+    {
+        $bounces = Campaign::whereBetween('created_at', [$startDate, $endDate])
+            ->selectRaw('DATE(created_at) as date, 
+                        SUM(bounces) as hard_bounces,
+                        0 as soft_bounces,
+                        AVG(bounce_rate) as bounce_rate')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return $bounces->map(function ($bounce) {
+            return [
+                'date' => Carbon::parse($bounce->date)->format('M j'),
+                'hard_bounces' => (int) $bounce->hard_bounces,
+                'soft_bounces' => (int) ($bounce->soft_bounces ?? 0),
+                'bounce_rate' => round((float) $bounce->bounce_rate, 2),
+            ];
+        })->toArray();
     }
 } 
  

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { verifyEmail, resendEmailVerification } from '../../store/slices/authSlice';
 import toast from 'react-hot-toast';
 import { HiMail, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi';
 
@@ -17,7 +18,7 @@ const VerifyEmail = () => {
 
   useEffect(() => {
     if (token) {
-      verifyEmail(token);
+      handleVerifyEmail(token);
     }
   }, [token]);
 
@@ -28,32 +29,23 @@ const VerifyEmail = () => {
     }
   }, [resendCooldown]);
 
-  const verifyEmail = async (verificationToken) => {
+  const handleVerifyEmail = async (verificationToken) => {
     setIsVerifying(true);
     try {
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token: verificationToken }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setVerificationStatus('success');
-        toast.success('Email verified successfully!');
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      } else {
-        setVerificationStatus('error');
-        toast.error(data.message || 'Email verification failed');
-      }
+      await dispatch(verifyEmail({ 
+        token: verificationToken,
+        email: email 
+      })).unwrap();
+      
+      setVerificationStatus('success');
+      toast.success('Email verified successfully!');
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     } catch (error) {
       setVerificationStatus('error');
-      toast.error('An error occurred during verification');
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Email verification failed';
+      toast.error(errorMessage);
     } finally {
       setIsVerifying(false);
     }
@@ -63,24 +55,12 @@ const VerifyEmail = () => {
     if (resendCooldown > 0) return;
 
     try {
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success('Verification email sent!');
-        setResendCooldown(60); // 60 second cooldown
-      } else {
-        toast.error(data.message || 'Failed to resend verification email');
-      }
+      await dispatch(resendEmailVerification()).unwrap();
+      toast.success('Verification email sent!');
+      setResendCooldown(60); // 60 second cooldown
     } catch (error) {
-      toast.error('An error occurred while resending verification email');
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to resend verification email';
+      toast.error(errorMessage);
     }
   };
 

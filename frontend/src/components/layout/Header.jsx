@@ -50,6 +50,9 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     if (!notification.read_at) {
       await dispatch(markNotificationAsRead(notification.id));
     }
+    // Navigate to notifications page
+    setShowNotifications(false);
+    navigate('/notifications');
   };
 
   // Format time helper
@@ -208,7 +211,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                           onClick={() => handleNotificationClick(notification)}
                           className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
                             !notification.read_at ? 'bg-blue-50' : ''
-                          }`}
+                          } flex justify-between`}
                         >
                           <div className="flex items-start">
                             <div className="flex-shrink-0">
@@ -240,13 +243,15 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     )}
                   </div>
                   <div className="p-4 border-t border-gray-200">
-                    <a 
-                      href="/notifications" 
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                      onClick={() => setShowNotifications(false)}
+                    <button 
+                      onClick={() => {
+                        setShowNotifications(false);
+                        navigate('/notifications');
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800 w-full text-left"
                     >
                       View all notifications
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}

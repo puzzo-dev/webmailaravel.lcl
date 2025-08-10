@@ -57,16 +57,26 @@ const UserDashboard = ({ data, onRefresh }) => {
   const bounceProcessing = safeData.bounce_processing || {};
   const suppression = safeData.suppression || {};
 
-  // Generate performance chart data from last 7 days
+  // Generate performance chart data using real backend data
   const getPerformanceData = () => {
-    // For now, generate a trending view based on the available data
-    // In future, this could be enhanced with daily/weekly trending data from backend
+    // Use real chart data from backend if available
+    const chartData = safeData.charts?.campaign_performance || [];
+    if (chartData.length > 0) {
+      return chartData.map(item => ({
+        name: item.date,
+        sent: item.sent || 0,
+        delivered: item.delivered || 0,
+        opened: item.opened || 0,
+        clicked: item.clicked || 0,
+      }));
+    }
+    
+    // Fallback to mock data if no real data available
     const dates = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       
-      // Use actual data for the most recent day, and scale down for previous days
       const dayMultiplier = i === 0 ? 1 : (7 - i) / 7;
       
       dates.push({
@@ -80,9 +90,15 @@ const UserDashboard = ({ data, onRefresh }) => {
     return dates;
   };
 
-  // Generate campaign status data for pie chart
+  // Generate campaign status data for pie chart using real backend data
   const getCampaignStatusData = () => {
-    // Use backend data structure for campaign counts
+    // Use real chart data from backend if available
+    const chartData = safeData.charts?.campaign_status_distribution || [];
+    if (chartData.length > 0) {
+      return chartData;
+    }
+    
+    // Fallback to calculated data if no real data available
     const statusData = [
       { name: 'Active', value: campaigns.active || 0, color: '#10B981' },
       { name: 'Completed', value: campaigns.completed || 0, color: '#3B82F6' },

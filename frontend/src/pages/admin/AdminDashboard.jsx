@@ -267,9 +267,18 @@ const AdminDashboard = () => {
     },
   ];
 
-  // Chart data generation functions
+  // Chart data generation functions using real backend data
   const getUserGrowthData = () => {
-    // Generate last 7 days of user growth data
+    // Use real chart data from backend if available
+    const chartData = analyticsData.charts?.user_growth || [];
+    if (chartData.length > 0) {
+      return chartData.map(item => ({
+        name: item.date,
+        users: item.value,
+      }));
+    }
+    
+    // Fallback to mock data if no real data available
     const dates = [];
     const totalUsers = analyticsData.users?.total || 0;
     const weeklyUsers = analyticsData.users?.new_this_week || 0;
@@ -278,7 +287,6 @@ const AdminDashboard = () => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       
-      // Distribute weekly users across 7 days (most recent day gets highest)
       const dayMultiplier = i === 0 ? 0.3 : (7 - i) / 7 * 0.7;
       const dailyUsers = Math.round(weeklyUsers * dayMultiplier);
       
@@ -291,7 +299,19 @@ const AdminDashboard = () => {
   };
 
   const getCampaignPerformanceData = () => {
-    // Generate last 7 days of campaign performance data
+    // Use real chart data from backend if available
+    const chartData = analyticsData.charts?.campaign_performance || [];
+    if (chartData.length > 0) {
+      return chartData.map(item => ({
+        name: item.date,
+        campaigns: item.sent || 0,
+        emails_sent: item.sent || 0,
+        opens: item.opened || 0,
+        clicks: item.clicked || 0,
+      }));
+    }
+    
+    // Fallback to mock data if no real data available
     const dates = [];
     const campaigns = analyticsData.campaigns || {};
     const weeklyCampaigns = campaigns.weekly_created || 0;
@@ -300,7 +320,6 @@ const AdminDashboard = () => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       
-      // Distribute weekly data across 7 days
       const dayMultiplier = i === 0 ? 0.4 : (7 - i) / 7 * 0.6;
       
       dates.push({
@@ -315,12 +334,41 @@ const AdminDashboard = () => {
   };
 
   const getDeliverabilityData = () => {
+    // Use real chart data from backend if available
+    const chartData = analyticsData.charts?.deliverability_trends || [];
+    if (chartData.length > 0) {
+      return chartData.map(item => ({
+        name: item.date,
+        delivery_rate: item.delivery_rate || 0,
+        bounce_rate: item.bounce_rate || 0,
+        open_rate: item.open_rate || 0,
+        click_rate: item.click_rate || 0,
+      }));
+    }
+    
+    // Fallback to static data if no real data available
     const deliverability = analyticsData.deliverability || {};
     return [
       { name: 'Delivered', value: deliverability.delivery_rate || 0, color: '#10b981' },
       { name: 'Bounced', value: deliverability.bounce_rate || 0, color: '#ef4444' },
       { name: 'Complaints', value: deliverability.complaint_rate || 0, color: '#f59e0b' },
     ];
+  };
+
+  const getCampaignStatusData = () => {
+    // Use real chart data from backend if available
+    const chartData = analyticsData.charts?.campaign_status_distribution || [];
+    if (chartData.length > 0) {
+      return chartData;
+    }
+    
+    // Fallback to calculated data if no real data available
+    const campaigns = analyticsData.campaigns || {};
+    return [
+      { name: 'Active', value: campaigns.active || 0, color: '#10b981' },
+      { name: 'Completed', value: campaigns.completed || 0, color: '#3b82f6' },
+      { name: 'Failed', value: campaigns.failed || 0, color: '#ef4444' },
+    ].filter(item => item.value > 0);
   };
 
   const getRevenueData = () => {
@@ -774,22 +822,22 @@ const AdminDashboard = () => {
           )}
         </div>
 
-        {/* Revenue Metrics */}
+        {/* Campaign Status Distribution */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Revenue Overview</h3>
-              <p className="text-sm text-gray-500">Revenue metrics breakdown</p>
+              <h3 className="text-lg font-semibold text-gray-900">Campaign Status</h3>
+              <p className="text-sm text-gray-500">Campaign status distribution</p>
             </div>
             <div className="p-2 bg-yellow-100 rounded-lg">
               <HiCurrencyDollar className="h-5 w-5 text-yellow-600" />
             </div>
           </div>
-          {getRevenueData().length > 0 ? (
+          {getCampaignStatusData().length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={getRevenueData()}
+                  data={getCampaignStatusData()}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -797,7 +845,7 @@ const AdminDashboard = () => {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {getRevenueData().map((entry, index) => (
+                  {getCampaignStatusData().map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -808,7 +856,7 @@ const AdminDashboard = () => {
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
-                  formatter={(value) => [`$${value.toFixed(2)}`, 'Revenue']}
+                  formatter={(value) => [value, 'Campaigns']}
                 />
                 <Legend 
                   verticalAlign="bottom" 
@@ -821,8 +869,8 @@ const AdminDashboard = () => {
             <div className="h-80 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <HiCurrencyDollar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>No revenue data available</p>
-                <p className="text-sm">Revenue metrics will appear here</p>
+                <p>No campaign data available</p>
+                <p className="text-sm">Campaign status will appear here</p>
               </div>
             </div>
           )}

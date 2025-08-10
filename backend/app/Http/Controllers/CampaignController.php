@@ -48,6 +48,10 @@ class CampaignController extends Controller
                 $results->getCollection()->transform(function ($campaign) {
                     $campaign->senders = $campaign->getSenders();
                     $campaign->contents = $campaign->getContentVariations();
+                    
+                    // Calculate progress based on campaign status and stats
+                    $campaign->progress = $this->calculateCampaignProgress($campaign);
+                    
                     return $campaign;
                 });
                 
@@ -61,6 +65,10 @@ class CampaignController extends Controller
                 $results->getCollection()->transform(function ($campaign) {
                     $campaign->senders = $campaign->getSenders();
                     $campaign->contents = $campaign->getContentVariations();
+                    
+                    // Calculate progress based on campaign status and stats
+                    $campaign->progress = $this->calculateCampaignProgress($campaign);
+                    
                     return $campaign;
                 });
                 
@@ -87,7 +95,7 @@ class CampaignController extends Controller
                 'enable_unsubscribe_link' => 'boolean',
             ],
             function () use ($request) {
-                $data = $request->validated();
+                $data = $request->input('validated_data');
                 
                 // Use unified email sending service
                 $result = $this->emailSendingService->sendSingleEmail($data);
@@ -344,7 +352,7 @@ class CampaignController extends Controller
                 return $this->successResponse(null, 'Campaign deleted successfully');
             }
             
-            return $this->errorResponse('Failed to delete campaign', $result['error']);
+            return $this->errorResponse('Failed to delete campaign: ' . $result['error'], 400);
         }, 'delete_campaign');
     }
 
@@ -394,7 +402,7 @@ class CampaignController extends Controller
                 return $this->successResponse($campaign, 'Campaign started successfully');
             }
             
-            return $this->errorResponse('Failed to start campaign', $result['error']);
+            return $this->errorResponse('Failed to start campaign: ' . $result['error'], 400);
         }, 'start_campaign');
     }
 
@@ -414,7 +422,7 @@ class CampaignController extends Controller
                 return $this->successResponse($result['campaign'], 'Campaign paused successfully');
             }
             
-            return $this->errorResponse('Failed to pause campaign', $result['error']);
+            return $this->errorResponse('Failed to pause campaign: ' . $result['error'], 400);
         }, 'pause_campaign');
     }
 
@@ -434,7 +442,7 @@ class CampaignController extends Controller
                 return $this->successResponse($result['campaign'], 'Campaign resumed successfully');
             }
             
-            return $this->errorResponse('Failed to resume campaign', $result['error']);
+            return $this->errorResponse('Failed to resume campaign: ' . $result['error'], 400);
         }, 'resume_campaign');
     }
 
@@ -454,7 +462,7 @@ class CampaignController extends Controller
                 return $this->successResponse($result['campaign'], 'Campaign stopped successfully');
             }
             
-            return $this->errorResponse('Failed to stop campaign', $result['error']);
+            return $this->errorResponse('Failed to stop campaign: ' . $result['error'], 400);
         }, 'stop_campaign');
     }
 
@@ -559,7 +567,7 @@ class CampaignController extends Controller
             $result = $unsubscribeService->exportUnsubscribeList($campaign->id, $format);
 
             if (!$result['success']) {
-                return $this->errorResponse('Failed to export unsubscribe list', $result['error']);
+                return $this->errorResponse('Failed to export unsubscribe list: ' . $result['error'], 400);
             }
 
             $filename = "unsubscribe_list_{$campaign->id}.{$format}";
@@ -670,5 +678,44 @@ class CampaignController extends Controller
             // Log error but don't fail the main operation
             $this->logError('Telegram notification failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Calculate campaign progress based on status and statistics
+     */
+    private function calculateCampaignProgress($campaign): int
+    {
+        // If campaign is draft or scheduled, progress is 0%
+        if (in_array($campaign->status, ['draft', 'scheduled'])) {
+            return 0;
+        }
+        
+        // If campaign is completed, progress is 100%
+        if ($campaign->status === 'completed') {
+            return 100;
+        }
+        
+        // If campaign failed, progress is based on what was sent before failure
+        if ($campaign->status === 'failed') {
+            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
+                return min(100, round(($campaign->total_sent / $campaign->recipient_count) * 100));
+            }
+            return 0;
+        }
+        
+        // For sending/paused campaigns, calculate based on sent vs total recipients
+        if (in_array($campaign->status, ['sending', 'paused'])) {
+            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
+                return min(100, round(($campaign->total_sent / $campaign->recipient_count) * 100));
+            }
+            // If no recipient count but has total_sent, assume some progress
+            if ($campaign->total_sent > 0) {
+                return 50; // Assume 50% progress if we can't calculate exactly
+            }
+            return 10; // Campaign started but minimal progress
+        }
+        
+        // Default fallback
+        return 0;
     }
 }

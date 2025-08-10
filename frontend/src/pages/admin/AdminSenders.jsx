@@ -524,15 +524,15 @@ const AdminSenders = () => {
                         <div className="flex items-center space-x-4">
                           <span className="flex items-center">
                             <ChartBarIcon className="w-4 h-4 mr-1 text-gray-400" />
-                            {formatNumber(sender.stats?.campaigns_sent || 0)}
+                            {formatNumber(sender.statistics?.campaigns_count || 0)}
                           </span>
-                          <span className="flex items-center">
+                          <span className="flex items-center text-green-600">
                             <EnvelopeIcon className="w-4 h-4 mr-1 text-green-400" />
-                            {formatNumber(sender.stats?.total_emails || 0)}
+                            {formatNumber(sender.statistics?.total_sent || 0)}
                           </span>
                         </div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {sender.stats?.success_rate || 0}% success rate
+                          {sender.statistics?.success_rate || 0}% success rate
                     </div>
                     </div>
                   </td>

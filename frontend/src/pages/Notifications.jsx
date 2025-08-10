@@ -14,6 +14,8 @@ import {
   HiEye,
   HiFilter,
   HiSearch,
+  HiShieldCheck,
+  HiMail,
 } from 'react-icons/hi';
 import NotificationList from '../components/shared/NotificationList';
 
@@ -23,6 +25,8 @@ const Notifications = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     dispatch(fetchNotifications());
@@ -78,6 +82,25 @@ const Notifications = () => {
     }
   };
 
+  const handleViewNotification = async (notification) => {
+    setSelectedNotification(notification);
+    setShowModal(true);
+    
+    // Mark as read if not already read
+    if (!notification.read_at) {
+      try {
+        await dispatch(markNotificationAsRead(notification.id)).unwrap();
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
+    }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedNotification(null);
+  };
+
   const filteredNotifications = notifications.filter(notification => {
     // Filter by status
     if (filter === 'unread' && notification.read_at) return false;
@@ -97,6 +120,13 @@ const Notifications = () => {
 
   const getNotificationIcon = (type) => {
     switch (type) {
+      case 'security':
+      case 'login':
+        return <HiShieldCheck className="h-5 w-5 text-red-500" />;
+      case 'campaign':
+      case 'campaign_created':
+      case 'campaign_completed':
+        return <HiMail className="h-5 w-5 text-blue-500" />;
       case 'success':
         return <HiCheckCircle className="h-5 w-5 text-green-500" />;
       case 'warning':
@@ -224,91 +254,109 @@ const Notifications = () => {
 
       {/* Notifications List */}
       <div className="space-y-4">
-        {filteredNotifications.length > 0 ? (
-          filteredNotifications.map((notification, index) => (
-            <div
-              key={notification.id}
-              className={`bg-white rounded-lg shadow-sm border-l-4 hover:shadow-md transition-all duration-200 transform hover:-translate-y-1 ${
-                !notification.read_at
-                  ? 'border-l-primary-500 bg-gradient-to-r from-primary-50 to-white'
-                  : 'border-l-gray-300'
-              } ${index === 0 ? 'animate-fadeInDown' : ''}`}
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-3 flex-1">
-                    <div className="flex-shrink-0 mt-1">
-                      {getNotificationIcon(notification.notification_type || notification.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="text-sm font-medium text-gray-900 truncate">
-                          {notification.title || 'Notification'}
-                        </h3>
-                        {!notification.read_at && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 animate-pulse">
-                            New
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {notification.message || ''}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {formatTimeAgo(notification.created_at)}
-                      </p>
-                    </div>
+        <NotificationList
+          notifications={filteredNotifications}
+          loading={isLoading}
+          onMarkAsRead={handleMarkAsRead}
+          onDelete={handleDelete}
+          onView={handleViewNotification}
+          showActions={true}
+          emptyMessage="No notifications found"
+        />
+      </div>
+
+      {/* Notification View Modal */}
+      {showModal && selectedNotification && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b">
+                <div className="flex items-center space-x-3">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                    selectedNotification.type === 'security' || selectedNotification.type === 'login' 
+                      ? 'bg-red-100 text-red-600'
+                      : selectedNotification.type === 'campaign'
+                      ? 'bg-blue-100 text-blue-600'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {getNotificationIcon(selectedNotification.type || selectedNotification.notification_type)}
                   </div>
-                  <div className="flex items-center space-x-2 ml-4">
-                    {!notification.read_at && (
-                      <button
-                        onClick={() => handleMarkAsRead(notification.id)}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                        title="Mark as read"
-                      >
-                        <HiCheck className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(notification.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                      title="Delete notification"
-                    >
-                      <HiTrash className="h-4 w-4" />
-                    </button>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      {selectedNotification.title || 'Notification'}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {formatTimeAgo(selectedNotification.created_at)}
+                    </p>
                   </div>
                 </div>
+                <button
+                  onClick={closeModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <HiX className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="py-4">
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {selectedNotification.message || 'No message content available.'}
+                </div>
+                
+                {/* Additional notification data */}
+                {selectedNotification.ip_address && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">Security Details</h4>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      {selectedNotification.ip_address && (
+                        <div><strong>IP Address:</strong> {selectedNotification.ip_address}</div>
+                      )}
+                      {selectedNotification.location && (
+                        <div><strong>Location:</strong> {selectedNotification.location}</div>
+                      )}
+                      {selectedNotification.device && (
+                        <div><strong>Device:</strong> {selectedNotification.device}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end pt-4 border-t space-x-3">
+                {!selectedNotification.read_at && (
+                  <button
+                    onClick={() => {
+                      handleMarkAsRead(selectedNotification.id);
+                      closeModal();
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    Mark as Read
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    handleDelete(selectedNotification.id);
+                    closeModal();
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={closeModal}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Close
+                </button>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <HiBell className="h-12 w-12 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || filter !== 'all' ? 'No matching notifications' : 'No notifications yet'}
-            </h3>
-            <p className="text-gray-500">
-              {searchTerm || filter !== 'all' 
-                ? 'Try adjusting your search or filter criteria.'
-                : "You're all caught up! New notifications will appear here."}
-            </p>
-            {(searchTerm || filter !== 'all') && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setFilter('all');
-                }}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Clear filters
-              </button>
-            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Statistics */}
       {notifications.length > 0 && (

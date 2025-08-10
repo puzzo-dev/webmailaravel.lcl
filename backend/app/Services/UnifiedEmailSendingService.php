@@ -12,6 +12,7 @@ use App\Models\Sender;
 use App\Models\SuppressionList;
 use App\Jobs\SendEmailJob;
 use App\Services\PerformanceMonitoringService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -331,6 +332,6 @@ class UnifiedEmailSendingService
      */
     private function isEmailSuppressed(string $email): bool
     {
-        return $this->checkSuppressionList($email);
+        return $this->shouldSuppressEmail($email);
     }
 }

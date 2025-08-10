@@ -31,7 +31,19 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        $channels = ['database']; // Always store in database
+        
+        // Add email channel if user has email notifications enabled
+        if ($notifiable->email_notifications_enabled) {
+            $channels[] = 'mail';
+        }
+        
+        // Add Telegram channel if user has Telegram notifications enabled and chat ID
+        if ($notifiable->telegram_notifications_enabled && $notifiable->telegram_chat_id) {
+            $channels[] = \App\Channels\TelegramChannel::class;
+        }
+        
+        return $channels;
     }
 
     /**
@@ -120,20 +132,37 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
             $additionalContext = " Error: {$this->campaign->error_message}";
         } elseif ($this->newStatus === 'completed' && isset($this->campaign->total_sent)) {
             $additionalContext = " Total emails sent: {$this->campaign->total_sent}";
-        } elseif ($this->newStatus === 'milestone' && isset($this->campaign->milestone_data)) {
-            $additionalContext = " Milestone: {$this->campaign->milestone_data}";
-        }
-
-        return [
-            'title' => $config['title'],
-            'message' => "Your campaign '{$this->campaign->name}' {$config['message']}.{$additionalContext}",
-            'type' => 'campaign_status_updated',
-            'notification_type' => $config['type'],
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,
-            'status_changed_at' => now()->toISOString(),
+            'type' => 'campaign_status',
+            'action_url' => '/campaigns/' . $this->campaign->id,
+        ];
+    }
+
+    /**
+     * Get the Telegram representation of the notification.
+     */
+    public function toTelegram(object $notifiable): array
+    {
+        $config = $this->getStatusConfig($this->newStatus);
+        
+        $message = "🔔 <b>{$config['title']}</b>\n\n";
+        $message .= "📧 Campaign: <b>{$this->campaign->name}</b>\n";
+        $message .= "📊 Status: {$this->oldStatus} → {$this->newStatus}\n";
+        
+        if ($this->newStatus === 'failed' && !empty($this->campaign->error_message)) {
+            $message .= "❌ Error: {$this->campaign->error_message}\n";
+        } elseif ($this->newStatus === 'completed' && isset($this->campaign->total_sent)) {
+            $message .= "✅ Total sent: {$this->campaign->total_sent} emails\n";
+        }
+        
+        $message .= "\nView your campaign dashboard for more details.";
+        
+        return [
+            'text' => $message,
+            'parse_mode' => 'HTML'
         ];
     }
 }

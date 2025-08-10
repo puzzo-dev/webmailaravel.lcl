@@ -55,6 +55,51 @@ export const authService = {
     getCurrentUser() {
         // User data is managed by Redux, not local storage
         return null;
+    },
+
+    async forgotPassword(email) {
+        try {
+            const response = await api.post('/auth/forgot-password', { email });
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    async resetPassword(resetData) {
+        try {
+            const response = await api.post('/auth/reset-password', resetData);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    async sendEmailVerification() {
+        try {
+            const response = await api.post('/auth/send-verification');
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    async verifyEmail(verificationData) {
+        try {
+            const response = await api.post('/auth/verify-email', verificationData);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    async resendEmailVerification() {
+        try {
+            const response = await api.post('/auth/resend-verification');
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
     }
 };
 
@@ -1074,6 +1119,11 @@ export const adminService = {
     async deleteNotification(notificationId) {
         const response = await api.delete(`/admin/notifications/${notificationId}`);
         return response.data;
+    },
+
+    async markNotificationAsRead(notificationId) {
+        const response = await api.put(`/admin/notifications/${notificationId}/read`);
+        return response.data;
     }
 
     // BTCPay configuration is now handled through SystemSettings
@@ -1142,11 +1192,6 @@ export const userActivityService = {
 
 // Additional admin service methods
 export const adminNotificationService = {
-    async markNotificationAsRead(notificationId) {
-        const response = await api.put(`/admin/notifications/${notificationId}/read`);
-        return response.data;
-    },
-
     // Backup Management
     async getBackups() {
         const response = await api.get('/admin/backups');

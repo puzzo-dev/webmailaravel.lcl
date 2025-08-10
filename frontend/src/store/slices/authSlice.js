@@ -166,6 +166,42 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
+export const sendEmailVerification = createAsyncThunk(
+  'auth/sendEmailVerification',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await authService.sendEmailVerification();
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to send verification email');
+    }
+  }
+);
+
+export const verifyEmail = createAsyncThunk(
+  'auth/verifyEmail',
+  async (verificationData, { rejectWithValue }) => {
+    try {
+      const response = await authService.verifyEmail(verificationData);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Email verification failed');
+    }
+  }
+);
+
+export const resendEmailVerification = createAsyncThunk(
+  'auth/resendEmailVerification',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await authService.resendEmailVerification();
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.message || 'Failed to resend verification email');
+    }
+  }
+);
+
 // Check if we might be authenticated on app start (to prevent flash of unauthenticated content)
 const hasStoredAuth = () => {
   try {

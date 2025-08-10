@@ -495,27 +495,58 @@ class UserController extends Controller
      */
     public function updateNotificationSettings(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        $validator = Validator::make($request->all(), [
-            'telegram_notifications_enabled' => 'sometimes|boolean',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
+            
+            $validator = Validator::make($request->all(), [
+                'email_notifications_enabled' => 'sometimes|boolean',
+                'telegram_notifications_enabled' => 'sometimes|boolean',
+                'telegram_chat_id' => 'sometimes|nullable|string|max:255',
+                'notification_preferences' => 'sometimes|array',
+                'notification_preferences.*.email' => 'sometimes|boolean',
+                'notification_preferences.*.telegram' => 'sometimes|boolean',
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
 
-        $user->update($validator->validated());
+            $data = $validator->validated();
+            
+            // Update basic notification settings
+            if (isset($data['email_notifications_enabled'])) {
+                $user->email_notifications_enabled = $data['email_notifications_enabled'];
+            }
+            
+            if (isset($data['telegram_notifications_enabled'])) {
+                $user->telegram_notifications_enabled = $data['telegram_notifications_enabled'];
+            }
+            
+            if (isset($data['telegram_chat_id'])) {
+                $user->telegram_chat_id = $data['telegram_chat_id'];
+            }
+            
+            // Update granular notification preferences
+            if (isset($data['notification_preferences'])) {
+                $currentPreferences = $user->notification_preferences ?? [];
+                $newPreferences = array_merge($currentPreferences, $data['notification_preferences']);
+                $user->notification_preferences = $newPreferences;
+            }
+            
+            $user->save();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification settings updated successfully',
-            'data' => $user->fresh()
-        ]);
+            Log::info('User notification settings updated', [
+                'user_id' => $user->id,
+                'email_enabled' => $user->email_notifications_enabled,
+                'telegram_enabled' => $user->telegram_notifications_enabled,
+                'has_telegram_chat_id' => !empty($user->telegram_chat_id),
+                'preferences_count' => count($user->notification_preferences ?? [])
+            ]);
+
+            return $this->successResponse([
+                'user' => $user->fresh()
+            ], 'Notification settings updated successfully');
+        }, 'update_notification_settings');
     }
 
     /**

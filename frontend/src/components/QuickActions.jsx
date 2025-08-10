@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminService } from '../services/api';
+import { api } from '../utils/api';
 import toast from 'react-hot-toast';
 import {
   HiPlus,
@@ -20,17 +21,24 @@ const QuickActions = ({ _user }) => {
   const navigate = useNavigate();
   const [webmailUrl, setWebmailUrl] = useState(null);
 
-  // Fetch system settings to get webmail URL
+  // Fetch public config to get webmail URL (accessible to all users)
   useEffect(() => {
     const fetchWebmailSettings = async () => {
       try {
-        const response = await adminService.getSystemSettings();
-        if (response.success && response.data?.webmail) {
-          const { url, enabled } = response.data.webmail;
+        const response = await api.get('/config');
+        const data = response.data;
+        
+        if (data.success && data.data?.webmail) {
+          const { url, enabled } = data.data.webmail;
           // Only set URL if webmail is enabled and URL is provided
           if (enabled && url && url.trim()) {
             setWebmailUrl(url.trim());
+            console.log('Webmail settings loaded:', { enabled, url });
+          } else {
+            console.log('Webmail not enabled or URL missing:', { enabled, url });
           }
+        } else {
+          console.log('No webmail config in response:', data);
         }
       } catch (error) {
         // Silently fail - webmail button won't show if URL not available

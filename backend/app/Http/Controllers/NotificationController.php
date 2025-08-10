@@ -26,18 +26,37 @@ class NotificationController extends Controller
                 
                 // Transform notifications to include computed fields
                 $transformedNotifications = $notifications->getCollection()->map(function ($notification) {
-                    return [
+                    $data = [
                         'id' => $notification->id,
                         'type' => $notification->type,
                         'title' => $notification->data['title'] ?? 'Notification',
                         'message' => $notification->data['message'] ?? '',
-                        'notification_type' => $notification->data['type'] ?? 'info',
+                        'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
                         'read_at' => $notification->read_at,
                         'created_at' => $notification->created_at,
                         'updated_at' => $notification->updated_at,
                         'user_id' => $notification->notifiable_id,
                         'user_email' => $notification->notifiable->email ?? 'Unknown',
                     ];
+                    
+                    // Include additional fields from notification data (for login notifications, etc.)
+                    if (isset($notification->data['ip_address'])) {
+                        $data['ip_address'] = $notification->data['ip_address'];
+                    }
+                    if (isset($notification->data['location'])) {
+                        $data['location'] = $notification->data['location'];
+                    }
+                    if (isset($notification->data['device'])) {
+                        $data['device'] = $notification->data['device'];
+                    }
+                    if (isset($notification->data['login_time'])) {
+                        $data['login_time'] = $notification->data['login_time'];
+                    }
+                    if (isset($notification->data['action_url'])) {
+                        $data['action_url'] = $notification->data['action_url'];
+                    }
+                    
+                    return $data;
                 });
                 
                 $notifications->setCollection($transformedNotifications);
@@ -51,16 +70,35 @@ class NotificationController extends Controller
                 
                 // Transform notifications to include computed fields
                 $transformedNotifications = $notifications->getCollection()->map(function ($notification) {
-                    return [
+                    $data = [
                         'id' => $notification->id,
                         'type' => $notification->type,
                         'title' => $notification->data['title'] ?? 'Notification',
                         'message' => $notification->data['message'] ?? '',
-                        'notification_type' => $notification->data['type'] ?? 'info',
+                        'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
                         'read_at' => $notification->read_at,
                         'created_at' => $notification->created_at,
                         'updated_at' => $notification->updated_at,
                     ];
+                    
+                    // Include additional fields from notification data (for login notifications, etc.)
+                    if (isset($notification->data['ip_address'])) {
+                        $data['ip_address'] = $notification->data['ip_address'];
+                    }
+                    if (isset($notification->data['location'])) {
+                        $data['location'] = $notification->data['location'];
+                    }
+                    if (isset($notification->data['device'])) {
+                        $data['device'] = $notification->data['device'];
+                    }
+                    if (isset($notification->data['login_time'])) {
+                        $data['login_time'] = $notification->data['login_time'];
+                    }
+                    if (isset($notification->data['action_url'])) {
+                        $data['action_url'] = $notification->data['action_url'];
+                    }
+                    
+                    return $data;
                 });
                 
                 $notifications->setCollection($transformedNotifications);
@@ -87,11 +125,28 @@ class NotificationController extends Controller
                 'type' => $notification->type,
                 'title' => $notification->data['title'] ?? 'Notification',
                 'message' => $notification->data['message'] ?? '',
-                'notification_type' => $notification->data['type'] ?? 'info',
+                'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
                 'read_at' => $notification->read_at,
                 'created_at' => $notification->created_at,
                 'updated_at' => $notification->updated_at,
             ];
+            
+            // Include additional fields from notification data (for login notifications, etc.)
+            if (isset($notification->data['ip_address'])) {
+                $transformedNotification['ip_address'] = $notification->data['ip_address'];
+            }
+            if (isset($notification->data['location'])) {
+                $transformedNotification['location'] = $notification->data['location'];
+            }
+            if (isset($notification->data['device'])) {
+                $transformedNotification['device'] = $notification->data['device'];
+            }
+            if (isset($notification->data['login_time'])) {
+                $transformedNotification['login_time'] = $notification->data['login_time'];
+            }
+            if (isset($notification->data['action_url'])) {
+                $transformedNotification['action_url'] = $notification->data['action_url'];
+            }
             
             return $this->successResponse($transformedNotification, 'Notification retrieved successfully');
         }, 'view_notification');

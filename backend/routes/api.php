@@ -48,10 +48,18 @@ Route::get('/security/test', function () {
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->name('verification.verify');
+    Route::post('/email/verification-notification', [AuthController::class, 'resendVerificationEmail'])->middleware(['auth:api'])->name('verification.send');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
+    
+    // Authenticated email verification routes
+    Route::middleware('auth:api')->group(function () {
+        Route::post('/send-verification', [AuthController::class, 'sendVerification']);
+        Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
+    });
 });
 
 // Public config routes (no authentication required)

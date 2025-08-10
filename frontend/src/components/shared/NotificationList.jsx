@@ -20,6 +20,7 @@ const NotificationList = ({
   loading = false,
   onMarkAsRead = null,
   onDelete = null,
+  onView = null,
   onMarkAllAsRead = null,
   onDeleteAll = null,
   showActions = true,
@@ -55,6 +56,7 @@ const NotificationList = ({
       'high_bounce_rate_alert': 'text-orange-600 bg-orange-100',
       'campaign': 'text-blue-600 bg-blue-100',
       'security': 'text-red-600 bg-red-100',
+      'login': 'text-red-600 bg-red-100',
       'warning': 'text-yellow-600 bg-yellow-100',
       'info': 'text-green-600 bg-green-100',
       'default': 'text-gray-600 bg-gray-100',
@@ -130,12 +132,12 @@ const NotificationList = ({
             <div
               key={notification.id}
               className={`p-6 hover:bg-gray-50 transition-colors ${
-                !notification.read ? 'bg-blue-50' : ''
+                !notification.read_at ? 'bg-blue-50' : ''
               }`}
             >
               <div className="flex items-start space-x-3">
-                <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${getNotificationColor(notification.type)}`}>
-                  {getNotificationIcon(notification.type)}
+                <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${getNotificationColor(notification.type || notification.notification_type)}`}>
+                  {getNotificationIcon(notification.type || notification.notification_type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
@@ -148,7 +150,7 @@ const NotificationList = ({
                       </p>
                       <div className="flex items-center mt-2 text-xs text-gray-400">
                         <span>{formatDate(notification.created_at)}</span>
-                        {!notification.read && (
+                        {!notification.read_at && (
                           <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             New
                           </span>
@@ -157,10 +159,19 @@ const NotificationList = ({
                     </div>
                     {showActions && (
                       <div className="flex items-center space-x-2">
-                        {!notification.read && onMarkAsRead && (
+                        {onView && (
+                          <button
+                            onClick={() => onView(notification)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="View notification"
+                          >
+                            <HiEye className="h-4 w-4" />
+                          </button>
+                        )}
+                        {!notification.read_at && onMarkAsRead && (
                           <button
                             onClick={() => onMarkAsRead(notification.id)}
-                            className="text-success-600 hover:text-success-900"
+                            className="text-green-600 hover:text-green-900"
                             title="Mark as read"
                           >
                             <HiCheck className="h-4 w-4" />
@@ -169,7 +180,7 @@ const NotificationList = ({
                         {onDelete && (
                           <button
                             onClick={() => onDelete(notification.id)}
-                            className="text-danger-600 hover:text-danger-900"
+                            className="text-red-600 hover:text-red-900"
                             title="Delete notification"
                           >
                             <HiTrash className="h-4 w-4" />

@@ -111,11 +111,18 @@ const Account = () => {
     time_format: '12h',
   });
   const [notificationSettings, setNotificationSettings] = useState({
-    email_notifications: true,
-    campaign_completed: true,
-    campaign_failed: true,
-    new_login: true,
-    security_alerts: true,
+    email_notifications_enabled: true,
+    telegram_notifications_enabled: false,
+    telegram_chat_id: '',
+    notification_preferences: {
+      campaign_completed: { email: true, telegram: false },
+      campaign_failed: { email: true, telegram: false },
+      campaign_started: { email: false, telegram: false },
+      new_login: { email: true, telegram: true },
+      security_alerts: { email: true, telegram: true },
+      subscription_expiry: { email: true, telegram: false },
+      high_bounce_rate: { email: true, telegram: false },
+    },
   });
   const [securitySettings, setSecuritySettings] = useState({
     two_factor_auth: false,
@@ -296,10 +303,23 @@ const Account = () => {
   };
 
   const handleNotificationChange = (e) => {
-    const { name, checked } = e.target;
+    const { name, checked, value, type } = e.target;
     setNotificationSettings(prev => ({
       ...prev,
-      [name]: checked,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleNotificationPreferenceChange = (notificationType, channel, enabled) => {
+    setNotificationSettings(prev => ({
+      ...prev,
+      notification_preferences: {
+        ...prev.notification_preferences,
+        [notificationType]: {
+          ...prev.notification_preferences[notificationType],
+          [channel]: enabled,
+        },
+      },
     }));
   };
 
@@ -800,74 +820,111 @@ const Account = () => {
                 {/* Notification Settings */}
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Notification Settings</h3>
-                  <form onSubmit={handleNotificationSubmit} className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">Email Notifications</h4>
-                          <p className="text-sm text-gray-500">Receive notifications via email</p>
+                  <form onSubmit={handleNotificationSubmit} className="space-y-6">
+                    
+                    {/* Channel Settings */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">Notification Channels</h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <HiMail className="h-5 w-5 text-gray-400 mr-2" />
+                            <div>
+                              <span className="text-sm font-medium text-gray-900">Email Notifications</span>
+                              <p className="text-xs text-gray-500">Receive notifications via email</p>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            name="email_notifications_enabled"
+                            checked={notificationSettings.email_notifications_enabled}
+                            onChange={handleNotificationChange}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
                         </div>
-                        <input
-                          type="checkbox"
-                          name="email_notifications"
-                          checked={notificationSettings.email_notifications}
-                          onChange={handleNotificationChange}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">Campaign Completed</h4>
-                          <p className="text-sm text-gray-500">Notify when campaigns are completed</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <HiDeviceMobile className="h-5 w-5 text-gray-400 mr-2" />
+                            <div>
+                              <span className="text-sm font-medium text-gray-900">Telegram Notifications</span>
+                              <p className="text-xs text-gray-500">Receive notifications via Telegram</p>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            name="telegram_notifications_enabled"
+                            checked={notificationSettings.telegram_notifications_enabled}
+                            onChange={handleNotificationChange}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
                         </div>
-                        <input
-                          type="checkbox"
-                          name="campaign_completed"
-                          checked={notificationSettings.campaign_completed}
-                          onChange={handleNotificationChange}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">Campaign Failed</h4>
-                          <p className="text-sm text-gray-500">Notify when campaigns fail</p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          name="campaign_failed"
-                          checked={notificationSettings.campaign_failed}
-                          onChange={handleNotificationChange}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">New Login</h4>
-                          <p className="text-sm text-gray-500">Notify on new device login</p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          name="new_login"
-                          checked={notificationSettings.new_login}
-                          onChange={handleNotificationChange}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-900">Security Alerts</h4>
-                          <p className="text-sm text-gray-500">Notify on security events</p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          name="security_alerts"
-                          checked={notificationSettings.security_alerts}
-                          onChange={handleNotificationChange}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
+                        {notificationSettings.telegram_notifications_enabled && (
+                          <div className="mt-2 pl-7">
+                            <input
+                              type="text"
+                              name="telegram_chat_id"
+                              value={notificationSettings.telegram_chat_id}
+                              onChange={handleNotificationChange}
+                              placeholder="Enter your Telegram Chat ID"
+                              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Start a chat with our bot @YourBotName and send /start to get your Chat ID
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {/* Notification Types */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">Notification Types</h4>
+                      <div className="space-y-4">
+                        {Object.entries({
+                          campaign_completed: { title: 'Campaign Completed', desc: 'When campaigns finish successfully' },
+                          campaign_failed: { title: 'Campaign Failed', desc: 'When campaigns encounter errors' },
+                          campaign_started: { title: 'Campaign Started', desc: 'When campaigns begin sending' },
+                          new_login: { title: 'New Login', desc: 'When someone logs into your account' },
+                          security_alerts: { title: 'Security Alerts', desc: 'Important security notifications' },
+                          subscription_expiry: { title: 'Subscription Expiry', desc: 'When your subscription is about to expire' },
+                          high_bounce_rate: { title: 'High Bounce Rate', desc: 'When bounce rates exceed thresholds' },
+                        }).map(([key, config]) => (
+                          <div key={key} className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <h5 className="text-sm font-medium text-gray-900">{config.title}</h5>
+                                <p className="text-xs text-gray-500">{config.desc}</p>
+                              </div>
+                            </div>
+                            <div className="flex space-x-6 mt-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={notificationSettings.notification_preferences[key]?.email || false}
+                                  onChange={(e) => handleNotificationPreferenceChange(key, 'email', e.target.checked)}
+                                  disabled={!notificationSettings.email_notifications_enabled}
+                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
+                                />
+                                <HiMail className="h-4 w-4 text-gray-400 ml-2 mr-1" />
+                                <span className="text-sm text-gray-600">Email</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={notificationSettings.notification_preferences[key]?.telegram || false}
+                                  onChange={(e) => handleNotificationPreferenceChange(key, 'telegram', e.target.checked)}
+                                  disabled={!notificationSettings.telegram_notifications_enabled}
+                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
+                                />
+                                <HiDeviceMobile className="h-4 w-4 text-gray-400 ml-2 mr-1" />
+                                <span className="text-sm text-gray-600">Telegram</span>
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="flex justify-end">
                       <button 
                         type="submit" 

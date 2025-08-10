@@ -6,6 +6,7 @@ use App\Models\Analytics;
 use App\Models\Campaign;
 use App\Models\SystemConfig;
 use App\Models\User;
+use App\Services\EnvFileManager;
 use App\Traits\ResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -351,6 +352,8 @@ class AdminController extends Controller
             ]);
 
             $updatedSettings = [];
+            $systemConfigUpdates = []; // Track all SystemConfig updates for .env sync
+            $envFileManager = new EnvFileManager();
 
             // Update system SMTP settings
             if ($request->has('system_smtp')) {
@@ -358,6 +361,7 @@ class AdminController extends Controller
                 foreach ($smtpSettings as $key => $value) {
                     $configKey = 'SYSTEM_SMTP_'.strtoupper($key);
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["system_smtp.{$key}"] = $value;
                 }
             }
@@ -368,6 +372,7 @@ class AdminController extends Controller
                 foreach ($webmailSettings as $key => $value) {
                     $configKey = 'WEBMAIL_'.strtoupper($key);
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["webmail.{$key}"] = $value;
                 }
             }
@@ -389,6 +394,7 @@ class AdminController extends Controller
                         $configKey = 'APP_TIMEZONE';
                     }
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["system.{$key}"] = $value;
                 }
             }
@@ -405,6 +411,7 @@ class AdminController extends Controller
                         $configKey = 'NOTIFICATION_'.strtoupper($key);
                     }
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["notifications.{$key}"] = $value;
                 }
             }
@@ -425,6 +432,7 @@ class AdminController extends Controller
                         $configKey = 'TRAINING_'.strtoupper($key);
                     }
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["training.{$key}"] = $value;
                 }
             }
@@ -435,7 +443,37 @@ class AdminController extends Controller
                 foreach ($btcpaySettings as $key => $value) {
                     $configKey = 'BTCPAY_'.strtoupper($key);
                     SystemConfig::set($configKey, $value);
+                    $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["btcpay.{$key}"] = $value;
+                }
+            }
+
+            // Sync all SystemConfig updates to .env file
+            if (!empty($systemConfigUpdates)) {
+                $envSyncResults = $envFileManager->syncMultipleSystemConfigToEnv($systemConfigUpdates);
+                
+                // Log any failed .env syncs
+                foreach ($envSyncResults as $envKey => $success) {
+                    if (!$success) {
+                        \Log::warning('Failed to sync setting to .env file', [
+                            'env_key' => $envKey,
+                            'user_id' => Auth::id()
+                        ]);
+                    }
+                }
+                
+                // Clear Laravel config cache to ensure changes take effect
+                try {
+                    \Artisan::call('config:clear');
+                    \Log::info('Configuration cache cleared after system settings update', [
+                        'updated_keys' => array_keys($systemConfigUpdates),
+                        'user_id' => Auth::id()
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to clear config cache after system settings update', [
+                        'error' => $e->getMessage(),
+                        'user_id' => Auth::id()
+                    ]);
                 }
             }
 

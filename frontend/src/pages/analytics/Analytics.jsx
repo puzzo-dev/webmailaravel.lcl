@@ -90,31 +90,31 @@ const Analytics = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
             title="Total Emails Sent"
-            value={analytics.total_sent || 0}
-            previous={analytics.previous_total_sent}
+            value={analytics.summary?.total_emails_sent || analytics.campaigns?.emails_sent || 0}
+            previous={analytics.summary?.previous_total_emails_sent}
             icon={<HiMail className="h-6 w-6 text-blue-600" />}
             color="blue"
           />
           <MetricCard
             title="Open Rate"
-            value={analytics.open_rate || 0}
-            previous={analytics.previous_open_rate}
+            value={analytics.campaigns?.open_rate || 0}
+            previous={analytics.campaigns?.previous_open_rate}
             icon={<HiEye className="h-6 w-6 text-green-600" />}
             color="green"
             formatValue={(val) => `${val.toFixed(1)}%`}
           />
           <MetricCard
             title="Click Rate"
-            value={analytics.click_rate || 0}
-            previous={analytics.previous_click_rate}
+            value={analytics.campaigns?.click_rate || 0}
+            previous={analytics.campaigns?.previous_click_rate}
             icon={<HiCursorClick className="h-6 w-6 text-purple-600" />}
             color="purple"
             formatValue={(val) => `${val.toFixed(1)}%`}
           />
           <MetricCard
             title="Bounce Rate"
-            value={analytics.bounce_rate || 0}
-            previous={analytics.previous_bounce_rate}
+            value={analytics.campaigns?.bounce_rate || 0}
+            previous={analytics.campaigns?.previous_bounce_rate}
             icon={<HiExclamation className="h-6 w-6 text-red-600" />}
             color="red"
             formatValue={(val) => `${val.toFixed(1)}%`}

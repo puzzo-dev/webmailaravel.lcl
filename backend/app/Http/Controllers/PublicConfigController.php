@@ -32,6 +32,10 @@ class PublicConfigController extends Controller
                     'favicon_url' => SystemConfig::get('FAVICON_URL', null),
                     'primary_color' => SystemConfig::get('PRIMARY_COLOR', '#3B82F6'),
                 ],
+                'webmail' => [
+                    'enabled' => SystemConfig::get('WEBMAIL_ENABLED', false),
+                    'url' => SystemConfig::get('WEBMAIL_URL', null),
+                ],
             ];
 
             return $this->successResponse($config, 'Public configuration retrieved successfully');

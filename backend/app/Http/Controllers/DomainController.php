@@ -794,4 +794,43 @@ class DomainController extends Controller
             return $this->successResponse($testResult, $testResult['success'] ? 'Domain test successful' : 'Domain test failed');
         }, 'admin_test_domain_connection');
     }
+
+    /**
+     * Update domain status (active/inactive)
+     */
+    public function updateStatus(Request $request, string $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $id) {
+            $validator = Validator::make($request->all(), [
+                'is_active' => 'required|boolean'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+
+            $domain = Domain::findOrFail($id);
+
+            // Check if user owns this domain or is admin
+            if (!Auth::user()->hasRole('admin') && $domain->user_id !== Auth::id()) {
+                return $this->forbiddenResponse('You can only update your own domains');
+            }
+
+            $oldStatus = $domain->is_active;
+            $domain->is_active = $request->input('is_active');
+            $domain->save();
+
+            Log::info('Domain status updated', [
+                'user_id' => Auth::id(),
+                'domain_id' => $id,
+                'domain_name' => $domain->name,
+                'old_status' => $oldStatus,
+                'new_status' => $domain->is_active
+            ]);
+
+            return $this->successResponse([
+                'domain' => $domain->fresh(['smtpConfig', 'senders'])
+            ], 'Domain status updated successfully');
+        }, 'update_domain_status');
+    }
 }

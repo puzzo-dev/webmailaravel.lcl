@@ -874,6 +874,42 @@ const AdminNotifications = () => {
                   {selectedNotification.read_at ? `Read on ${new Date(selectedNotification.read_at).toLocaleString()}` : 'Unread'}
                 </p>
               </div>
+              
+              {/* Security Details for Login Notifications */}
+              {(selectedNotification.notification_type === 'login' || selectedNotification.type === 'security') && (
+                <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <h4 className="text-sm font-medium text-red-900 mb-2 flex items-center">
+                    <HiCog className="h-4 w-4 mr-1" />
+                    Security Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedNotification.ip_address && (
+                      <div>
+                        <span className="font-medium text-red-800">IP Address:</span>
+                        <span className="ml-2 text-red-700">{selectedNotification.ip_address}</span>
+                      </div>
+                    )}
+                    {selectedNotification.location && (
+                      <div>
+                        <span className="font-medium text-red-800">Location:</span>
+                        <span className="ml-2 text-red-700">{selectedNotification.location}</span>
+                      </div>
+                    )}
+                    {selectedNotification.device && (
+                      <div>
+                        <span className="font-medium text-red-800">Device:</span>
+                        <span className="ml-2 text-red-700">{selectedNotification.device}</span>
+                      </div>
+                    )}
+                    {selectedNotification.login_time && (
+                      <div>
+                        <span className="font-medium text-red-800">Login Time:</span>
+                        <span className="ml-2 text-red-700">{new Date(selectedNotification.login_time).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

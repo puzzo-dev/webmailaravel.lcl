@@ -33,14 +33,14 @@ class AnalyticsController extends Controller
                 return $this->getAdminAnalytics($request);
             }
             
-            // Get basic user analytics data
+            // Get user-specific analytics data (properly isolated)
             $data = [
-                'dashboard' => $this->analyticsService->getDashboardAnalytics(),
-                'trending' => $this->analyticsService->getTrendingMetrics(7), // Last 7 days
+                'dashboard' => $this->analyticsService->getUserDashboardAnalytics($user),
+                'trending' => $this->analyticsService->getUserTrendingMetrics($user, 7), // Last 7 days
                 'summary' => [
                     'total_campaigns' => $user->campaigns()->count(),
                     'active_campaigns' => $user->campaigns()->where('status', 'active')->count(),
-                    'total_emails_sent' => $user->campaigns()->sum('emails_sent'),
+                    'total_emails_sent' => $user->campaigns()->sum('total_sent'),
                     'total_opens' => $user->campaigns()->sum('opens'),
                     'total_clicks' => $user->campaigns()->sum('clicks'),
                 ]
@@ -71,7 +71,13 @@ class AnalyticsController extends Controller
     {
         try {
             $user = auth()->user();
-            $data = $this->analyticsService->getDashboardAnalytics();
+            
+            // Use user-specific analytics for regular users, system-wide for admins
+            if ($user->hasRole('admin')) {
+                $data = $this->analyticsService->getDashboardAnalytics();
+            } else {
+                $data = $this->analyticsService->getUserDashboardAnalytics($user);
+            }
 
             $this->logInfo('analytics.dashboard.accessed', [
                 'user_id' => $user->id,

@@ -113,7 +113,7 @@ const PaymentHistoryTable = ({
                       {typeof payment.method === 'string' ? payment.method : 'BTCPay'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {typeof payment.invoice === 'string' ? payment.invoice : payment.invoice?.id || 'N/A'}
+                      {payment.invoice_id || payment.invoice?.id || payment.invoice || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
@@ -124,18 +124,18 @@ const PaymentHistoryTable = ({
                         >
                           <HiInformationCircle className="h-4 w-4" />
                         </button>
-                        {onViewInvoice && (
+                        {onViewInvoice && (payment.invoice_id || payment.invoice?.id || payment.invoice) && (
                           <button
-                            onClick={() => onViewInvoice(payment.invoice)}
+                            onClick={() => onViewInvoice(payment.invoice_id || payment.invoice?.id || payment.invoice)}
                             className="text-primary-600 hover:text-primary-900 p-1"
                             title="View Invoice"
                           >
                             <HiEye className="h-4 w-4" />
                           </button>
                         )}
-                        {onDownloadInvoice && (
+                        {onDownloadInvoice && (payment.invoice_id || payment.invoice?.id || payment.invoice) && (
                           <button
-                            onClick={() => onDownloadInvoice(payment.invoice)}
+                            onClick={() => onDownloadInvoice(payment.invoice_id || payment.invoice?.id || payment.invoice)}
                             className="text-primary-600 hover:text-primary-900 p-1"
                             title="Download Invoice"
                           >

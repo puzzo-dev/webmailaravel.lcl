@@ -966,28 +966,31 @@ class CampaignService
                     ]);
                     $emailsFailed++;
                 }
-            }
+        }
 
-            // Update campaign statistics
+        // Update campaign statistics including recipient count
+        $campaign->update([
+            'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
+            'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
+            'recipient_count' => count($recipients), // Set total recipient count
+        ]);
+
+        // Check for milestones and send notifications
+        $this->checkCampaignMilestones($campaign);
+
+        // Mark campaign as completed if all emails have been processed
+        if ($remainingRecipients <= 0) {
             $campaign->update([
-                'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
-                'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
+                'status' => 'completed', // Use lowercase to match frontend expectations
+                'completed_at' => now(),
             ]);
 
-            // Check for milestones and send notifications
-            $this->checkCampaignMilestones($campaign);
+            // Sender statistics are now calculated on-demand via getSenderStatistics()
 
-            // Mark campaign as completed if all emails have been processed
-            if ($remainingRecipients <= 0) {
-                $campaign->update([
-                    'status' => 'COMPLETED',
-                    'completed_at' => now(),
-                ]);
+            // Send campaign completed notification
+            $campaign->user->notify(new CampaignCompleted($campaign));
 
-                // Send campaign completed notification
-                $campaign->user->notify(new CampaignCompleted($campaign));
-
-                $this->logInfo('Campaign completed', [
+            $this->logInfo('Campaign completed', [
                     'campaign_id' => $campaign->id,
                     'total_sent' => $campaign->total_sent,
                     'total_failed' => $campaign->total_failed,
@@ -1362,6 +1365,66 @@ class CampaignService
                     'total_sent' => $campaign->total_sent,
                 ]);
             }
+        }
+    }
+
+    /**
+     * Update sender statistics after campaign completion
+     */
+    public function getSenderStatistics(int $senderId): array
+    {
+        try {
+            $sender = Sender::findOrFail($senderId);
+            
+            // Calculate sender's total statistics from all their completed campaigns
+            $senderCampaigns = Campaign::where('single_sender_id', $sender->id)
+                ->where('status', 'completed')
+                ->get();
+            
+            $totalSent = $senderCampaigns->sum('total_sent');
+            $totalFailed = $senderCampaigns->sum('total_failed');
+            $totalOpens = $senderCampaigns->sum('opens');
+            $totalClicks = $senderCampaigns->sum('clicks');
+            $totalBounces = $senderCampaigns->sum('bounces');
+            $totalComplaints = $senderCampaigns->sum('complaints');
+            
+            // Calculate rates
+            $successRate = $totalSent > 0 ? (($totalSent - $totalFailed) / $totalSent) * 100 : 0;
+            $openRate = $totalSent > 0 ? ($totalOpens / $totalSent) * 100 : 0;
+            $clickRate = $totalSent > 0 ? ($totalClicks / $totalSent) * 100 : 0;
+            $bounceRate = $totalSent > 0 ? ($totalBounces / $totalSent) * 100 : 0;
+            $complaintRate = $totalSent > 0 ? ($totalComplaints / $totalSent) * 100 : 0;
+            
+            $stats = [
+                'total_sent' => $totalSent,
+                'total_delivered' => $totalSent - $totalFailed,
+                'total_bounces' => $totalBounces,
+                'total_complaints' => $totalComplaints,
+                'total_opens' => $totalOpens,
+                'total_clicks' => $totalClicks,
+                'success_rate' => round($successRate, 2),
+                'open_rate' => round($openRate, 2),
+                'click_rate' => round($clickRate, 2),
+                'bounce_rate' => round($bounceRate, 2),
+                'complaint_rate' => round($complaintRate, 2),
+                'campaigns_count' => $senderCampaigns->count(),
+            ];
+            
+            $this->logInfo('Sender statistics calculated', [
+                'sender_id' => $sender->id,
+                'sender_email' => $sender->email,
+                'total_sent' => $totalSent,
+                'success_rate' => $successRate,
+                'campaigns_processed' => $senderCampaigns->count(),
+            ]);
+            
+            return $stats;
+            
+        } catch (\Exception $e) {
+            $this->logError('Failed to update sender statistics', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

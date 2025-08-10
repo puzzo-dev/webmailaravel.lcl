@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -10,7 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable implements JWTSubject
+class User extends Authenticatable implements JWTSubject, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, HasApiTokens;
@@ -43,6 +43,8 @@ class User extends Authenticatable implements JWTSubject
         'training_mode',
         'manual_training_percentage',
         'last_manual_training_at',
+        'notification_preferences',
+        'email_notifications_enabled',
     ];
 
     /**
@@ -167,27 +169,25 @@ class User extends Authenticatable implements JWTSubject
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array<string, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'telegram_verified_at' => 'datetime',
-            'telegram_notifications_enabled' => 'boolean',
-            'two_factor_enabled' => 'boolean',
-            'two_factor_enabled_at' => 'datetime',
-            'backup_codes' => 'array',
-            'last_password_change' => 'datetime',
-            'last_payment_at' => 'datetime',
-            'password' => 'hashed',
-            'training_enabled' => 'boolean',
-            'manual_training_percentage' => 'decimal:2',
-            'last_manual_training_at' => 'datetime',
-        ];
-    }
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'two_factor_enabled_at' => 'datetime',
+        'last_password_change' => 'datetime',
+        'last_payment_at' => 'datetime',
+        'last_manual_training_at' => 'datetime',
+        'telegram_verified_at' => 'datetime',
+        'backup_codes' => 'array',
+        'notification_preferences' => 'array',
+        'telegram_notifications_enabled' => 'boolean',
+        'two_factor_enabled' => 'boolean',
+        'training_enabled' => 'boolean',
+        'email_notifications_enabled' => 'boolean',
+    ];
 
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.

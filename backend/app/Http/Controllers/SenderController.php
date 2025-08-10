@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Sender;
 use App\Models\SmtpConfig;
 use App\Mail\TestEmail;
+use App\Services\CampaignService;
 use App\Traits\ResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -15,9 +16,12 @@ use Illuminate\Support\Facades\Validator;
 class SenderController extends Controller
 {
     use ResponseTrait;
-    public function __construct()
+    
+    protected $campaignService;
+    
+    public function __construct(CampaignService $campaignService)
     {
-        // No parent constructor to call for base Controller
+        $this->campaignService = $campaignService;
     }
 
     /**
@@ -34,14 +38,39 @@ class SenderController extends Controller
                 // Admin sees all senders
                 $query = Sender::with(['domain', 'domain.smtpConfig', 'user']);
                 $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
-                
-                return $this->paginatedResponse($results, 'All senders retrieved successfully');
             } else {
                 // Regular users see only their senders
                 $query = Sender::with(['domain', 'domain.smtpConfig'])
                     ->where('user_id', Auth::id());
                 $results = $query->paginate($perPage, ['*'], 'page', $page);
+            }
+            
+            // Add calculated statistics to each sender
+            $results->getCollection()->transform(function ($sender) {
+                $senderArray = $sender->toArray();
                 
+                // Get calculated statistics
+                try {
+                    $stats = $this->campaignService->getSenderStatistics($sender->id);
+                    $senderArray['statistics'] = $stats;
+                } catch (\Exception $e) {
+                    // If statistics calculation fails, provide default values
+                    $senderArray['statistics'] = [
+                        'total_sent' => 0,
+                        'total_delivered' => 0,
+                        'success_rate' => 0,
+                        'open_rate' => 0,
+                        'click_rate' => 0,
+                        'campaigns_count' => 0,
+                    ];
+                }
+                
+                return $senderArray;
+            });
+            
+            if (Auth::user()->hasRole('admin')) {
+                return $this->paginatedResponse($results, 'All senders retrieved successfully');
+            } else {
                 return $this->paginatedResponse($results, 'Senders retrieved successfully');
             }
         }, 'list_senders');
