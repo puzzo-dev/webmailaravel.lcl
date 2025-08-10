@@ -85,22 +85,55 @@ fi
 print_step "9. Installing and configuring Supervisor..."
 if ! command -v supervisorctl &>/dev/null; then
     apt install -y supervisor
+    
+    # Ensure log directory exists
+    mkdir -p ${LOG_PATH}
+    chown ${APP_USER}:${APP_USER} ${LOG_PATH}
+    
     cat > /etc/supervisor/conf.d/laravel-worker.conf <<EOC
 [program:laravel-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php${PHP_VERSION} ${BACKEND_PATH}/artisan queue:work --sleep=3 --tries=3
+command=php${PHP_VERSION} ${BACKEND_PATH}/artisan queue:work --sleep=3 --tries=3 --timeout=60
 autostart=true
 autorestart=true
 user=${APP_USER}
 numprocs=1
 redirect_stderr=true
 stdout_logfile=${LOG_PATH}/laravel-worker.log
+stopwaitsecs=60
 EOC
+    
+    systemctl enable supervisor
+    systemctl start supervisor
     supervisorctl reread
     supervisorctl update
     supervisorctl start laravel-worker:*
     print_status "Supervisor installed and configured"
 else
+    # Update existing configuration if paths changed
+    if [ -f /etc/supervisor/conf.d/laravel-worker.conf ]; then
+        # Ensure log directory exists
+        mkdir -p ${LOG_PATH}
+        chown ${APP_USER}:${APP_USER} ${LOG_PATH}
+        
+        # Update configuration with current paths
+        cat > /etc/supervisor/conf.d/laravel-worker.conf <<EOC
+[program:laravel-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php${PHP_VERSION} ${BACKEND_PATH}/artisan queue:work --sleep=3 --tries=3 --timeout=60
+autostart=true
+autorestart=true
+user=${APP_USER}
+numprocs=1
+redirect_stderr=true
+stdout_logfile=${LOG_PATH}/laravel-worker.log
+stopwaitsecs=60
+EOC
+        
+        supervisorctl reread
+        supervisorctl update
+        print_status "Supervisor configuration updated"
+    fi
     print_status "Supervisor already configured"
 fi
 

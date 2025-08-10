@@ -177,7 +177,23 @@ pipeline {
                 sh """
                     sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
                         if [ -f /etc/supervisor/conf.d/laravel-worker.conf ]; then
-                            sudo supervisorctl restart laravel-worker:*
+                            echo "📋 Updating supervisor configuration..."
+                            sudo supervisorctl reread
+                            sudo supervisorctl update
+                            
+                            # Check if worker processes exist and restart them
+                            if sudo supervisorctl status | grep -q "laravel-worker"; then
+                                echo "🔄 Restarting existing Laravel workers..."
+                                sudo supervisorctl restart laravel-worker:* || true
+                            else
+                                echo "🚀 Starting Laravel workers for the first time..."
+                                sudo supervisorctl start laravel-worker:* || true
+                            fi
+                            
+                            echo "📊 Current supervisor status:"
+                            sudo supervisorctl status
+                        else
+                            echo "⚠️ Laravel worker configuration not found. Run setup-production.sh first."
                         fi
                     '
                 """
