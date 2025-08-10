@@ -213,7 +213,20 @@ EOF
             }
         }
         
-        stage('🔍 Health Checks') {
+        stage('� Production Diagnostics') {
+            steps {
+                sh """
+                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/diagnose-production.sh ${PROD_USER}@${PROD_SERVER}:/tmp/diagnose-production.sh
+                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
+                        chmod +x /tmp/diagnose-production.sh
+                        /tmp/diagnose-production.sh
+                        rm /tmp/diagnose-production.sh
+                    '
+                """
+            }
+        }
+        
+        stage('�🔍 Health Checks') {
             steps {
                 sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/health-check.sh"
             }
