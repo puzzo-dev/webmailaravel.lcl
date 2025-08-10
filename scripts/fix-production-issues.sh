@@ -36,15 +36,15 @@ echo "🗄️ Step 3: Verifying database tables..."
 # Check if cache table exists and create if missing
 php8.3 artisan migrate --force
 
-echo "📊 Step 3: Checking supervisor log for worker errors..."
+echo "📊 Step 4: Checking supervisor log for worker errors..."
 # Check supervisor logs for specific error details
 sudo tail -20 /var/log/campaignprox/laravel-worker.log || echo "No supervisor log found yet"
 
-echo "🔧 Step 4: Testing artisan queue:work manually..."
+echo "🔧 Step 5: Testing artisan queue:work manually..."
 # Test if the queue work command works manually
 timeout 5s php8.3 artisan queue:work --stop-when-empty || echo "Queue work test completed"
 
-echo "📋 Step 5: Fixing supervisor configuration..."
+echo "📋 Step 6: Fixing supervisor configuration..."
 # Update supervisor configuration with better error handling
 sudo tee /etc/supervisor/conf.d/laravel-worker.conf > /dev/null <<EOF
 [program:laravel-worker]
@@ -62,24 +62,24 @@ stopwaitsecs=60
 stopsignal=QUIT
 EOF
 
-echo "🔄 Step 6: Restarting supervisor..."
+echo "🔄 Step 7: Restarting supervisor..."
 sudo supervisorctl reread
 sudo supervisorctl update
 sudo supervisorctl stop laravel-worker:* || true
 sleep 2
 sudo supervisorctl start laravel-worker:*
 
-echo "📊 Step 7: Final status check..."
+echo "📊 Step 8: Final status check..."
 sudo supervisorctl status
 
-echo "🧪 Step 8: Testing Laravel application..."
+echo "🧪 Step 9: Testing Laravel application..."
 # Test a simple artisan command
 php8.3 artisan --version
 
 # Test database connectivity
 php8.3 artisan migrate:status
 
-echo "📝 Step 9: Checking recent logs..."
+echo "📝 Step 10: Checking recent logs..."
 # Check recent Laravel logs
 tail -10 storage/logs/laravel.log 2>/dev/null || echo "No recent Laravel logs found"
 
