@@ -237,25 +237,25 @@ const AdminSystem = () => {
       case "healthy":
       case "connected":
       case "running":
-        return <HiCheckCircle className="h-4 w-4 text-green-500" />;
+        return <HiCheckCircle className="w-4 h-4 text-green-500" />;
       case "warning":
-        return <HiExclamation className="h-4 w-4 text-yellow-500" />;
+        return <HiExclamation className="w-4 h-4 text-yellow-500" />;
       case "error":
       case "disconnected":
       case "stopped":
-        return <HiXCircle className="h-4 w-4 text-red-500" />;
+        return <HiXCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <HiInformationCircle className="h-4 w-4 text-gray-500" />;
+        return <HiInformationCircle className="w-4 h-4 text-gray-500" />;
     }
   };
 
   // Check if user has admin access
   if (user?.role !== "admin") {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+      <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div className="p-4 border border-red-200 rounded-md bg-red-50">
           <div className="flex">
-            <HiExclamation className="h-5 w-5 text-red-400" />
+            <HiExclamation className="w-5 h-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">
                 Access Denied
@@ -272,10 +272,10 @@ const AdminSystem = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="animate-pulse space-y-6">
+      <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div className="space-y-6 animate-pulse">
           <div className="h-24 bg-gray-200 rounded-lg"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
@@ -294,20 +294,20 @@ const AdminSystem = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="p-6 bg-white rounded-lg shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
               System Configuration
             </h1>
-            <p className="text-gray-600 mt-1">
+            <p className="mt-1 text-gray-600">
               Manage system settings and monitor system status
             </p>
           </div>
           <button
             onClick={handleRefreshStatus}
             disabled={loading}
-            className="btn btn-secondary flex items-center"
+            className="flex items-center btn btn-secondary"
           >
             <HiRefresh
               className={`h-5 w-5 mr-2 ${loading ? "animate-spin" : ""}`}
@@ -318,7 +318,7 @@ const AdminSystem = () => {
       </div>
 
       {/* System Status Overview */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="p-6 bg-white rounded-lg shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">System Status</h3>
           <span
@@ -334,7 +334,7 @@ const AdminSystem = () => {
             </span>
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-sm font-medium text-gray-500">Uptime</p>
             <p className="text-lg font-semibold text-gray-900">
@@ -369,7 +369,7 @@ const AdminSystem = () => {
             </span>
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 mt-6 md:grid-cols-3">
           <div>
             <p className="text-sm font-medium text-gray-500">Storage Usage</p>
             <div className="mt-2">
@@ -378,13 +378,13 @@ const AdminSystem = () => {
                   {systemStatus.storage_usage}%
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+              <div className="w-full h-2 mt-1 bg-gray-200 rounded-full">
                 <div
                   className={`h-2 rounded-full ${systemStatus.storage_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.storage_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.storage_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.storage_usage}%` }}
                 ></div>
@@ -399,13 +399,13 @@ const AdminSystem = () => {
                   {systemStatus.memory_usage}%
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+              <div className="w-full h-2 mt-1 bg-gray-200 rounded-full">
                 <div
                   className={`h-2 rounded-full ${systemStatus.memory_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.memory_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.memory_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.memory_usage}%` }}
                 ></div>
@@ -420,13 +420,13 @@ const AdminSystem = () => {
                   {systemStatus.cpu_usage}%
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+              <div className="w-full h-2 mt-1 bg-gray-200 rounded-full">
                 <div
                   className={`h-2 rounded-full ${systemStatus.cpu_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.cpu_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.cpu_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.cpu_usage}%` }}
                 ></div>
@@ -439,7 +439,7 @@ const AdminSystem = () => {
       {/* Configuration Tabs */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
-          <nav className="flex overflow-x-auto scrollbar-hide px-4 md:px-6">
+          <nav className="flex px-4 overflow-x-auto scrollbar-hide md:px-6">
             {[
               {
                 id: "overview",
@@ -514,11 +514,11 @@ const AdminSystem = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-shrink-0 flex items-center py-4 px-3 mr-6 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                      ? "border-primary-500 text-primary-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-primary-500 text-primary-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                     }`}
                 >
-                  <Icon className="h-4 w-4 mr-2 flex-shrink-0" />
+                  <Icon className="flex-shrink-0 w-4 h-4 mr-2" />
                   <span className="hidden md:inline whitespace-nowrap">
                     {tab.name}
                   </span>
@@ -535,13 +535,13 @@ const AdminSystem = () => {
           {/* Overview Tab */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h4 className="text-md font-medium text-gray-900 mb-4">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="p-6 rounded-lg bg-gray-50">
+                  <h4 className="mb-4 font-medium text-gray-900 text-md">
                     Service Status
                   </h4>
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Database</span>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(
@@ -558,7 +558,7 @@ const AdminSystem = () => {
                         </span>
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Cache</span>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(
@@ -573,7 +573,7 @@ const AdminSystem = () => {
                         </span>
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Queue</span>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(
@@ -590,8 +590,8 @@ const AdminSystem = () => {
                     </div>
                   </div>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <h4 className="text-md font-medium text-gray-900 mb-4">
+                <div className="p-6 rounded-lg bg-gray-50">
+                  <h4 className="mb-4 font-medium text-gray-900 text-md">
                     System Information
                   </h4>
                   <div className="space-y-3">
@@ -654,9 +654,9 @@ const AdminSystem = () => {
                           testSystemSMTP(email);
                         }
                       }}
-                      className="btn btn-secondary btn-sm flex items-center"
+                      className="flex items-center btn btn-secondary btn-sm"
                     >
-                      <HiMail className="h-4 w-4 mr-2" />
+                      <HiMail className="w-4 h-4 mr-2" />
                       Test SMTP
                     </button>
                   )}
@@ -667,15 +667,15 @@ const AdminSystem = () => {
                       setEditedConfig({ ...config });
                       setShowEditModal(true);
                     }}
-                    className="btn btn-primary btn-sm flex items-center"
+                    className="flex items-center btn btn-primary btn-sm"
                   >
-                    <HiPencil className="h-4 w-4 mr-2" />
+                    <HiPencil className="w-4 h-4 mr-2" />
                     Edit Configuration
                   </button>
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 rounded-lg bg-gray-50">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   {Object.entries(systemConfig[activeTab] || {})
                     .filter(([key]) => {
                       // Hide pointless user override and approval settings for training
@@ -691,10 +691,10 @@ const AdminSystem = () => {
                     })
                     .map(([key, value]) => (
                       <div key={key}>
-                        <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
+                        <label className="block mb-2 text-sm font-medium text-gray-700 capitalize">
                           {key.replace(/_/g, " ")}
                         </label>
-                        <div className="text-sm text-gray-900 bg-white p-3 rounded-md border">
+                        <div className="p-3 text-sm text-gray-900 bg-white border rounded-md">
                           {typeof value === "boolean" ? (
                             <span
                               className={
@@ -704,7 +704,7 @@ const AdminSystem = () => {
                               {value ? "Enabled" : "Disabled"}
                             </span>
                           ) : typeof value === "object" ? (
-                            <pre className="text-xs overflow-x-auto">
+                            <pre className="overflow-x-auto text-xs">
                               {JSON.stringify(value, null, 2)}
                             </pre>
                           ) : key.toLowerCase().includes("password") ||
@@ -715,7 +715,7 @@ const AdminSystem = () => {
                             </span>
                           ) : (
                             String(value) || (
-                              <span className="text-gray-400 italic">
+                              <span className="italic text-gray-400">
                                 Not configured
                               </span>
                             )
@@ -723,7 +723,7 @@ const AdminSystem = () => {
                         </div>
                       </div>
                     )
-                  )}
+                    )}
                 </div>
               </div>
             </div>
@@ -738,67 +738,66 @@ const AdminSystem = () => {
                 </h4>
                 <button
                   onClick={() => window.location.reload()}
-                  className="btn btn-secondary btn-sm flex items-center"
+                  className="flex items-center btn btn-secondary btn-sm"
                 >
-                  <HiRefresh className="h-4 w-4 mr-2" />
+                  <HiRefresh className="w-4 h-4 mr-2" />
                   Refresh Status
                 </button>
               </div>
 
               {/* Laravel Scheduler Service */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="p-6 bg-white border border-gray-200 rounded-lg">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center">
-                    <HiClock className="h-6 w-6 text-blue-600 mr-3" />
+                    <HiClock className="w-6 h-6 mr-3 text-blue-600" />
                     <div>
                       <h5 className="text-lg font-medium text-gray-900">Laravel Scheduler</h5>
                       <p className="text-sm text-gray-600">Manages scheduled tasks, queue processing, and background jobs</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                      systemStatus.queue_status === 'running' 
-                        ? 'bg-green-100 text-green-800' 
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${systemStatus.queue_status === 'running'
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
-                    }`}>
+                      }`}>
                       {systemStatus.queue_status === 'running' ? (
                         <>
-                          <HiCheckCircle className="h-4 w-4 mr-1" /> Running
+                          <HiCheckCircle className="w-4 h-4 mr-1" /> Running
                         </>
                       ) : (
                         <>
-                          <HiXCircle className="h-4 w-4 mr-1" /> Stopped
+                          <HiXCircle className="w-4 h-4 mr-1" /> Stopped
                         </>
                       )}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
+                  <div className="p-4 rounded-lg bg-gray-50">
                     <p className="text-sm font-medium text-gray-500">Queue Connection</p>
                     <p className="text-lg font-semibold text-gray-900">{systemStatus.queue?.connection || 'database'}</p>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="p-4 rounded-lg bg-gray-50">
                     <p className="text-sm font-medium text-gray-500">Pending Jobs</p>
                     <p className="text-lg font-semibold text-gray-900">{systemStatus.queue?.pending || 0}</p>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="p-4 rounded-lg bg-gray-50">
                     <p className="text-sm font-medium text-gray-500">Failed Jobs</p>
                     <p className="text-lg font-semibold text-red-600">{systemStatus.queue?.failed || 0}</p>
                   </div>
                 </div>
 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+                <div className="p-4 mb-6 border border-yellow-200 rounded-md bg-yellow-50">
                   <div className="flex">
-                    <HiInformationCircle className="h-5 w-5 text-yellow-400" />
+                    <HiInformationCircle className="w-5 h-5 text-yellow-400" />
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">
                         Scheduler Setup Required
                       </h3>
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>To enable automatic queue processing and scheduled tasks, add this cron job to your server:</p>
-                        <div className="mt-2 bg-gray-900 text-green-400 p-3 rounded font-mono text-xs">
+                        <div className="p-3 mt-2 font-mono text-xs text-green-400 bg-gray-900 rounded">
                           * * * * * cd /path/to/your/project && php artisan schedule:run &gt;&gt; /dev/null 2&gt;&1
                         </div>
                         <p className="mt-2">This will run Laravel's scheduler every minute, which will execute:</p>
@@ -819,29 +818,29 @@ const AdminSystem = () => {
                     onClick={async () => {
                       try {
                         // This would trigger a manual queue processing
-                        const response = await adminService.runScheduler();
+                        await adminService.runScheduler();
                         toast.success('Scheduler triggered manually');
                       } catch (error) {
                         toast.error('Failed to trigger scheduler: ' + error.message);
                       }
                     }}
-                    className="btn btn-primary flex items-center"
+                    className="flex items-center btn btn-primary"
                   >
-                    <HiClock className="h-4 w-4 mr-2" />
+                    <HiClock className="w-4 h-4 mr-2" />
                     Run Scheduler Now
                   </button>
                   <button
                     onClick={async () => {
                       try {
-                        const response = await adminService.processQueue();
+                        await adminService.processQueue();
                         toast.success('Queue processing triggered');
                       } catch (error) {
                         toast.error('Failed to process queue: ' + error.message);
                       }
                     }}
-                    className="btn btn-secondary flex items-center"
+                    className="flex items-center btn btn-secondary"
                   >
-                    <HiRefresh className="h-4 w-4 mr-2" />
+                    <HiRefresh className="w-4 h-4 mr-2" />
                     Process Queue
                   </button>
                 </div>
@@ -870,22 +869,22 @@ const AdminSystem = () => {
                       toast.error("Failed to load environment variables");
                     }
                   }}
-                  className="btn btn-secondary btn-sm flex items-center"
+                  className="flex items-center btn btn-secondary btn-sm"
                 >
-                  <HiRefresh className="h-4 w-4 mr-2" />
+                  <HiRefresh className="w-4 h-4 mr-2" />
                   Refresh
                 </button>
               </div>
 
               {Object.entries(systemConfig.env || {}).map(([section, vars]) => (
-                <div key={section} className="bg-gray-50 rounded-lg p-6">
-                  <h5 className="text-md font-medium text-gray-900 mb-4 capitalize">
+                <div key={section} className="p-6 rounded-lg bg-gray-50">
+                  <h5 className="mb-4 font-medium text-gray-900 capitalize text-md">
                     {section.replace("_", " ")} Variables
                   </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {Object.entries(vars).map(([key, value]) => (
-                      <div key={key} className="bg-white p-3 rounded border">
-                        <div className="text-xs font-mono text-gray-500 mb-1">
+                      <div key={key} className="p-3 bg-white border rounded">
+                        <div className="mb-1 font-mono text-xs text-gray-500">
                           {key}
                         </div>
                         <div className="text-sm text-gray-900">
@@ -897,7 +896,7 @@ const AdminSystem = () => {
                             </span>
                           ) : (
                             String(value) || (
-                              <span className="text-gray-400 italic">
+                              <span className="italic text-gray-400">
                                 Not set
                               </span>
                             )
@@ -915,8 +914,8 @@ const AdminSystem = () => {
 
       {/* Edit Configuration Modal */}
       {showEditModal && selectedConfig && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 z-50 w-full h-full overflow-y-auto bg-gray-600 bg-opacity-50">
+          <div className="relative w-full max-w-4xl p-5 mx-auto bg-white border rounded-md shadow-lg top-20">
             <div className="mt-3">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">
@@ -930,13 +929,13 @@ const AdminSystem = () => {
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <HiX className="h-6 w-6" />
+                  <HiX className="w-6 h-6" />
                 </button>
               </div>
               <div className="space-y-6">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="p-4 border border-yellow-200 rounded-md bg-yellow-50">
                   <div className="flex">
-                    <HiExclamation className="h-5 w-5 text-yellow-400" />
+                    <HiExclamation className="w-5 h-5 text-yellow-400" />
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-yellow-800">
                         Warning
@@ -958,7 +957,7 @@ const AdminSystem = () => {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   {Object.entries(selectedConfig)
                     .filter(([key]) => {
                       // Hide pointless user override and approval settings for training
@@ -973,141 +972,135 @@ const AdminSystem = () => {
                       return true;
                     })
                     .map(([key, value]) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
-                        {key.replace(/_/g, " ")}
-                      </label>
-                      {typeof value === "boolean" ? (
-                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
-                          <span className="text-sm text-gray-700">
-                            {editedConfig[key] !== undefined ? editedConfig[key] : value ? "Enabled" : "Disabled"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
+                      <div key={key}>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 capitalize">
+                          {key.replace(/_/g, " ")}
+                        </label>
+                        {typeof value === "boolean" ? (
+                          <div className="flex items-center justify-between p-3 border rounded-md bg-gray-50">
+                            <span className="text-sm text-gray-700">
+                              {editedConfig[key] !== undefined ? editedConfig[key] : value ? "Enabled" : "Disabled"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditedConfig((prev) => ({
+                                  ...prev,
+                                  [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
+                                }))
+                              }
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${(editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
+                                }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                              />
+                            </button>
+                          </div>
+                        ) : typeof value === "number" ? (
+                          <input
+                            type="number"
+                            value={
+                              editedConfig[key] !== undefined
+                                ? editedConfig[key]
+                                : value
+                            }
+                            onChange={(e) =>
                               setEditedConfig((prev) => ({
                                 ...prev,
-                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
+                                [key]: parseInt(e.target.value) || 0,
                               }))
                             }
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                              (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      ) : typeof value === "number" ? (
-                        <input
-                          type="number"
-                          value={
-                            editedConfig[key] !== undefined
-                              ? editedConfig[key]
-                              : value
-                          }
-                          onChange={(e) =>
-                            setEditedConfig((prev) => ({
-                              ...prev,
-                              [key]: parseInt(e.target.value) || 0,
-                            }))
-                          }
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      ) : (key.toLowerCase().includes('training') && key.toLowerCase().includes('mode')) || key.toLowerCase() === 'default_mode' ? (
-                        // Training mode - styled dropdown
-                        <div className="relative">
-                          <select
-                            value={editedConfig[key] !== undefined ? editedConfig[key] : value || 'manual'}
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                          />
+                        ) : (key.toLowerCase().includes('training') && key.toLowerCase().includes('mode')) || key.toLowerCase() === 'default_mode' ? (
+                          // Training mode - styled dropdown
+                          <div className="relative">
+                            <select
+                              value={editedConfig[key] !== undefined ? editedConfig[key] : value || 'manual'}
+                              onChange={(e) =>
+                                setEditedConfig((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                              className="block w-full px-4 py-3 text-base transition-colors bg-white border-2 border-gray-200 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 hover:border-gray-300"
+                            >
+                              <option value="manual">🔧 Manual Training</option>
+                              <option value="automatic">🤖 Automatic Training</option>
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                              <svg className="w-5 h-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          </div>
+                        ) : key.toLowerCase().includes('training') && (key.toLowerCase().includes('enabled') || key.toLowerCase().includes('allow') || key.toLowerCase().includes('required') || key.toLowerCase().includes('approval')) ? (
+                          // Training boolean fields (enabled, allow_user_override, manual_approval_required, etc.)
+                          <div className="flex items-center justify-between p-3 border rounded-md bg-gray-50">
+                            <span className="text-sm text-gray-700">
+                              {editedConfig[key] !== undefined ? (editedConfig[key] ? "Enabled" : "Disabled") : (value ? "Enabled" : "Disabled")}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditedConfig((prev) => ({
+                                  ...prev,
+                                  [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
+                                }))
+                              }
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${(editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
+                                }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                              />
+                            </button>
+                          </div>
+                        ) : typeof value === 'string' && (value === 'true' || value === 'false' || value === true || value === false) ? (
+                          // Handle string boolean values
+                          <div className="flex items-center justify-between p-3 border rounded-md bg-gray-50">
+                            <span className="text-sm text-gray-700">
+                              {(editedConfig[key] !== undefined ? editedConfig[key] : value === 'true' || value === true) ? "Enabled" : "Disabled"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditedConfig((prev) => ({
+                                  ...prev,
+                                  [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !(value === 'true' || value === true),
+                                }))
+                              }
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${(editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'bg-primary-600' : 'bg-gray-200'
+                                }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${(editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                              />
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={
+                              editedConfig[key] !== undefined
+                                ? editedConfig[key]
+                                : value
+                            }
                             onChange={(e) =>
                               setEditedConfig((prev) => ({
                                 ...prev,
                                 [key]: e.target.value,
                               }))
                             }
-                            className="block w-full px-4 py-3 text-base border-2 border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none cursor-pointer hover:border-gray-300"
-                          >
-                            <option value="manual">🔧 Manual Training</option>
-                            <option value="automatic">🤖 Automatic Training</option>
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3">
-                            <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        </div>
-                      ) : key.toLowerCase().includes('training') && (key.toLowerCase().includes('enabled') || key.toLowerCase().includes('allow') || key.toLowerCase().includes('required') || key.toLowerCase().includes('approval')) ? (
-                        // Training boolean fields (enabled, allow_user_override, manual_approval_required, etc.)
-                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
-                          <span className="text-sm text-gray-700">
-                            {editedConfig[key] !== undefined ? (editedConfig[key] ? "Enabled" : "Disabled") : (value ? "Enabled" : "Disabled")}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditedConfig((prev) => ({
-                                ...prev,
-                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !value,
-                              }))
-                            }
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                              (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'bg-primary-600' : 'bg-gray-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                (editedConfig[key] !== undefined ? editedConfig[key] : value) ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      ) : typeof value === 'string' && (value === 'true' || value === 'false' || value === true || value === false) ? (
-                        // Handle string boolean values
-                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-md border">
-                          <span className="text-sm text-gray-700">
-                            {(editedConfig[key] !== undefined ? editedConfig[key] : value === 'true' || value === true) ? "Enabled" : "Disabled"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditedConfig((prev) => ({
-                                ...prev,
-                                [key]: editedConfig[key] !== undefined ? !editedConfig[key] : !(value === 'true' || value === true),
-                              }))
-                            }
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                              (editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'bg-primary-600' : 'bg-gray-200'
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                (editedConfig[key] !== undefined ? editedConfig[key] : (value === 'true' || value === true)) ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          value={
-                            editedConfig[key] !== undefined
-                              ? editedConfig[key]
-                              : value
-                          }
-                          onChange={(e) =>
-                            setEditedConfig((prev) => ({
-                              ...prev,
-                              [key]: e.target.value,
-                            }))
-                          }
-                          className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      )}
-                    </div>
-                  ))}
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                          />
+                        )}
+                      </div>
+                    ))}
                 </div>
                 <div className="flex justify-end space-x-3">
                   <button
@@ -1123,9 +1116,9 @@ const AdminSystem = () => {
                   <button
                     onClick={handleSaveConfig}
                     disabled={loading}
-                    className="btn btn-primary flex items-center"
+                    className="flex items-center btn btn-primary"
                   >
-                    <HiSave className="h-4 w-4 mr-2" />
+                    <HiSave className="w-4 h-4 mr-2" />
                     {loading ? "Saving..." : "Save Configuration"}
                   </button>
                 </div>
