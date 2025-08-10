@@ -184,6 +184,19 @@ EOF
             }
         }
         
+        stage('Fix 405 Errors') {
+            steps {
+                sh """
+                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/fix-405-error.sh ${PROD_USER}@${PROD_SERVER}:/tmp/fix-405-error.sh
+                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
+                        chmod +x /tmp/fix-405-error.sh
+                        /tmp/fix-405-error.sh
+                        rm /tmp/fix-405-error.sh
+                    '
+                """
+            }
+        }
+        
         stage('Health Checks') {
             steps {
                 sh "RELEASE_NAME=${RELEASE_NAME} ./scripts/health-check.sh"
