@@ -8,7 +8,7 @@ APP_NAME="campaignprox.msz-pl.com"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
-APP_PATH="/home/campaignprox/domains/api.msz-pl.com/app"
+APP_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
 PUBLIC_HTML="/home/campaignprox/public_html"
@@ -36,10 +36,10 @@ else
 fi
 
 echo "🔍 Checking backend public directory..."
-if [ -f "${BACKEND_PATH}/index.php" ]; then
+if [ -f "${BACKEND_PATH}/public/index.php" ]; then
     echo "✅ Backend public directory is properly set up"
 else
-    echo "❌ Backend public directory check failed: index.php not found"
+    echo "❌ Backend public directory check failed: public/index.php not found"
     exit 1
 fi
 
