@@ -87,11 +87,11 @@ pipeline {
                     echo "Packaging backend..."
                     rsync -av --exclude='node_modules' --exclude='.git' --exclude='tests' --exclude='storage/logs/*' backend/ deployment/backend/
                     cp backend/.env.production.example deployment/backend/.env
-                    cp build-info.json deployment/backend/
+                    cp backend/build-info.json deployment/backend/
                     rm -rf deployment/backend/tests deployment/backend/storage/logs/* deployment/backend/.git* deployment/backend/phpunit.xml
                     mkdir -p deployment/frontend
                     cp -r frontend/dist/* deployment/frontend/
-                    cp build-info.json deployment/frontend/
+                    [ -f frontend/dist/build-info.json ] && cp frontend/dist/build-info.json deployment/frontend/ || echo "Frontend build-info.json not found"
                 '''
             }
             post {
