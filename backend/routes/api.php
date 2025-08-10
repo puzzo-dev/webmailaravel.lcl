@@ -34,6 +34,31 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// API Status and Health Check
+Route::get('/', function () {
+    return response()->json([
+        'message' => 'Email Campaign Management System API',
+        'version' => '1.0.0',
+        'status' => 'active',
+        'timestamp' => now()->toISOString(),
+        'endpoints' => [
+            'auth' => '/api/auth',
+            'campaigns' => '/api/campaigns',
+            'analytics' => '/api/analytics',
+            'documentation' => '/api/documentation'
+        ]
+    ]);
+});
+
+Route::get('/status', function () {
+    return response()->json([
+        'status' => 'healthy',
+        'timestamp' => now()->toISOString(),
+        'environment' => app()->environment(),
+        'version' => '1.0.0'
+    ]);
+});
+
 // Public routes - Webhooks are now processed via traits during operations
 // Route::post('/webhooks/telegram', [TelegramController::class, 'webhook']);
 
