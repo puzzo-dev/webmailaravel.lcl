@@ -1,19 +1,7 @@
 pipeline {
     agent { label 'docker-agent-php' }
     
-                        sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                            set -e
-                            if ! command -v php8.3 &>/dev/null; then
-                                echo "ERROR: PHP 8.3 not found, checking alternatives..."
-                                for ver in php8.2 php8.1 php7.1; do
-                                    if command -v $ver &>/dev/null; then
-                                        echo "Found $ver"
-                                        exit 0
-                                    fi
-                                done
-                                echo "ERROR: No compatible PHP version found"
-                                exit 1
-                            fint {
+    environment {
         PROD_SERVER = credentials('prod-server-host')
         PROD_USER = credentials('prod-ssh-user')
         PROD_PASSWORD = credentials('prod-ssh-password')
@@ -68,8 +56,8 @@ pipeline {
                         sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
                             set -e
                             if ! command -v ${PHP_CMD} &>/dev/null; then
-                                echo "ERROR: PHP 8.2 not found, checking alternatives..."
-                                for ver in php8.3 php8.1 php7.1; do
+                                echo "ERROR: PHP 8.3 not found, checking alternatives..."
+                                for ver in php8.2 php8.1 php7.1; do
                                     if command -v \$ver &>/dev/null; then
                                         echo "Found \$ver"
                                         exit 0
