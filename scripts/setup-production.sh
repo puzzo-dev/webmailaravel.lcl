@@ -130,12 +130,12 @@ tar -czf \${BACKUP_DIR}/backup_\${TIMESTAMP}.tar.gz -C ${BACKEND_PATH} .
 find \${BACKUP_DIR} -name "backup_*.tar.gz" -mtime +10 -delete
 find \${BACKUP_DIR} -name "db_backup_*.sqlite" -mtime +10 -delete
 EOC
-chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/${APP_NAME}-backup
-chmod 755 /home/${APP_USER}/scripts/${APP_NAME}-backup
+chown ${APP_USER}:${APP_USER} /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-backup
+chmod 755 /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-backup
 print_status "Backup script created"
 
 print_step "12. Setting up monitoring script..."
-cat > /home/${APP_USER}/scripts/${APP_NAME}-monitor <<EOC
+cat > /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor <<EOC
 #!/bin/bash
 echo "System Load:"
 uptime
@@ -148,8 +148,8 @@ supervisorctl status
 echo "Disk Usage:"
 df -h ${BACKEND_PATH}
 EOC
-chown ${APP_USER}:${APP_USER} /home/${APP_USER}/scripts/${APP_NAME}-monitor
-chmod 755 /home/${APP_USER}/scripts/${APP_NAME}-monitor
+chown ${APP_USER}:${APP_USER} /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor
+chmod 755 /home/${APP_USER}/domains/${SUB_DOMAIN}/scripts/${APP_NAME}-monitor
 print_status "Monitoring script created"
 
 print_step "13. Configuring log rotation..."
