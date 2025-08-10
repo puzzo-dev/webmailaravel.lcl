@@ -75,8 +75,8 @@ fi
 # Move rsynced directory to final location
 echo "📦 Moving backend files..."
 sudo mv /tmp/${RELEASE_NAME}_backend ${BACKEND_PATH}
-if [ ! -f "${BACKEND_PATH}/index.php" ]; then
-    echo "ERROR: Backend transfer failed, index.php not found"
+if [ ! -f "${BACKEND_PATH}/public/index.php" ]; then
+    echo "ERROR: Backend transfer failed, public/index.php not found"
     exit 1
 fi
 
