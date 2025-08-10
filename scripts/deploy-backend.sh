@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+# Updated: 2025-08-10 - Fixed Laravel index.php validation path
 echo "🔧 Starting backend deployment..."
 
 # Configuration variables
