@@ -70,7 +70,11 @@ pipeline {
                                 echo "ERROR: Virtualmin directories missing"
                                 exit 1
                             fi
-                            df -h / | grep -v Filesystem | awk "{if(\$4<\"1G\") {print \"ERROR: Insufficient disk space\"; exit 1}}"
+                            AVAILABLE=\$(df -h / | grep -v Filesystem | awk '"'"'{print \$4}'"'"' | sed '"'"'s/G//'"'"')
+                            if [ "\${AVAILABLE%.*}" -lt 1 ]; then
+                                echo "ERROR: Insufficient disk space (only \${AVAILABLE}G available)"
+                                exit 1
+                            fi
                         '
                     """
                 }
