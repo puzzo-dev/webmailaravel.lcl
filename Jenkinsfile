@@ -176,25 +176,38 @@ pipeline {
             steps {
                 sh """
                     sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                        if [ -f /etc/supervisor/conf.d/laravel-worker.conf ]; then
-                            echo "📋 Updating supervisor configuration..."
-                            sudo supervisorctl reread
-                            sudo supervisorctl update
-                            
-                            # Check if worker processes exist and restart them
-                            if sudo supervisorctl status | grep -q "laravel-worker"; then
-                                echo "🔄 Restarting existing Laravel workers..."
-                                sudo supervisorctl restart laravel-worker:* || true
-                            else
-                                echo "🚀 Starting Laravel workers for the first time..."
-                                sudo supervisorctl start laravel-worker:* || true
-                            fi
-                            
-                            echo "📊 Current supervisor status:"
-                            sudo supervisorctl status
-                        else
-                            echo "⚠️ Laravel worker configuration not found. Run setup-production.sh first."
-                        fi
+                        echo "📋 Updating supervisor configuration for PHP 8.3..."
+                        
+                        # Force update the supervisor configuration with correct PHP version
+                        sudo mkdir -p /var/log/campaignprox
+                        sudo chown campaignprox:campaignprox /var/log/campaignprox
+                        
+                        sudo tee /etc/supervisor/conf.d/laravel-worker.conf > /dev/null <<EOF
+[program:laravel-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php8.3 /home/campaignprox/public_html/artisan queue:work --sleep=3 --tries=3 --timeout=60
+autostart=true
+autorestart=true
+user=campaignprox
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/log/campaignprox/laravel-worker.log
+stopwaitsecs=60
+EOF
+                        
+                        echo "🔄 Reloading supervisor configuration..."
+                        sudo supervisorctl reread
+                        sudo supervisorctl update
+                        
+                        # Stop any existing workers first
+                        sudo supervisorctl stop laravel-worker:* || true
+                        
+                        # Start workers
+                        echo "� Starting Laravel workers..."
+                        sudo supervisorctl start laravel-worker:* || true
+                        
+                        echo "📊 Current supervisor status:"
+                        sudo supervisorctl status
                     '
                 """
             }
