@@ -185,7 +185,7 @@ pipeline {
                         sudo tee /etc/supervisor/conf.d/laravel-worker.conf > /dev/null <<EOF
 [program:laravel-worker]
 process_name=%(program_name)s_%(process_num)02d
-command=php8.3 /home/campaignprox/public_html/artisan queue:work --sleep=3 --tries=3 --timeout=60
+command=php8.3 ${BACKEND_PATH}/artisan queue:work --sleep=3 --tries=3 --timeout=60
 autostart=true
 autorestart=true
 user=campaignprox
