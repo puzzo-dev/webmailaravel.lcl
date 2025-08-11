@@ -190,16 +190,36 @@ composer install --no-dev --optimize-autoloader || {
 }
 
 echo "🔧 Setting up Laravel..."
-# Handle environment file
+# Handle environment file - prioritize production configuration
 if [ -f "\${BACKEND_PATH}_deploying/.env" ]; then
     echo "Copying .env from previous deployment"
     cp "\${BACKEND_PATH}_deploying/.env" "\${BACKEND_PATH}/.env"
+elif [ -f ".env.production.example" ]; then
+    echo "✅ Using .env.production.example for production deployment"
+    cp ".env.production.example" ".env"
 elif [ -f ".env.production" ]; then
+    echo "✅ Using .env.production for production deployment"
     cp ".env.production" ".env"
-    echo "✅ Copied .env.production to .env"
 else
-    echo "⚠️ No .env file found. Using .env.example as template"
+    echo "⚠️ No production .env file found. Using .env.example as template"
     cp ".env.example" ".env"
+    echo "🔧 Converting to production settings..."
+    # Convert key settings for production
+    sed -i 's/APP_ENV=local/APP_ENV=production/' .env
+    sed -i 's/APP_DEBUG=true/APP_DEBUG=false/' .env
+fi
+
+# Ensure production-specific settings
+echo "🔧 Applying production environment settings..."
+sed -i 's/APP_ENV=.*/APP_ENV=production/' .env
+sed -i 's/APP_DEBUG=.*/APP_DEBUG=false/' .env
+
+# Set correct database path for production
+if grep -q "DB_CONNECTION=sqlite" .env; then
+    # Use absolute path for production database
+    PROD_DB_PATH="/home/campaignprox/domains/api.msz-pl.com/database.sqlite"
+    sed -i "s|DB_DATABASE=.*|DB_DATABASE=\${PROD_DB_PATH}|" .env
+    echo "✅ Database path configured for production: \${PROD_DB_PATH}"
 fi
 
 # Generate app key if needed
@@ -210,6 +230,30 @@ if ! grep -q "APP_KEY=" .env || grep -q "APP_KEY=\$" .env; then
     }
     echo "✅ Generated new APP_KEY"
 fi
+
+# Generate JWT secret if needed
+if ! grep -q "JWT_SECRET=" .env || grep -q "JWT_SECRET=\$" .env || [ "\$(grep '^JWT_SECRET=' .env | cut -d'=' -f2)" = "" ]; then
+    echo "🔐 Generating JWT secret..."
+    \${PHP_CMD} artisan jwt:secret --force || {
+        echo "ERROR: Failed to generate JWT_SECRET"
+        exit 1
+    }
+    echo "✅ Generated new JWT_SECRET"
+else
+    echo "✅ JWT_SECRET already configured"
+fi
+
+# Verify critical environment variables
+echo "🔍 Verifying critical environment variables..."
+if ! grep -q "^APP_KEY=.\+" .env; then
+    echo "ERROR: APP_KEY is not properly set"
+    exit 1
+fi
+if ! grep -q "^JWT_SECRET=.\+" .env; then
+    echo "ERROR: JWT_SECRET is not properly set"
+    exit 1
+fi
+echo "✅ Critical environment variables verified"
 
 # Ensure database exists and run migrations
 if [ ! -f "\${DB_PATH}" ]; then
@@ -302,12 +346,43 @@ else
     exit 1
 fi
 
+# Test JWT configuration
+echo "🔐 Testing JWT configuration..."
+if \${PHP_CMD} artisan tinker --execute="echo 'JWT Config Test: ' . config('jwt.secret') ? 'OK' : 'MISSING';" 2>/dev/null | grep -q "JWT Config Test: OK"; then
+    echo "✅ JWT configuration is valid"
+else
+    echo "❌ JWT configuration test failed"
+    # Try to regenerate JWT secret
+    echo "🔧 Attempting to regenerate JWT secret..."
+    \${PHP_CMD} artisan jwt:secret --force || {
+        echo "ERROR: JWT secret generation failed"
+        exit 1
+    }
+fi
+
+# Test database connection
+echo "🗄️ Testing database connection..."
+if \${PHP_CMD} artisan tinker --execute="DB::connection()->getPdo(); echo 'Database: OK';" 2>/dev/null | grep -q "Database: OK"; then
+    echo "✅ Database connection is working"
+else
+    echo "❌ Database connection test failed"
+    exit 1
+fi
+
 # Test if public/index.php exists and is accessible
 if [ -f public/index.php ]; then
     echo "✅ Laravel public/index.php found"
 else
     echo "❌ Laravel public/index.php missing"
     exit 1
+fi
+
+# Test basic Laravel configuration
+echo "🧪 Testing Laravel configuration..."
+if \${PHP_CMD} artisan config:show app.name 2>/dev/null | grep -q "Campaign Pro X\|Laravel"; then
+    echo "✅ Laravel configuration is loading correctly"
+else
+    echo "⚠️ Laravel configuration test incomplete, but continuing..."
 fi
 
 # Restart services

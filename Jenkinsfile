@@ -63,6 +63,14 @@ pipeline {
                                 echo "Installing Node.js dependencies..."
                                 npm ci
                                 
+                                echo "Setting up production environment..."
+                                if [ -f .env.example.production ]; then
+                                    cp .env.example.production .env.production
+                                    echo "✅ Using production environment configuration"
+                                else
+                                    echo "⚠️ .env.example.production not found, using default configuration"
+                                fi
+                                
                                 echo "Building production assets..."
                                 npm run build
                                 
@@ -86,7 +94,15 @@ pipeline {
                     
                     echo "Packaging backend..."
                     rsync -av --exclude='node_modules' --exclude='.git' --exclude='tests' --exclude='storage/logs/*' backend/ deployment/backend/
-                    cp backend/.env.production.example deployment/backend/.env
+                    
+                    echo "Setting up production environment configuration..."
+                    if [ -f backend/.env.production.example ]; then
+                        cp backend/.env.production.example deployment/backend/.env.production.example
+                        echo "✅ Included .env.production.example in deployment"
+                    else
+                        echo "⚠️ .env.production.example not found"
+                    fi
+                    
                     cp backend/build-info.json deployment/backend/
                     rm -rf deployment/backend/tests deployment/backend/storage/logs/* deployment/backend/.git* deployment/backend/phpunit.xml
                     mkdir -p deployment/frontend
