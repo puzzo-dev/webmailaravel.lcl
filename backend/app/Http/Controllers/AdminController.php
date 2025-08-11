@@ -441,7 +441,7 @@ class AdminController extends Controller
             if ($request->has('btcpay')) {
                 $btcpaySettings = $request->input('btcpay');
                 foreach ($btcpaySettings as $key => $value) {
-                    $configKey = 'BTCPAY_'.strtoupper($key);
+                    $configKey = 'btcpay_'.$key; // Use lowercase keys to match reading
                     SystemConfig::set($configKey, $value);
                     $systemConfigUpdates[$configKey] = $value;
                     $updatedSettings["btcpay.{$key}"] = $value;

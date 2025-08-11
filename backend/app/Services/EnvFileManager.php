@@ -173,7 +173,14 @@ class EnvFileManager
             'SESSION_DRIVER' => 'SESSION_DRIVER',
             'SESSION_LIFETIME' => 'SESSION_LIFETIME',
             
-            // BTCPay settings
+            // BTCPay settings (database keys -> env keys)
+            'btcpay_url' => 'BTCPAY_URL',
+            'btcpay_api_key' => 'BTCPAY_API_KEY',
+            'btcpay_store_id' => 'BTCPAY_STORE_ID',
+            'btcpay_webhook_secret' => 'BTCPAY_WEBHOOK_SECRET',
+            'btcpay_currency' => 'BTCPAY_CURRENCY',
+            
+            // BTCPay settings (backwards compatibility with uppercase keys)
             'BTCPAY_URL' => 'BTCPAY_URL',
             'BTCPAY_API_KEY' => 'BTCPAY_API_KEY',
             'BTCPAY_STORE_ID' => 'BTCPAY_STORE_ID',
