@@ -9,12 +9,14 @@ use App\Notifications\PasswordResetRequested;
 use App\Notifications\PasswordResetCompleted;
 use App\Notifications\EmailVerificationRequested;
 use App\Notifications\EmailVerified;
+use App\Traits\CloudflareIPTrait;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 
 class AuthService
 {
+    use CloudflareIPTrait;
     /**
      * Request password reset
      */
@@ -37,18 +39,19 @@ class AuthService
         // Create new password reset token
         $token = Str::random(64);
         $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
+        $realIP = $this->getRealClientIP($request);
         
         $passwordReset = PasswordReset::create([
             'email' => $email,
             'token' => $token,
             'expires_at' => now()->addHours(1), // 1 hour expiry
-            'ip_address' => $request->ip(),
+            'ip_address' => $realIP,
             'user_agent' => $request->header('User-Agent')
         ]);
 
         // Prepare reset data for notification
         $resetData = [
-            'ip' => $request->ip(),
+            'ip' => $realIP,
             'device' => $deviceInfo['combined'],
             'browser' => $deviceInfo['browser'],
             'os' => $deviceInfo['os'],
@@ -103,8 +106,9 @@ class AuthService
 
         // Prepare reset completion data
         $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
+        $realIP = $this->getRealClientIP($request);
         $resetData = [
-            'ip' => $request->ip(),
+            'ip' => $realIP,
             'device' => $deviceInfo['combined'],
             'browser' => $deviceInfo['browser'],
             'os' => $deviceInfo['os'],
@@ -144,19 +148,20 @@ class AuthService
         // Create new verification token
         $token = Str::random(64);
         $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
+        $realIP = $this->getRealClientIP($request);
         
         $verificationToken = EmailVerificationToken::create([
             'user_id' => $user->id,
             'email' => $user->email,
             'token' => $token,
             'expires_at' => now()->addHours(24), // 24 hours expiry
-            'ip_address' => $request->ip(),
+            'ip_address' => $realIP,
             'user_agent' => $request->header('User-Agent')
         ]);
 
         // Prepare verification data for notification
         $verificationData = [
-            'ip' => $request->ip(),
+            'ip' => $realIP,
             'device' => $deviceInfo['combined'],
             'browser' => $deviceInfo['browser'],
             'os' => $deviceInfo['os'],
@@ -218,8 +223,9 @@ class AuthService
 
         // Prepare verification completion data
         $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
+        $realIP = $this->getRealClientIP($request);
         $verificationData = [
-            'ip' => $request->ip(),
+            'ip' => $realIP,
             'device' => $deviceInfo['combined'],
             'browser' => $deviceInfo['browser'],
             'os' => $deviceInfo['os'],

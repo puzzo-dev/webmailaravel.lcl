@@ -9,6 +9,7 @@ use App\Traits\LoggingTrait;
 use App\Traits\CacheManagementTrait;
 use App\Traits\ValidationTrait;
 use App\Traits\FileProcessingTrait;
+use App\Traits\CloudflareIPTrait;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -17,13 +18,28 @@ use PragmaRX\Google2FA\Google2FA;
 
 class SecurityService
 {
-    use LoggingTrait, CacheManagementTrait, ValidationTrait, FileProcessingTrait;
+    use LoggingTrait, CacheManagementTrait, ValidationTrait, FileProcessingTrait, CloudflareIPTrait;
 
     protected $google2fa;
 
     public function __construct()
     {
         $this->google2fa = new Google2FA();
+    }
+
+    /**
+     * Safely get real client IP, handles cases where request may not be available
+     */
+    protected function getSafeClientIP(): string
+    {
+        try {
+            if (app()->has('request') && request()) {
+                return $this->getRealClientIP(request());
+            }
+            return '127.0.0.1'; // fallback for CLI/background processes
+        } catch (\Exception $e) {
+            return '127.0.0.1';
+        }
     }
 
     /**
@@ -81,7 +97,7 @@ class SecurityService
         $this->forgetCache("2fa_secret_{$user->id}");
 
         $this->logSecurityEvent($user, '2fa_enabled', [
-            'ip' => request()->ip(),
+            'ip' => $this->getSafeClientIP(),
             'user_agent' => request()->userAgent()
         ]);
     }
@@ -98,7 +114,7 @@ class SecurityService
         ]);
 
         $this->logSecurityEvent($user, '2fa_disabled', [
-            'ip' => request()->ip(),
+            'ip' => $this->getSafeClientIP(),
             'user_agent' => request()->userAgent()
         ]);
     }
@@ -157,7 +173,7 @@ class SecurityService
         $this->logSecurityEvent($user, 'api_key_created', [
             'api_key_id' => $apiKey->id,
             'name' => $name,
-            'ip' => request()->ip()
+            'ip' => $this->getSafeClientIP()
         ]);
 
         return [
@@ -214,7 +230,7 @@ class SecurityService
 
         $this->logSecurityEvent($user, 'api_key_revoked', [
             'api_key_id' => $apiKeyId,
-            'ip' => request()->ip()
+            'ip' => $this->getSafeClientIP()
         ]);
 
         return true;
@@ -303,7 +319,7 @@ class SecurityService
             'user_id' => $user->id,
             'event' => $event,
             'metadata' => json_encode(array_merge($metadata, [
-                'ip' => request()->ip(),
+                'ip' => $this->getSafeClientIP(),
                 'user_agent' => request()->userAgent(),
                 'timestamp' => now()->toISOString()
             ]))

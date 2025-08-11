@@ -7,13 +7,14 @@ use App\Models\EmailTracking;
 use App\Models\ClickTracking;
 use App\Traits\GeoIPTrait;
 use App\Traits\SuppressionListTrait;
+use App\Traits\CloudflareIPTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class TrackingController extends Controller
 {
-    use GeoIPTrait, SuppressionListTrait;
+    use GeoIPTrait, SuppressionListTrait, CloudflareIPTrait;
 
     /**
      * Track email open
@@ -28,11 +29,16 @@ class TrackingController extends Controller
                 return response()->json(['error' => 'Email not found'], 404);
             }
 
-            // Get IP and user agent
-            $ipAddress = $request->ip();
+            // Get real client IP (handles Cloudflare and other proxies)
+            $ipAddress = $this->getRealClientIP($request);
             $userAgent = $request->userAgent();
 
-            // Get geo location
+            // Log IP detection details for debugging
+            if (config('app.debug')) {
+                $this->logIPDetection($request);
+            }
+
+            // Get geo location using real IP
             $geoData = $this->getLocation($ipAddress);
 
             // Mark as opened
@@ -103,11 +109,16 @@ class TrackingController extends Controller
                 return response()->json(['error' => 'Link not found'], 404);
             }
 
-            // Get IP and user agent
-            $ipAddress = $request->ip();
+            // Get real client IP (handles Cloudflare and other proxies)
+            $ipAddress = $this->getRealClientIP($request);
             $userAgent = $request->userAgent();
 
-            // Get geo location
+            // Log IP detection details for debugging
+            if (config('app.debug')) {
+                $this->logIPDetection($request);
+            }
+
+            // Get geo location using real IP
             $geoData = $this->getLocation($ipAddress);
 
             // Mark email as clicked
@@ -165,8 +176,12 @@ class TrackingController extends Controller
 
             $email = $emailTracking->recipient_email;
             $campaignId = $emailTracking->campaign_id;
+            
+            // Get real client IP for unsubscribe tracking
+            $realIP = $this->getRealClientIP($request);
+            
             $metadata = [
-                'ip_address' => $request->ip(),
+                'ip_address' => $realIP,
                 'user_agent' => $request->userAgent(),
                 'unsubscribed_at' => now()->toISOString()
             ];
@@ -183,7 +198,7 @@ class TrackingController extends Controller
                     'email_id' => $emailId,
                     'recipient_email' => $emailTracking->recipient_email,
                     'campaign_id' => $emailTracking->campaign_id,
-                    'ip' => $request->ip()
+                    'ip' => $realIP
                 ]);
 
                 // Return a simple HTML page

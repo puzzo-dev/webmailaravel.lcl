@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\CloudflareIPTrait;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserActivity extends Model
 {
-    use HasFactory;
+    use HasFactory, CloudflareIPTrait;
 
     protected $fillable = [
         'user_id',
@@ -109,13 +110,26 @@ class UserActivity extends Model
         ?int $entityId = null,
         array $metadata = []
     ): self {
+        // Create instance to access trait methods
+        $instance = new self();
+        
+        // Safely get real client IP
+        $realIP = '127.0.0.1'; // fallback
+        try {
+            if (app()->has('request') && request()) {
+                $realIP = $instance->getRealClientIP(request());
+            }
+        } catch (\Exception $e) {
+            // Keep fallback IP
+        }
+        
         return self::create([
             'user_id' => $userId,
             'activity_type' => $activityType,
             'activity_description' => $description,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
-            'ip_address' => request()->ip(),
+            'ip_address' => $realIP,
             'user_agent' => request()->userAgent(),
             'metadata' => $metadata
         ]);
