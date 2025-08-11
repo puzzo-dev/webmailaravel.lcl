@@ -71,8 +71,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('model:prune')->daily()->runInBackground();
     })
     ->withMiddleware(function (Middleware $middleware): void {
-        // Add JWT from cookie middleware globally for API routes
+        // Add trusted proxies middleware globally to handle Cloudflare
+        $middleware->web(prepend: [
+            \App\Http\Middleware\TrustedProxies::class,
+        ]);
+        
         $middleware->api(prepend: [
+            \App\Http\Middleware\TrustedProxies::class,
+        ]);
+        
+        // Add JWT from cookie middleware globally for API routes
+        $middleware->api(append: [
             JWTFromCookie::class,
         ]);
 

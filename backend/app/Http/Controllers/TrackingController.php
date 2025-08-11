@@ -7,13 +7,17 @@ use App\Models\EmailTracking;
 use App\Models\ClickTracking;
 use App\Traits\GeoIPTrait;
 use App\Traits\SuppressionListTrait;
+use App\Traits\CloudflareIPTrait;
+use App\Traits\LoggingTrait;
+use App\Traits\CacheManagementTrait;
+use App\Traits\ValidationTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class TrackingController extends Controller
 {
-    use GeoIPTrait, SuppressionListTrait;
+    use GeoIPTrait, SuppressionListTrait, CloudflareIPTrait, LoggingTrait, CacheManagementTrait, ValidationTrait;
 
     /**
      * Track email open
@@ -28,9 +32,21 @@ class TrackingController extends Controller
                 return response()->json(['error' => 'Email not found'], 404);
             }
 
-            // Get IP and user agent
-            $ipAddress = $request->ip();
+            // Get IP and user agent (using real IP behind Cloudflare)
+            $ipAddress = $this->getRealClientIP($request);
             $userAgent = $request->userAgent();
+
+            // Log IP detection details for debugging
+            if ($this->isBehindCloudflare($request)) {
+                Log::info('Email open tracking behind Cloudflare', [
+                    'email_id' => $emailId,
+                    'real_ip' => $ipAddress,
+                    'request_ip' => $request->ip(),
+                    'cf_connecting_ip' => $request->header('CF-Connecting-IP'),
+                    'cf_country' => $request->header('CF-IPCountry'),
+                    'cf_ray' => $request->header('CF-Ray')
+                ]);
+            }
 
             // Get geo location
             $geoData = $this->getLocation($ipAddress);
@@ -103,9 +119,22 @@ class TrackingController extends Controller
                 return response()->json(['error' => 'Link not found'], 404);
             }
 
-            // Get IP and user agent
-            $ipAddress = $request->ip();
+            // Get IP and user agent (using real IP behind Cloudflare)
+            $ipAddress = $this->getRealClientIP($request);
             $userAgent = $request->userAgent();
+
+            // Log IP detection details for debugging
+            if ($this->isBehindCloudflare($request)) {
+                Log::info('Click tracking behind Cloudflare', [
+                    'email_id' => $emailId,
+                    'link_id' => $linkId,
+                    'real_ip' => $ipAddress,
+                    'request_ip' => $request->ip(),
+                    'cf_connecting_ip' => $request->header('CF-Connecting-IP'),
+                    'cf_country' => $request->header('CF-IPCountry'),
+                    'cf_ray' => $request->header('CF-Ray')
+                ]);
+            }
 
             // Get geo location
             $geoData = $this->getLocation($ipAddress);

@@ -131,6 +131,22 @@ trait CacheManagementTrait
     }
 
     /**
+     * Simple get cache method
+     */
+    protected function getCache(string $key): mixed
+    {
+        return $this->getCachedDataIfExists($key);
+    }
+
+    /**
+     * Simple set cache method
+     */
+    protected function setCache(string $key, mixed $value, int $ttl = 3600): bool
+    {
+        return Cache::put($key, $value, $ttl);
+    }
+
+    /**
      * Increment cached counter
      */
     protected function incrementCachedCounter(string $key, int $value = 1, int $ttl = 3600): int

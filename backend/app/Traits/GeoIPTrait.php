@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use App\Models\SystemConfig;
+use App\Traits\CloudflareIPTrait;
 use GeoIp2\Database\Reader;
 use GeoIp2\Exception\AddressNotFoundException;
 use Illuminate\Support\Facades\Http;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 trait GeoIPTrait
 {
-    use LoggingTrait, CacheManagementTrait, ValidationTrait;
+    use LoggingTrait, CacheManagementTrait, ValidationTrait, CloudflareIPTrait;
 
     /**
      * Get location from IP address
@@ -37,6 +38,9 @@ trait GeoIPTrait
                 return $cachedResult;
             }
 
+            // Check if we have Cloudflare country data for this IP
+            $cloudflareCountry = $this->getCloudflareCountryForIP($ip);
+            
             // Try MaxMind database first
             $systemConfig = app(SystemConfig::class);
             $geoipConfig = $systemConfig::getGeoIPConfig();
@@ -46,6 +50,11 @@ trait GeoIPTrait
                     $reader = new Reader($geoipConfig['database_path']);
                     $result = $this->getLocationFromDatabase($reader, $ip);
                     if ($result['success']) {
+                        // Enhance with Cloudflare country if available and more accurate
+                        if ($cloudflareCountry) {
+                            $result['cf_country'] = $cloudflareCountry;
+                            $result['source'] .= '+cloudflare';
+                        }
                         $this->setCache($cacheKey, $result, 86400); // Cache for 24 hours
                         $this->logMethodExit(__METHOD__, $result);
                         return $result;
@@ -60,6 +69,11 @@ trait GeoIPTrait
             // Fallback to external API
             $result = $this->getLocationFromAPI($ip, $geoipConfig);
             if ($result['success']) {
+                // Enhance with Cloudflare country if available
+                if ($cloudflareCountry) {
+                    $result['cf_country'] = $cloudflareCountry;
+                    $result['source'] .= '+cloudflare';
+                }
                 $this->setCache($cacheKey, $result, 86400); // Cache for 24 hours
             }
 
@@ -264,6 +278,20 @@ trait GeoIPTrait
     protected function validateIPAddress(string $ip): bool
     {
         return filter_var($ip, FILTER_VALIDATE_IP) !== false;
+    }
+
+    /**
+     * Get Cloudflare country for specific IP from current request context
+     */
+    protected function getCloudflareCountryForIP(string $ip): ?string
+    {
+        // Check if current request is for this IP and has Cloudflare headers
+        $request = request();
+        if ($request && $this->getRealClientIP($request) === $ip) {
+            return $this->getCloudflareCountry($request);
+        }
+        
+        return null;
     }
 
     /**
