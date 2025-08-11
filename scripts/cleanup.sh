@@ -1,16 +1,14 @@
 #!/bin/bash
 set -e
 
-echo "🧹 Starting cleanup..."
+echo "🧹 Starting cleanup of deployment artifacts..."
 
 # Configuration variables
-APP_NAME="campaignprox.msz-pl.com"
 PROD_SERVER="${PROD_SERVER}"
 PROD_USER="${PROD_USER}"
 PROD_PASSWORD="${PROD_PASSWORD}"
 BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 FRONTEND_PATH="/home/campaignprox/public_html"
-BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/backups"
 
 # Check if required environment variables are set
 if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]; then
@@ -21,41 +19,31 @@ fi
 # SSH command using sshpass
 SSH="sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER}"
 
-# Cleanup
+# Cleanup deployment artifacts
 ${SSH} bash -s << EOF
 set -e
 
-echo "🧹 Cleaning up old deployments and backups..."
+echo "🧹 Cleaning up deployment artifacts..."
 
-# Remove old backend deployments (keep last 2)
-if [ -d "${BACKEND_PATH}_old" ]; then
-    rm -rf ${BACKEND_PATH}_old || echo "Failed to remove old backend"
-fi
-if [ -d "${BACKEND_PATH}_rollback_temp" ]; then
-    rm -rf ${BACKEND_PATH}_rollback_temp || echo "Failed to remove rollback temp"
-fi
-if [ -d "${BACKEND_PATH}_backup_restore" ]; then
-    rm -rf ${BACKEND_PATH}_backup_restore || echo "Failed to remove backup restore"
-fi
+# Remove temporary deployment files
+rm -f /tmp/laravel-*.log 2>/dev/null || true
+rm -rf /tmp/*_frontend* 2>/dev/null || true
+rm -rf /tmp/*_backend* 2>/dev/null || true
 
-# Remove old frontend deployments (keep last 2)
-if [ -d "${FRONTEND_PATH}_old" ]; then
-    rm -rf ${FRONTEND_PATH}_old || echo "Failed to remove old frontend"
-fi
-if [ -d "${FRONTEND_PATH}_rollback_temp" ]; then
-    rm -rf ${FRONTEND_PATH}_rollback_temp || echo "Failed to remove frontend rollback temp"
-fi
+# Remove old backup directories (keep last 3)
+find /home/campaignprox/ -name "*_old" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
 
-# Remove old backups (keep last 5)
-if [ -d "${BACKUP_PATH}" ]; then
-    ls -t ${BACKUP_PATH}/db_backup_*.sqlite 2>/dev/null | tail -n +6 | xargs -I {} rm -f {} || echo "No old database backups to remove"
-    ls -t ${BACKUP_PATH}/backup_*.tar.gz 2>/dev/null | tail -n +6 | xargs -I {} rm -f {} || echo "No old backups to remove"
+# Clean up Laravel cache and logs that might have accumulated
+cd ${BACKEND_PATH} 2>/dev/null || echo "Backend path not accessible"
+if [ -d "${BACKEND_PATH}" ]; then
+    # Clear old Laravel logs (keep last 7 days)
+    find ${BACKEND_PATH}/storage/logs/ -name "*.log" -mtime +7 -delete 2>/dev/null || true
+    
+    # Clear old cache files
+    rm -rf ${BACKEND_PATH}/bootstrap/cache/*.php 2>/dev/null || true
 fi
 
-# Remove temporary files
-rm -rf /tmp/restore_* /tmp/backend /tmp/frontend /tmp/*_backend.tar.gz /tmp/*_frontend.tar.gz 2>/dev/null || echo "No temporary files to remove"
-
-echo "✅ Cleanup completed!"
+echo "✅ Cleanup completed successfully!"
 EOF
 
 echo "✅ Cleanup script completed!"

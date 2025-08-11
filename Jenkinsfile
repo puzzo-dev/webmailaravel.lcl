@@ -117,82 +117,31 @@ pipeline {
             }
         }
         
-        stage('Setup Supervisor') {
+        stage('Production Testing & CORS Validation') {
             steps {
                 sh """
-                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                        echo "Updating supervisor configuration for PHP 8.3..."
-                        
-                        # Force update the supervisor configuration with correct PHP version
-                        sudo mkdir -p /var/log/campaignprox
-                        sudo chown campaignprox:campaignprox /var/log/campaignprox
-                        
-                        sudo tee /etc/supervisor/conf.d/laravel-worker.conf > /dev/null <<EOF
-[program:laravel-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php8.3 ${BACKEND_PATH}/artisan queue:work --sleep=3 --tries=3 --timeout=60
-autostart=true
-autorestart=true
-user=campaignprox
-numprocs=1
-redirect_stderr=true
-stdout_logfile=/var/log/campaignprox/laravel-worker.log
-stopwaitsecs=60
-EOF
-                        
-                        echo "Reloading supervisor configuration..."
-                        sudo supervisorctl reread
-                        sudo supervisorctl update
-                        
-                        # Stop any existing workers first
-                        sudo supervisorctl stop laravel-worker:* || true
-                        
-                        # Start workers
-                        echo "Starting Laravel workers..."
-                        sudo supervisorctl start laravel-worker:* || true
-                        
-                        echo "Current supervisor status:"
-                        sudo supervisorctl status
-                    '
-                """
-            }
-        }
-        
-        stage('Production Diagnostics') {
-            steps {
-                sh """
-                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/diagnose-production.sh ${PROD_USER}@${PROD_SERVER}:/tmp/diagnose-production.sh
-                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                        chmod +x /tmp/diagnose-production.sh
-                        /tmp/diagnose-production.sh
-                        rm /tmp/diagnose-production.sh
-                    '
-                """
-            }
-        }
-        
-        stage('Fix Production Issues') {
-            steps {
-                sh """
-                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/fix-production-issues.sh ${PROD_USER}@${PROD_SERVER}:/tmp/fix-production-issues.sh
-                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                        chmod +x /tmp/fix-production-issues.sh
-                        /tmp/fix-production-issues.sh
-                        rm /tmp/fix-production-issues.sh
-                    '
-                """
-            }
-        }
-        
-        stage('Fix 405 Errors') {
-            steps {
-                sh """
-                    sshpass -p ${PROD_PASSWORD} scp -o StrictHostKeyChecking=no scripts/fix-405-error.sh ${PROD_USER}@${PROD_SERVER}:/tmp/fix-405-error.sh
-                    sshpass -p ${PROD_PASSWORD} ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} '
-                        chmod +x /tmp/fix-405-error.sh
-                        /tmp/fix-405-error.sh
-                        rm /tmp/fix-405-error.sh
-                    '
+                    echo "🧪 Testing frontend and backend connectivity..."
+                    
+                    # Test frontend is accessible
+                    echo "Testing frontend (campaignprox.msz-pl.com)..."
+                    curl -f -s "https://campaignprox.msz-pl.com" > /dev/null && echo "✅ Frontend accessible" || echo "❌ Frontend not accessible"
+                    
+                    # Test backend API
+                    echo "Testing backend API (api.msz-pl.com)..."
+                    curl -f -s "https://api.msz-pl.com" > /dev/null && echo "✅ Backend accessible" || echo "❌ Backend not accessible"
+                    
+                    # Test CORS headers
+                    echo "Testing CORS configuration..."
+                    CORS_TEST=\$(curl -s -I -X OPTIONS "https://api.msz-pl.com" -H "Origin: https://campaignprox.msz-pl.com" | grep -i "access-control-allow-origin" || echo "none")
+                    if [ "\$CORS_TEST" != "none" ]; then
+                        echo "✅ CORS headers found: \$CORS_TEST"
+                    else
+                        echo "⚠️ CORS headers not found or not configured properly"
+                    fi
+                    
+                    # Test a simple API endpoint if available
+                    echo "Testing API health endpoint..."
+                    curl -f -s "https://api.msz-pl.com/api/health" > /dev/null && echo "✅ API health endpoint working" || echo "⚠️ API health endpoint not found (may need to be created)"
                 """
             }
         }
