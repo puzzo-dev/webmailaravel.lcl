@@ -17,7 +17,8 @@ import {
 } from 'react-icons/hi';
 import { formatDate } from '../../utils/helpers';
 import { formatNumber } from '../../utils/format';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { 
   fetchSenders, 
   createSender, 
@@ -94,7 +95,7 @@ const Senders = () => {
       setShowAddModal(false);
       resetForm();
     } catch (error) {
-      toast.error('Failed to add sender');
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -108,7 +109,7 @@ const Senders = () => {
       setShowEditModal(false);
       resetForm();
     } catch (error) {
-      toast.error('Failed to update sender');
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -122,7 +123,7 @@ const Senders = () => {
       await dispatch(deleteSender(senderId)).unwrap();
       toast.success('Sender deleted successfully');
     } catch (error) {
-      toast.error('Failed to delete sender');
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -131,11 +132,14 @@ const Senders = () => {
   const handleTestConnection = async () => {
     setIsSubmitting(true);
     try {
-      await dispatch(testSenderConnection(selectedSender.id)).unwrap();
+      await dispatch(testSenderConnection({ 
+        id: selectedSender.id, 
+        test_email: selectedSender.email 
+      })).unwrap();
       toast.success('Connection test successful');
       setShowTestModal(false);
     } catch (error) {
-      toast.error('Connection test failed');
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }

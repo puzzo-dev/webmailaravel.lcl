@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authService } from '../../services/api';
+import { serializeError } from '../../utils/errorHandler';
 
 // Async thunks
 export const initializeAuth = createAsyncThunk(
@@ -39,8 +40,8 @@ export const login = createAsyncThunk(
         throw new Error('Invalid response structure from server');
       }
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
-      return rejectWithValue(errorMessage);
+      // Pass the full error object so getErrorMessage can extract the right message
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -59,8 +60,8 @@ export const register = createAsyncThunk(
       }
     } catch (error) {
       console.error('Register error in authSlice:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Registration failed';
-      return rejectWithValue(errorMessage);
+      // Pass the full error object so getErrorMessage can extract the right message
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -86,7 +87,7 @@ export const refreshToken = createAsyncThunk(
       const response = await authService.refreshToken();
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Token refresh failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -98,7 +99,7 @@ export const forgotPassword = createAsyncThunk(
       const response = await authService.forgotPassword(email);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Password reset request failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -110,7 +111,7 @@ export const resetPassword = createAsyncThunk(
       const response = await authService.resetPassword(resetData);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Password reset failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -122,7 +123,7 @@ export const verify2FA = createAsyncThunk(
       const response = await authService.verify2FA(verificationData);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || '2FA verification failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -134,7 +135,7 @@ export const changePassword = createAsyncThunk(
       const response = await authService.changePassword(passwordData);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Password change failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -146,7 +147,7 @@ export const updatePassword = createAsyncThunk(
       const response = await authService.updatePassword(passwordData);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Password update failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -161,7 +162,7 @@ export const updateProfile = createAsyncThunk(
       
       return { user };
     } catch (error) {
-      return rejectWithValue(error.message || 'Profile update failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -173,7 +174,7 @@ export const sendEmailVerification = createAsyncThunk(
       const response = await authService.sendEmailVerification();
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Failed to send verification email');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -185,7 +186,7 @@ export const verifyEmail = createAsyncThunk(
       const response = await authService.verifyEmail(verificationData);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Email verification failed');
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -197,7 +198,7 @@ export const resendEmailVerification = createAsyncThunk(
       const response = await authService.resendEmailVerification();
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.message || 'Failed to resend verification email');
+      return rejectWithValue(serializeError(error));
     }
   }
 );

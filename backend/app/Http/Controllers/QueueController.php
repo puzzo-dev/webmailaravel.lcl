@@ -293,6 +293,79 @@ class QueueController extends Controller
     }
 
     /**
+     * Get failed jobs for a specific campaign
+     */
+    public function getCampaignFailedJobs(Request $request, int $campaignId): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $campaignId) {
+            $page = $request->input('page', 1);
+            $limit = $request->input('limit', 20);
+
+            $query = DB::table('failed_jobs')
+                ->select([
+                    'id',
+                    'uuid',
+                    'connection',
+                    'queue',
+                    'payload',
+                    'exception',
+                    'failed_at'
+                ])
+                ->whereRaw('JSON_EXTRACT(payload, "$.data.campaign.id") = ?', [$campaignId])
+                ->orderBy('failed_at', 'desc');
+
+            $total = $query->count();
+            $failedJobs = $query->offset(($page - 1) * $limit)
+                ->limit($limit)
+                ->get()
+                ->map(function ($job) {
+                    $payload = json_decode($job->payload, true);
+                    $data = $payload['data'] ?? [];
+                    
+                    return [
+                        'id' => $job->id,
+                        'uuid' => $job->uuid,
+                        'connection' => $job->connection,
+                        'queue' => $job->queue,
+                        'job_class' => $payload['displayName'] ?? 'Unknown',
+                        'failed_at' => $job->failed_at,
+                        'exception' => $job->exception,
+                        'recipient' => $data['recipient'] ?? 'Unknown',
+                        'sender_id' => $data['sender']['id'] ?? null,
+                        'sender_email' => $data['sender']['email'] ?? 'Unknown',
+                        'campaign_id' => $data['campaign']['id'] ?? null,
+                        'error_message' => $this->extractErrorMessage($job->exception),
+                    ];
+                });
+
+            return $this->successResponse([
+                'data' => $failedJobs,
+                'current_page' => $page,
+                'per_page' => $limit,
+                'total' => $total,
+                'last_page' => ceil($total / $limit),
+            ], 'Campaign failed jobs retrieved successfully');
+        }, 'view_campaign_failed_jobs');
+    }
+
+    /**
+     * Extract readable error message from exception
+     */
+    private function extractErrorMessage(string $exception): string
+    {
+        // Extract the main error message from the exception stack trace
+        $lines = explode("\n", $exception);
+        $firstLine = $lines[0] ?? $exception;
+        
+        // Remove class names and file paths to get clean error message
+        if (preg_match('/: (.+)$/', $firstLine, $matches)) {
+            return $matches[1];
+        }
+        
+        return $firstLine;
+    }
+
+    /**
      * Get job detail
      */
     public function getJobDetail(string $type, string $id): JsonResponse

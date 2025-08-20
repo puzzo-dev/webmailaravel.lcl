@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { analyticsService } from '../../services/api';
+import { analyticsService, queueService } from '../../services/api';
 import {
   HiArrowLeft,
   HiPlay,
@@ -20,6 +20,7 @@ import {
 } from 'react-icons/hi';
 import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 
 const CampaignDetail = () => {
   const { id } = useParams();
@@ -31,6 +32,8 @@ const CampaignDetail = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [senderPerformance, setSenderPerformance] = useState([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [failedJobs, setFailedJobs] = useState([]);
+  const [loadingFailedJobs, setLoadingFailedJobs] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -67,6 +70,7 @@ const CampaignDetail = () => {
   useEffect(() => {
     if (activeTab === 'analytics' && id && currentCampaign) {
       loadSenderAnalytics();
+      loadFailedJobs();
     }
   }, [activeTab, id, currentCampaign]);
 
@@ -83,6 +87,29 @@ const CampaignDetail = () => {
     }
   };
 
+  const loadFailedJobs = async () => {
+    try {
+      setLoadingFailedJobs(true);
+      const response = await queueService.getCampaignFailedJobs(id, { limit: 10 });
+      setFailedJobs(response.data || []);
+    } catch (error) {
+      console.error('Failed to load failed jobs:', error);
+      setFailedJobs([]);
+    } finally {
+      setLoadingFailedJobs(false);
+    }
+  };
+
+  const handleRetryFailedJob = async (jobId) => {
+    try {
+      await queueService.retryFailedJob(jobId);
+      toast.success('Job retried successfully');
+      loadFailedJobs(); // Refresh the list
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
       try {
@@ -90,7 +117,7 @@ const CampaignDetail = () => {
         toast.success('Campaign deleted successfully');
         navigate('/campaigns');
       } catch (error) {
-        toast.error('Failed to delete campaign');
+        toast.error(getErrorMessage(error));
       }
     }
   };
@@ -105,7 +132,7 @@ const CampaignDetail = () => {
         const duplicatedCampaignId = result.data?.id || result.id;
         navigate(`/campaigns/${duplicatedCampaignId}`);
       } catch (error) {
-        toast.error('Failed to duplicate campaign');
+        toast.error(getErrorMessage(error));
       } finally {
         setActionLoading(false);
       }
@@ -142,7 +169,7 @@ const CampaignDetail = () => {
         dispatch(fetchCampaignTracking(id))
       ]);
     } catch (error) {
-      toast.error(`Failed to ${action} campaign`);
+      toast.error(getErrorMessage(error));
     } finally {
       setActionLoading(false);
     }
@@ -206,28 +233,28 @@ const CampaignDetail = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => navigate('/campaigns')}
-              className="text-gray-600 hover:text-gray-900"
+              className="text-gray-600 hover:text-gray-900 flex-shrink-0"
             >
               <HiArrowLeft className="h-6 w-6" />
             </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{currentCampaign.name}</h1>
-              <p className="text-gray-600">{currentCampaign.subject}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl lg:text-2xl font-bold text-gray-900 truncate">{currentCampaign.name}</h1>
+              <p className="text-gray-600 text-sm lg:text-base truncate">{currentCampaign.subject}</p>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-2 lg:gap-3">
             {(currentCampaign.status?.toLowerCase() === 'draft') && (
               <button
                 onClick={() => handleAction('start')}
                 disabled={actionLoading}
-                className="btn btn-success flex items-center disabled:opacity-50"
+                className="btn btn-success flex items-center disabled:opacity-50 text-sm lg:text-base"
               >
-                <HiPlay className="h-5 w-5 mr-2" />
-                {actionLoading ? 'Starting...' : 'Start'}
+                <HiPlay className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">{actionLoading ? 'Starting...' : 'Start'}</span>
               </button>
             )}
             
@@ -235,10 +262,10 @@ const CampaignDetail = () => {
               <button
                 onClick={() => handleAction('pause')}
                 disabled={actionLoading}
-                className="btn btn-warning flex items-center disabled:opacity-50"
+                className="btn btn-warning flex items-center disabled:opacity-50 text-sm lg:text-base"
               >
-                <HiPause className="h-5 w-5 mr-2" />
-                {actionLoading ? 'Pausing...' : 'Pause'}
+                <HiPause className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">{actionLoading ? 'Pausing...' : 'Pause'}</span>
               </button>
             )}
             
@@ -246,10 +273,10 @@ const CampaignDetail = () => {
               <button
                 onClick={() => handleAction('resume')}
                 disabled={actionLoading}
-                className="btn btn-success flex items-center disabled:opacity-50"
+                className="btn btn-success flex items-center disabled:opacity-50 text-sm lg:text-base"
               >
-                <HiPlay className="h-5 w-5 mr-2" />
-                {actionLoading ? 'Resuming...' : 'Resume'}
+                <HiPlay className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">{actionLoading ? 'Resuming...' : 'Resume'}</span>
               </button>
             )}
             
@@ -259,36 +286,36 @@ const CampaignDetail = () => {
               <button
                 onClick={() => handleAction('stop')}
                 disabled={actionLoading}
-                className="btn btn-danger flex items-center disabled:opacity-50"
+                className="btn btn-danger flex items-center disabled:opacity-50 text-sm lg:text-base"
               >
-                <HiStop className="h-5 w-5 mr-2" />
-                {actionLoading ? 'Stopping...' : 'Stop'}
+                <HiStop className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">{actionLoading ? 'Stopping...' : 'Stop'}</span>
               </button>
             )}
             
             <button
               onClick={() => navigate(`/campaigns/${id}/edit`)}
-              className="btn btn-secondary flex items-center"
+              className="btn btn-secondary flex items-center text-sm lg:text-base"
             >
-              <HiPencil className="h-5 w-5 mr-2" />
-              Edit
+              <HiPencil className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+              <span className="hidden sm:inline">Edit</span>
             </button>
             
             <button
               onClick={handleDuplicate}
               disabled={actionLoading}
-              className="btn btn-secondary flex items-center disabled:opacity-50"
+              className="btn btn-secondary flex items-center disabled:opacity-50 text-sm lg:text-base"
             >
-              <HiDuplicate className="h-5 w-5 mr-2" />
-              {actionLoading ? 'Duplicating...' : 'Duplicate'}
+              <HiDuplicate className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+              <span className="hidden sm:inline">{actionLoading ? 'Duplicating...' : 'Duplicate'}</span>
             </button>
             
             <button
               onClick={handleDelete}
-              className="btn btn-danger flex items-center"
+              className="btn btn-danger flex items-center text-sm lg:text-base"
             >
-              <HiTrash className="h-5 w-5 mr-2" />
-              Delete
+              <HiTrash className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+              <span className="hidden sm:inline">Delete</span>
             </button>
           </div>
         </div>
@@ -368,12 +395,12 @@ const CampaignDetail = () => {
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8 px-6">
+          <nav className="-mb-px flex overflow-x-auto space-x-4 lg:space-x-8 px-6 scrollbar-hide">
             {['overview', 'content', 'senders', 'recipients', 'tracking', 'analytics'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                className={`py-4 px-2 lg:px-1 border-b-2 font-medium text-sm capitalize whitespace-nowrap flex-shrink-0 ${
                   activeTab === tab
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -563,13 +590,13 @@ const CampaignDetail = () => {
                     </div>
                   )}
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {currentCampaign.senders.map((sender, index) => (
                       <div key={index} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900">Sender {index + 1}</h4>
+                          <h4 className="font-medium text-gray-900 truncate">Sender {index + 1}</h4>
                           {currentCampaign.senders.length > 1 && (
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded flex-shrink-0">
                               Active in rotation
                             </span>
                           )}
@@ -577,16 +604,16 @@ const CampaignDetail = () => {
                         <div className="space-y-2 text-sm">
                           <div>
                             <span className="font-medium text-gray-500">Name:</span>
-                            <span className="ml-2 text-gray-900">{sender.name}</span>
+                            <span className="ml-2 text-gray-900 break-words">{sender.name}</span>
                           </div>
                           <div>
                             <span className="font-medium text-gray-500">Email:</span>
-                            <span className="ml-2 text-gray-900">{sender.email}</span>
+                            <span className="ml-2 text-gray-900 break-all">{sender.email}</span>
                           </div>
                           {sender.reply_to && (
                             <div>
                               <span className="font-medium text-gray-500">Reply To:</span>
-                              <span className="ml-2 text-gray-900">{sender.reply_to}</span>
+                              <span className="ml-2 text-gray-900 break-all">{sender.reply_to}</span>
                             </div>
                           )}
                         </div>
@@ -813,6 +840,84 @@ const CampaignDetail = () => {
                           {loadingAnalytics ? 
                             'Loading sender performance data...' : 
                             'No sender performance data available yet. Data will appear after emails are sent.'
+                          }
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Failed Jobs Section */}
+                  {(currentCampaign?.total_failed > 0 || failedJobs.length > 0) && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-gray-900">Failed Email Jobs</h4>
+                        {loadingFailedJobs && (
+                          <div className="text-sm text-gray-500">Loading...</div>
+                        )}
+                      </div>
+                      
+                      {failedJobs.length > 0 ? (
+                        <div className="space-y-3">
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                            <p className="text-sm text-red-800">
+                              <strong>Failed Jobs:</strong> {currentCampaign?.total_failed || 0} emails failed to send. 
+                              You can retry individual jobs or investigate the errors below.
+                            </p>
+                          </div>
+                          
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Recipient</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sender</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Error</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Failed At</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {failedJobs.map((job) => (
+                                  <tr key={job.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-2 text-sm text-gray-900 break-all">
+                                      {job.recipient}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900">
+                                      {job.sender_email}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate" title={job.error_message}>
+                                      {job.error_message}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-500">
+                                      {new Date(job.failed_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm">
+                                      <button
+                                        onClick={() => handleRetryFailedJob(job.id)}
+                                        className="text-blue-600 hover:text-blue-900 text-xs bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded"
+                                      >
+                                        Retry
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          {currentCampaign?.total_failed > failedJobs.length && (
+                            <div className="text-center pt-3">
+                              <p className="text-sm text-gray-500">
+                                Showing {failedJobs.length} of {currentCampaign.total_failed} failed jobs
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {loadingFailedJobs ? 
+                            'Loading failed jobs...' : 
+                            'No failed jobs found for this campaign.'
                           }
                         </p>
                       )}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { createCampaign, fetchSenders, fetchDomains, fetchContents } from '../../store/slices/campaignSlice';
-import toast from 'react-hot-toast';
+import { useNavigate, useParams } from 'react-router-dom';
+import { createCampaign, updateCampaign, fetchCampaign, fetchSenders, fetchDomains, fetchContents } from '../../store/slices/campaignSlice';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   HiUpload,
   HiEye,
@@ -37,14 +38,19 @@ const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
 const CampaignBuilder = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditMode = Boolean(id);
+  
   const sendersState = useSelector((state) => state.senders);
   const domainsState = useSelector((state) => state.domains);
   const contentsState = useSelector((state) => state.contents);
+  const campaignState = useSelector((state) => state.campaigns);
   const authState = useSelector((state) => state.auth);
   
   const { senders = [], isLoading: isSendersLoading } = sendersState || {};
   const { domains = [], isLoading: isDomainsLoading } = domainsState || {};
   const { contents = [], isLoading: isContentsLoading } = contentsState || {};
+  const { campaigns = [], currentCampaign = null, isLoading: isCampaignLoading } = campaignState || {};
   const { user, currentView } = authState || {};
 
   // Filter domains and senders based on current view
@@ -95,7 +101,29 @@ const CampaignBuilder = () => {
     dispatch(fetchSenders());
     dispatch(fetchDomains());
     dispatch(fetchContents());
-  }, [dispatch]);
+    
+    // If editing, fetch the campaign data
+    if (isEditMode && id) {
+      dispatch(fetchCampaign(id));
+    }
+  }, [dispatch, isEditMode, id]);
+
+  // Populate form data when editing and campaign data is loaded
+  useEffect(() => {
+    if (isEditMode && currentCampaign && currentCampaign.id === parseInt(id)) {
+      setFormData({
+        name: currentCampaign.name || '',
+        subject: currentCampaign.subject || '',
+        email_content: currentCampaign.email_content || '',
+        enable_open_tracking: currentCampaign.enable_open_tracking ?? true,
+        enable_click_tracking: currentCampaign.enable_click_tracking ?? true,
+        enable_unsubscribe_link: currentCampaign.enable_unsubscribe_link ?? true,
+        enable_template_variables: currentCampaign.enable_template_variables ?? false,
+        template_variables: currentCampaign.template_variables || '',
+        recipient_file: null, // Don't pre-populate file uploads
+      });
+    }
+  }, [isEditMode, currentCampaign, id]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -230,14 +258,18 @@ const CampaignBuilder = () => {
 
 
 
-      const result = await dispatch(createCampaign(campaignData)).unwrap();
-      toast.success('Campaign created successfully');
+      let result;
+      if (isEditMode) {
+        result = await dispatch(updateCampaign({ id, data: campaignData })).unwrap();
+        toast.success('Campaign updated successfully');
+      } else {
+        result = await dispatch(createCampaign(campaignData)).unwrap();
+        toast.success('Campaign created successfully');
+      }
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Campaign creation error:', error);
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to create campaign';
-      toast.error(errorMessage);
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -282,14 +314,18 @@ const CampaignBuilder = () => {
 
 
 
-      const result = await dispatch(createCampaign(campaignData)).unwrap();
-      toast.success('Draft saved successfully');
+      let result;
+      if (isEditMode) {
+        result = await dispatch(updateCampaign({ id, data: campaignData })).unwrap();
+        toast.success('Draft updated successfully');
+      } else {
+        result = await dispatch(createCampaign(campaignData)).unwrap();
+        toast.success('Draft saved successfully');
+      }
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Draft save error:', error);
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to save draft';
-      toast.error(errorMessage);
+      toast.error(getErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -313,15 +349,17 @@ const CampaignBuilder = () => {
         feature="advanced campaign builder"
         customMessage="Upgrade to Pro to unlock the advanced campaign builder with custom templates, A/B testing, automation, and premium sending features."
       />
-      <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6">
+      <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Create New Campaign</h1>
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
+                {isEditMode ? 'Edit Campaign' : 'Create New Campaign'}
+              </h1>
               {isAdmin && (
-                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${isAdminView
+                <span className={`mt-2 sm:mt-0 sm:ml-2 px-2 py-1 text-xs font-medium rounded-full inline-block ${isAdminView
                     ? 'bg-blue-100 text-blue-800'
                     : 'bg-green-100 text-green-800'
                   }`}>
@@ -329,9 +367,9 @@ const CampaignBuilder = () => {
                 </span>
               )}
             </div>
-            <p className="text-gray-600 mt-1">Build and configure your email campaign</p>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">Build and configure your email campaign</p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
             <button
               type="button"
               onClick={handleSaveDraft}
@@ -378,24 +416,24 @@ const CampaignBuilder = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <label className="flex items-center space-x-2">
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+        <label className="flex items-start sm:items-center space-x-2">
           <input
             type="checkbox"
             checked={enableContentSwitching}
             onChange={e => setEnableContentSwitching(e.target.checked)}
-            className="form-checkbox"
+            className="form-checkbox mt-1 sm:mt-0"
           />
-          <span>Enable Content Switching (A/B test multiple email contents)</span>
+          <span className="text-sm sm:text-base">Enable Content Switching (A/B test multiple email contents)</span>
         </label>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="form-label">Campaign Name *</label>
@@ -489,6 +527,7 @@ const CampaignBuilder = () => {
                     <label className="form-label">Email Content *</label>
                     <QuillEditor
                       key={`variation-${idx}`}
+                      id={`variation-${idx}`}
                       value={variation.content}
                       onChange={data => handleContentVariationChange(idx, 'content', data.html)}
                       placeholder="Enter your email content here. You can use HTML tags for formatting."

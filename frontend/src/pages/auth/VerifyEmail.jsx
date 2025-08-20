@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { verifyEmail, resendEmailVerification } from '../../store/slices/authSlice';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { HiMail, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi';
 
 const VerifyEmail = () => {
@@ -44,7 +45,7 @@ const VerifyEmail = () => {
       }, 2000);
     } catch (error) {
       setVerificationStatus('error');
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Email verification failed';
+      const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
     } finally {
       setIsVerifying(false);
@@ -59,7 +60,7 @@ const VerifyEmail = () => {
       toast.success('Verification email sent!');
       setResendCooldown(60); // 60 second cooldown
     } catch (error) {
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to resend verification email';
+      const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
     }
   };

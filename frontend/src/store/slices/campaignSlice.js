@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { api, handleApiError } from '../../utils/api';
+import { serializeError } from '../../utils/errorHandler';
 
 export const fetchCampaigns = createAsyncThunk(
   'campaigns/fetchCampaigns',
@@ -8,7 +9,7 @@ export const fetchCampaigns = createAsyncThunk(
       const response = await api.get('/campaigns', params);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -20,7 +21,7 @@ export const fetchRecentCampaigns = createAsyncThunk(
       const response = await api.get('/campaigns/recent', params);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -32,7 +33,7 @@ export const fetchCampaign = createAsyncThunk(
       const response = await api.get(`/campaigns/${campaignId}`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -53,19 +54,24 @@ export const createCampaign = createAsyncThunk(
       const response = await api.post('/campaigns', campaignData, config);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
 
 export const updateCampaign = createAsyncThunk(
   'campaigns/updateCampaign',
-  async ({ campaignId, campaignData }, { rejectWithValue }) => {
+  async ({ id, data }, { rejectWithValue }) => {
     try {
-      const response = await api.put(`/campaigns/${campaignId}`, campaignData);
+      const config = {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      };
+      const response = await api.put(`/campaigns/${id}`, data, config);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -77,7 +83,7 @@ export const deleteCampaign = createAsyncThunk(
       const response = await api.delete(`/campaigns/${campaignId}`);
       return campaignId;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -89,7 +95,7 @@ export const startCampaign = createAsyncThunk(
       const response = await api.post(`/campaigns/${campaignId}/start`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -101,7 +107,7 @@ export const pauseCampaign = createAsyncThunk(
       const response = await api.post(`/campaigns/${campaignId}/pause`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -113,7 +119,7 @@ export const stopCampaign = createAsyncThunk(
       const response = await api.post(`/campaigns/${campaignId}/stop`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -125,7 +131,7 @@ export const resumeCampaign = createAsyncThunk(
       const response = await api.post(`/campaigns/${campaignId}/resume`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -137,7 +143,7 @@ export const duplicateCampaign = createAsyncThunk(
       const response = await api.post(`/campaigns/${campaignId}/duplicate`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -149,7 +155,7 @@ export const fetchCampaignStats = createAsyncThunk(
       const response = await api.get(`/campaigns/${campaignId}/stats`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -161,7 +167,7 @@ export const fetchCampaignTracking = createAsyncThunk(
       const response = await api.get(`/campaigns/${campaignId}/tracking`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -177,7 +183,7 @@ export const fetchSenders = createAsyncThunk(
       };
     } catch (error) {
       console.error('Error fetching senders:', error);
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -193,7 +199,7 @@ export const fetchDomains = createAsyncThunk(
       };
     } catch (error) {
       console.error('Error fetching domains:', error);
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -209,7 +215,7 @@ export const fetchContents = createAsyncThunk(
       };
     } catch (error) {
       console.error('Error fetching contents:', error);
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );
@@ -319,14 +325,24 @@ const campaignSlice = createSlice({
       })
 
       // Update Campaign
+      .addCase(updateCampaign.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(updateCampaign.fulfilled, (state, action) => {
-        const index = state.campaigns.findIndex(c => c.id === action.payload.id);
+        state.isLoading = false;
+        const campaign = action.payload.data || action.payload;
+        const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
-          state.campaigns[index] = action.payload;
+          state.campaigns[index] = campaign;
         }
-        if (state.currentCampaign?.id === action.payload.id) {
-          state.currentCampaign = action.payload;
+        if (state.currentCampaign?.id === campaign.id) {
+          state.currentCampaign = campaign;
         }
+      })
+      .addCase(updateCampaign.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
       })
 
       // Delete Campaign

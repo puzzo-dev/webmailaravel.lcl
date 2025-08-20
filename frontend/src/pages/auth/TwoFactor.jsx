@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { HiShieldCheck, HiRefresh, HiArrowLeft } from 'react-icons/hi';
 import { setUser } from '../../store/slices/authSlice';
 
@@ -103,13 +104,13 @@ const TwoFactor = () => {
         toast.success('Two-factor authentication successful!');
         navigate('/dashboard');
       } else {
-        toast.error(data.message || 'Invalid verification code');
+        toast.error(getErrorMessage({ response: { data } }));
         // Clear the code on error
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       }
     } catch (error) {
-      toast.error('An error occurred during verification');
+      toast.error(getErrorMessage(error));
       setCode(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -139,10 +140,10 @@ const TwoFactor = () => {
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       } else {
-        toast.error(data.message || 'Failed to resend code');
+        toast.error(getErrorMessage({ response: { data } }));
       }
     } catch (error) {
-      toast.error('An error occurred while resending code');
+      toast.error(getErrorMessage(error));
     }
   };
 

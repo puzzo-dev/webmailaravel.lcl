@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { useForm } from 'react-hook-form';
 import { login, clearError } from '../../store/slices/authSlice';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { HiInbox, HiLockClosed, HiEye, HiEyeOff } from 'react-icons/hi';
+import { useForm } from 'react-hook-form';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -31,11 +32,10 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate, location]);
 
-  // Show error toast
+  // Show error messages
   useEffect(() => {
     if (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
       dispatch(clearError());
     }
@@ -101,7 +101,7 @@ const Login = () => {
       </div>
 
       {/* Right side - Login Form */}
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24 bg-gray-50">
+      <div className="flex-1 flex flex-col justify-center py-8 px-4 sm:px-6 lg:px-20 xl:px-24 bg-gray-50">
         <div className="mx-auto w-full max-w-sm lg:w-96">
           {/* Logo for mobile */}
           <div className="lg:hidden text-center mb-8">

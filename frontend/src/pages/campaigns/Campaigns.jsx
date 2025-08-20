@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage, getSuccessMessage } from '../../utils/errorHandler';
 import {
   HiPlus,
   HiSearch,
@@ -123,7 +124,7 @@ const Campaigns = () => {
         toast.success('Campaign deleted successfully');
       } catch (error) {
         if (!handleSubscriptionError(error)) {
-          toast.error('Failed to delete campaign');
+          toast.error(getErrorMessage(error));
         }
       }
     }
@@ -136,7 +137,7 @@ const Campaigns = () => {
         toast.success('Campaign duplicated successfully');
       } catch (error) {
         if (!handleSubscriptionError(error)) {
-          toast.error('Failed to duplicate campaign');
+          toast.error(getErrorMessage(error));
         }
       }
     }
@@ -166,7 +167,7 @@ const Campaigns = () => {
       }
     } catch (error) {
       if (!handleSubscriptionError(error)) {
-        toast.error(`Failed to ${action} campaign`);
+        toast.error(getErrorMessage(error));
       }
     }
   };
@@ -188,7 +189,7 @@ const Campaigns = () => {
       setBulkAction('');
     } catch (error) {
       if (!handleSubscriptionError(error)) {
-        toast.error(`Failed to perform bulk ${bulkAction}`);
+        toast.error(getErrorMessage(error));
       }
     } finally {
       setIsPerformingBulkAction(false);
@@ -293,28 +294,29 @@ const Campaigns = () => {
   const hasActiveFilters = searchTerm || statusFilter || dateFilter || sortBy !== 'created_at' || sortOrder !== 'desc';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-            <p className="text-gray-600 mt-1">Manage your email campaigns</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Campaigns</h1>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage your email campaigns</p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <button
               onClick={() => dispatch(fetchCampaigns({ page: 1, limit: 10 }))}
-              className="btn btn-secondary flex items-center"
+              className="btn btn-secondary flex items-center justify-center"
               disabled={isLoading}
             >
               <HiRefresh className={`h-5 w-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <Link to="/campaigns/single-send" className="btn btn-secondary flex items-center mr-3">
+            <Link to="/campaigns/single-send" className="btn btn-secondary flex items-center justify-center">
               <HiMail className="h-5 w-5 mr-2" />
-              Send Single Email
+              <span className="hidden sm:inline">Send Single Email</span>
+              <span className="sm:hidden">Single Send</span>
             </Link>
-            <Link to="/campaigns/new" className="btn btn-primary flex items-center">
+            <Link to="/campaigns/new" className="btn btn-primary flex items-center justify-center">
               <HiPlus className="h-5 w-5 mr-2" />
               New Campaign
             </Link>
@@ -323,7 +325,7 @@ const Campaigns = () => {
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
         {/* Quick Search */}
         <div className="flex flex-col lg:flex-row gap-4 mb-4">
           <div className="flex-1 relative">
@@ -344,11 +346,11 @@ const Campaigns = () => {
               </button>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="input w-auto min-w-[140px]"
+              className="input w-full sm:w-auto sm:min-w-[140px]"
             >
               <option value="">All Status</option>
               <option value="DRAFT">Draft</option>
@@ -360,7 +362,7 @@ const Campaigns = () => {
             </select>
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`btn btn-secondary flex items-center ${showAdvancedFilters ? 'btn-primary' : ''}`}
+              className={`btn btn-secondary flex items-center justify-center w-full sm:w-auto ${showAdvancedFilters ? 'btn-primary' : ''}`}
             >
               <HiFilter className="h-5 w-5 mr-2" />
               Filters
@@ -445,11 +447,11 @@ const Campaigns = () => {
                 {selectedCampaigns.length} campaign{selectedCampaigns.length !== 1 ? 's' : ''} selected
               </span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2 w-full sm:w-auto">
               <select
                 value={bulkAction}
                 onChange={(e) => setBulkAction(e.target.value)}
-                className="input text-sm"
+                className="input text-sm w-full sm:w-auto"
               >
                 <option value="">Select Action</option>
                 <option value="start">Start</option>
@@ -457,23 +459,25 @@ const Campaigns = () => {
                 <option value="stop">Stop</option>
                 <option value="delete">Delete</option>
               </select>
-              <button
-                onClick={handleBulkAction}
-                disabled={!bulkAction || isPerformingBulkAction}
-                className="btn btn-primary text-sm"
-              >
-                {isPerformingBulkAction ? (
-                  <div className="loading-spinner h-4 w-4"></div>
-                ) : (
-                  'Apply'
-                )}
-              </button>
-              <button
-                onClick={() => setSelectedCampaigns([])}
-                className="btn btn-secondary text-sm"
-              >
-                <HiX className="h-4 w-4" />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkAction}
+                  disabled={!bulkAction || isPerformingBulkAction}
+                  className="btn btn-primary text-sm flex-1 sm:flex-none"
+                >
+                  {isPerformingBulkAction ? (
+                    <div className="loading-spinner h-4 w-4"></div>
+                  ) : (
+                    'Apply'
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedCampaigns([])}
+                  className="btn btn-secondary text-sm flex-shrink-0"
+                >
+                  <HiX className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

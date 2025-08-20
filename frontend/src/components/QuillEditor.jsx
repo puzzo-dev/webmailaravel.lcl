@@ -50,9 +50,9 @@ Font.whitelist = [
 Quill.register(Font, true);
 
 // Modules object for setting up the Quill editor
-const modules = {
+const getModules = (toolbarId) => ({
   toolbar: {
-    container: "#toolbar",
+    container: `#${toolbarId}`,
     handlers: {
       undo: undoChange,
       redo: redoChange
@@ -63,7 +63,7 @@ const modules = {
     maxStack: 100,
     userOnly: true
   }
-};
+});
 
 // Formats objects for setting up the Quill editor
 const formats = [
@@ -87,8 +87,8 @@ const formats = [
 ];
 
 // Quill Toolbar component
-const QuillToolbar = () => (
-  <div id="toolbar">
+const QuillToolbar = ({ toolbarId = "toolbar" }) => (
+  <div id={toolbarId}>
     <span className="ql-formats">
       <select className="ql-font" defaultValue="arial">
         <option value="arial">Arial</option>
@@ -160,10 +160,12 @@ const QuillEditor = ({
   placeholder = 'Enter content...',
   readOnly = false,
   className = '',
-  style = {}
+  style = {},
+  id = null
 }) => {
   const editorRef = useRef(null);
   const quillRef = useRef(null);
+  const toolbarId = id ? `toolbar-${id}` : `toolbar-${Math.random().toString(36).substr(2, 9)}`;
 
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
@@ -194,10 +196,10 @@ const QuillEditor = ({
       };
 
       try {
-        // Initialize Quill with custom configuration
+        // Initialize Quill with custom configuration and unique toolbar
         quillRef.current = new Quill(editorRef.current, {
           theme: 'snow',
-          modules,
+          modules: getModules(toolbarId),
           formats,
           placeholder
         });
@@ -288,7 +290,7 @@ const QuillEditor = ({
 
   return (
     <div className={`quill-editor ${className}`} style={style}>
-      <QuillToolbar />
+      <QuillToolbar toolbarId={toolbarId} />
       <div ref={editorRef} />
       <style>{`
         .quill-editor .ql-editor {

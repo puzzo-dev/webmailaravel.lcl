@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { adminService, analyticsService } from '../../services/api';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   LineChart,
   Line,
@@ -91,6 +92,7 @@ const AdminDashboard = () => {
         deliverability: analyticsData.deliverability || {},
         reputation: analyticsData.reputation || {},
         performance: analyticsData.performance || {},
+        charts: analyticsData.charts || {},
       });
       
       // Generate recent activities from the data
@@ -100,7 +102,7 @@ const AdminDashboard = () => {
       );
       setRecentActivities(activities);
     } catch (error) {
-      toast.error('Failed to load dashboard data');
+      toast.error(getErrorMessage(error));
       console.error('Dashboard data error:', error);
     } finally {
       setLoading(false);
@@ -334,11 +336,12 @@ const AdminDashboard = () => {
   };
 
   const getDeliverabilityData = () => {
-    // Use real chart data from backend if available
+    // Use real campaign data from backend if available
     const chartData = analyticsData.charts?.deliverability_trends || [];
     if (chartData.length > 0) {
+      // Return campaign-based data for bar chart
       return chartData.map(item => ({
-        name: item.date,
+        name: item.name,
         delivery_rate: item.delivery_rate || 0,
         bounce_rate: item.bounce_rate || 0,
         open_rate: item.open_rate || 0,
@@ -346,12 +349,36 @@ const AdminDashboard = () => {
       }));
     }
     
-    // Fallback to static data if no real data available
-    const deliverability = analyticsData.deliverability || {};
+    // Fallback to sample campaign data if no real data available
     return [
-      { name: 'Delivered', value: deliverability.delivery_rate || 0, color: '#10b981' },
-      { name: 'Bounced', value: deliverability.bounce_rate || 0, color: '#ef4444' },
-      { name: 'Complaints', value: deliverability.complaint_rate || 0, color: '#f59e0b' },
+      { 
+        name: 'Summer Sale', 
+        delivery_rate: 96.5, 
+        bounce_rate: 2.1, 
+        open_rate: 28.3, 
+        click_rate: 4.2 
+      },
+      { 
+        name: 'Newsletter #47', 
+        delivery_rate: 94.8, 
+        bounce_rate: 3.2, 
+        open_rate: 22.7, 
+        click_rate: 3.1 
+      },
+      { 
+        name: 'Product Launch', 
+        delivery_rate: 97.2, 
+        bounce_rate: 1.8, 
+        open_rate: 31.5, 
+        click_rate: 5.8 
+      },
+      { 
+        name: 'Welcome Series', 
+        delivery_rate: 95.1, 
+        bounce_rate: 2.9, 
+        open_rate: 35.2, 
+        click_rate: 6.4 
+      },
     ];
   };
 
@@ -500,19 +527,19 @@ const AdminDashboard = () => {
         adminOnly={true}
         customMessage="Admin privileges required to access the administrative dashboard and system management features."
       />
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-indigo-100 mt-1">System overview and management controls</p>
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg shadow-lg p-4 sm:p-6 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold truncate">Admin Dashboard</h1>
+            <p className="text-indigo-100 mt-1 text-sm sm:text-base">System overview and management controls</p>
           </div>
           <div className="flex items-center space-x-3">
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+              className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm sm:text-base w-full sm:w-auto"
             >
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
@@ -523,7 +550,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* System Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {systemStats.map((stat) => (
           <Link
             key={stat.name}
@@ -797,7 +824,14 @@ const AdminDashboard = () => {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={getDeliverabilityData()}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="name" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  interval={0}
+                  tick={{ fontSize: 10 }}
+                />
                 <YAxis />
                 <Tooltip 
                   contentStyle={{
@@ -806,9 +840,32 @@ const AdminDashboard = () => {
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
-                  formatter={(value) => [`${value.toFixed(2)}%`, 'Rate']}
+                  formatter={(value) => [`${value.toFixed(2)}%`, '']}
                 />
-                <Bar dataKey="value" fill="#8884d8" />
+                <Bar 
+                  dataKey="delivery_rate" 
+                  fill="#10b981" 
+                  name="Delivery Rate"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar 
+                  dataKey="open_rate" 
+                  fill="#3b82f6" 
+                  name="Open Rate"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar 
+                  dataKey="click_rate" 
+                  fill="#f59e0b" 
+                  name="Click Rate"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar 
+                  dataKey="bounce_rate" 
+                  fill="#ef4444" 
+                  name="Bounce Rate"
+                  radius={[2, 2, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (

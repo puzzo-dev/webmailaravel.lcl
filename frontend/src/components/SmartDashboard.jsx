@@ -38,7 +38,8 @@ import {
 } from 'react-icons/hi';
 import { analyticsService } from '../services/api';
 import useSubscriptionError from '../hooks/useSubscriptionError';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandler';
 import '../styles/animations.css';
 
 const SmartDashboard = () => {
@@ -90,7 +91,7 @@ const SmartDashboard = () => {
       generateRecentActivity(analyticsResponse.data);
     } catch (error) {
       if (!handleSubscriptionError(error)) {
-        toast.error('Failed to load analytics data');
+        toast.error(getErrorMessage(error));
         console.error('Analytics error:', error);
       }
     } finally {

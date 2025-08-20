@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { resetPassword, clearError } from '../../store/slices/authSlice';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { HiLockClosed, HiEye, HiEyeOff, HiArrowLeft } from 'react-icons/hi';
 
 const ResetPassword = () => {
@@ -29,8 +30,7 @@ const ResetPassword = () => {
 
   useEffect(() => {
     if (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
+      const errorMessage = getErrorMessage(error);
       toast.error(errorMessage);
       dispatch(clearError());
     }

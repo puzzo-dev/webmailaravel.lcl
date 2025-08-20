@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -33,6 +33,10 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  
+  // Refs for dropdown elements
+  const notificationsRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   // Get notifications from Redux store
   const { notifications, unreadCount, isLoading } = useSelector((state) => state.notifications);
@@ -45,14 +49,35 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     }
   }, [dispatch, user]);
 
+  // Handle clicks outside dropdowns to close them
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // Handle notification click
   const handleNotificationClick = async (notification) => {
     if (!notification.read_at) {
       await dispatch(markNotificationAsRead(notification.id));
     }
-    // Navigate to notifications page
+    // Navigate to appropriate notifications page based on current view
     setShowNotifications(false);
-    navigate('/notifications');
+    if (isAdmin && isAdminView) {
+      navigate('/admin/notifications');
+    } else {
+      navigate('/notifications');
+    }
   };
 
   // Format time helper
@@ -180,7 +205,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
             </div>
 
             {/* Notifications */}
-            <div className="relative">
+            <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors relative"
@@ -246,7 +271,11 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     <button 
                       onClick={() => {
                         setShowNotifications(false);
-                        navigate('/notifications');
+                        if (isAdmin && isAdminView) {
+                          navigate('/admin/notifications');
+                        } else {
+                          navigate('/notifications');
+                        }
                       }}
                       className="text-sm text-blue-600 hover:text-blue-800 w-full text-left"
                     >
@@ -258,7 +287,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
             </div>
 
             {/* User Menu */}
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center space-x-2 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -282,13 +311,16 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]">
                   <div className="py-1">
-                    <a
-                      href="/account"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/account');
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <HiUser className="h-4 w-4 mr-3" />
                       Account
-                    </a>
+                    </button>
                     {isAdmin && (
                       <>
                         <hr className="my-1" />
@@ -313,7 +345,10 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     )}
                     <hr className="my-1" />
                     <button
-                      onClick={onLogout}
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onLogout();
+                      }}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <HiLogout className="h-4 w-4 mr-3" />

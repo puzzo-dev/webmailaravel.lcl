@@ -85,16 +85,29 @@ class ProcessCampaignJob implements ShouldQueue
                 'attempt' => $this->attempts()
             ]);
 
-            // Mark campaign as failed if this is the last attempt
+            // Only mark campaign as failed if this is a critical system error, not individual email failures
             if ($this->attempts() >= $this->tries) {
                 $campaign = Campaign::find($this->campaignId);
                 if ($campaign) {
-                    $campaign->update(['status' => 'failed']);
-                    
-                    Log::error('Campaign marked as failed after all retry attempts', [
-                        'campaign_id' => $this->campaignId,
-                        'attempts' => $this->attempts()
-                    ]);
+                    // Only mark as failed if it's a system-level error (not individual email failures)
+                    if (strpos($e->getMessage(), 'Recipient list') !== false || 
+                        strpos($e->getMessage(), 'No senders found') !== false ||
+                        strpos($e->getMessage(), 'No content found') !== false) {
+                        $campaign->update(['status' => 'failed']);
+                        
+                        Log::error('Campaign marked as failed due to system error', [
+                            'campaign_id' => $this->campaignId,
+                            'error' => $e->getMessage(),
+                            'attempts' => $this->attempts()
+                        ]);
+                    } else {
+                        // For other errors, just log and let individual email jobs handle their own failures
+                        Log::warning('Campaign processing encountered error but continuing', [
+                            'campaign_id' => $this->campaignId,
+                            'error' => $e->getMessage(),
+                            'attempts' => $this->attempts()
+                        ]);
+                    }
                 }
             }
 
@@ -113,10 +126,19 @@ class ProcessCampaignJob implements ShouldQueue
             'attempts' => $this->attempts()
         ]);
 
-        // Mark campaign as failed
+        // Only mark campaign as failed for system-level errors
         $campaign = Campaign::find($this->campaignId);
         if ($campaign) {
-            $campaign->update(['status' => 'failed']);
+            if (strpos($exception->getMessage(), 'Recipient list') !== false || 
+                strpos($exception->getMessage(), 'No senders found') !== false ||
+                strpos($exception->getMessage(), 'No content found') !== false) {
+                $campaign->update(['status' => 'failed']);
+                
+                Log::error('Campaign marked as failed due to system error in failed handler', [
+                    'campaign_id' => $this->campaignId,
+                    'error' => $exception->getMessage()
+                ]);
+            }
         }
     }
 }

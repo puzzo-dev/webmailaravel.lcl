@@ -6,7 +6,8 @@ import {
   fetchSubscriptions,
   clearError,
 } from '../store/slices/billingSlice';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandler';
 
 /**
  * Custom hook for managing subscription state and operations
@@ -76,7 +77,7 @@ const useSubscription = () => {
       return result;
     } catch (error) {
       console.error('Plan upgrade failed:', error);
-      toast.error('Failed to create subscription. Please try again.');
+      toast.error(getErrorMessage(error));
       throw error;
     }
   };
@@ -106,7 +107,7 @@ const useSubscription = () => {
       return true;
     } catch (error) {
       console.error('Subscription cancellation failed:', error);
-      toast.error(error.message || 'Failed to cancel subscription. Please try again.');
+      toast.error(getErrorMessage(error));
       return false;
     }
   };

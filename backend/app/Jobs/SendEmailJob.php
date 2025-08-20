@@ -110,36 +110,54 @@ class SendEmailJob implements ShouldQueue
             
             // Clear user daily cache to reflect new count
             $userCacheKey = "user_daily_sent:{$user->id}:" . now()->format('Y-m-d');
-            \Illuminate\Support\Facades\Cache::forget($userCacheKey);
+            // Increment sent count for this campaign
+            $this->campaign->increment('total_sent');
 
+            // Get updated campaign data for status logging
+            $updatedCampaign = $this->campaign->fresh();
+            
             Log::info('Campaign email sent successfully', [
                 'campaign_id' => $this->campaign->id,
+                'campaign_name' => $updatedCampaign->name,
+                'campaign_status' => $updatedCampaign->status,
                 'recipient' => $this->recipient,
                 'sender_id' => $this->sender->id,
-                'sender_name' => $this->sender->name,
                 'sender_email' => $this->sender->email,
-                'remaining_daily_sends' => $sender->getRemainingDailySends()
+                'remaining_daily_sends' => $sender->getRemainingDailySends(),
+                'total_sent' => $updatedCampaign->total_sent,
+                'total_failed' => $updatedCampaign->total_failed,
+                'total_recipients' => $updatedCampaign->recipient_count,
+                'progress_percentage' => $updatedCampaign->recipient_count > 0 ? 
+                    round((($updatedCampaign->total_sent + $updatedCampaign->total_failed) / $updatedCampaign->recipient_count) * 100, 2) : 0
             ]);
+            
+            // Check if all emails have been processed (sent + failed)
+            $this->checkCampaignCompletion();
 
         } catch (\Exception $e) {
+            // Increment failed count for this campaign
+            $this->campaign->increment('total_failed');
+            
+            // Get updated campaign data for status logging
+            $updatedCampaign = $this->campaign->fresh();
+            
             Log::error('Campaign email sending failed', [
                 'campaign_id' => $this->campaign->id,
+                'campaign_name' => $updatedCampaign->name,
+                'campaign_status' => $updatedCampaign->status,
                 'recipient' => $this->recipient,
                 'sender_id' => $this->sender->id,
+                'sender_email' => $this->sender->email,
                 'error' => $e->getMessage(),
-                'attempt' => $this->attempts()
+                'trace' => $e->getTraceAsString(),
+                'total_sent' => $updatedCampaign->total_sent,
+                'total_failed' => $updatedCampaign->total_failed,
+                'total_recipients' => $updatedCampaign->recipient_count,
+                'progress_percentage' => $updatedCampaign->recipient_count > 0 ? 
+                    round((($updatedCampaign->total_sent + $updatedCampaign->total_failed) / $updatedCampaign->recipient_count) * 100, 2) : 0
             ]);
 
-            // Mark campaign as failed if this is the last attempt
-            if ($this->attempts() >= $this->tries) {
-                $this->campaign->update(['status' => 'failed']);
-                
-                Log::error('Campaign marked as failed after all retry attempts', [
-                    'campaign_id' => $this->campaign->id,
-                    'attempts' => $this->attempts()
-                ]);
-            }
-
+            // Re-throw the exception to trigger job failure
             throw $e;
         }
     }
@@ -201,7 +219,7 @@ class SendEmailJob implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('Campaign email job failed permanently', [
+        Log::error('SendEmailJob failed permanently', [
             'campaign_id' => $this->campaign->id,
             'recipient' => $this->recipient,
             'sender_id' => $this->sender->id,
@@ -209,7 +227,53 @@ class SendEmailJob implements ShouldQueue
             'attempts' => $this->attempts()
         ]);
 
-        // Mark campaign as failed
-        $this->campaign->update(['status' => 'failed']);
+        // Only increment failed count, don't mark entire campaign as failed
+        $this->campaign->increment('total_failed');
+        
+        Log::warning('Email job failed, incrementing campaign failed count', [
+            'campaign_id' => $this->campaign->id,
+            'recipient' => $this->recipient,
+            'total_failed' => $this->campaign->fresh()->total_failed
+        ]);
+        
+        // Check if all emails have been processed (sent + failed)
+        $this->checkCampaignCompletion();
+    }
+
+    /**
+     * Check if campaign should be marked as completed
+     */
+    private function checkCampaignCompletion(): void
+    {
+        $campaign = $this->campaign->fresh();
+        $totalProcessed = ($campaign->total_sent ?? 0) + ($campaign->total_failed ?? 0);
+        $totalRecipients = $campaign->recipient_count ?? 0;
+        
+        // Only check completion if we have recipient count and all are processed
+        if ($totalRecipients > 0 && $totalProcessed >= $totalRecipients) {
+            // Check if there are any remaining jobs for this campaign
+            $pendingJobs = \DB::table('jobs')
+                ->where('payload', 'LIKE', '%SendEmailJob%')
+                ->where('payload', 'LIKE', '%"campaign_id":' . $campaign->id . '%')
+                ->count();
+                
+            if ($pendingJobs == 0) {
+                $campaign->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+                
+                // Send completion notification
+                $campaign->user->notify(new \App\Notifications\CampaignCompleted($campaign));
+                
+                Log::info('Campaign marked as completed from SendEmailJob', [
+                    'campaign_id' => $campaign->id,
+                    'total_sent' => $campaign->total_sent,
+                    'total_failed' => $campaign->total_failed,
+                    'total_processed' => $totalProcessed,
+                    'total_recipients' => $totalRecipients,
+                ]);
+            }
+        }
     }
 }

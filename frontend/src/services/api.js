@@ -482,6 +482,24 @@ export const analyticsService = {
     }
 };
 
+// Queue service methods
+export const queueService = {
+    async getCampaignFailedJobs(campaignId, params = {}) {
+        const response = await api.get(`/admin/queue/campaigns/${campaignId}/failed`, { params });
+        return response.data;
+    },
+
+    async retryFailedJob(jobId) {
+        const response = await api.post(`/admin/queue/failed/${jobId}/retry`);
+        return response.data;
+    },
+
+    async deleteFailedJob(jobId) {
+        const response = await api.delete(`/admin/queue/failed/${jobId}`);
+        return response.data;
+    }
+};
+
 // Suppression service methods (Admin only)
 export const suppressionService = {
     async getList(params = {}) {
@@ -749,6 +767,26 @@ export const adminService = {
 
     async getCampaigns(params = {}) {
         const response = await api.get('/admin/campaigns', { params });
+        return response.data;
+    },
+
+    async deleteCampaign(campaignId) {
+        const response = await api.delete(`/admin/campaigns/${campaignId}`);
+        return response.data;
+    },
+
+    async startCampaign(campaignId) {
+        const response = await api.post(`/admin/campaigns/${campaignId}/start`);
+        return response.data;
+    },
+
+    async pauseCampaign(campaignId) {
+        const response = await api.post(`/admin/campaigns/${campaignId}/pause`);
+        return response.data;
+    },
+
+    async stopCampaign(campaignId) {
+        const response = await api.post(`/admin/campaigns/${campaignId}/stop`);
         return response.data;
     },
 

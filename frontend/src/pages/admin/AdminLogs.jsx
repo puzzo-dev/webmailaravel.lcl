@@ -223,46 +223,46 @@ const AdminLogs = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-lg shadow-sm p-3 lg:p-6">
+        <div className="flex flex-col space-y-3 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">System Logs</h1>
-            <p className="text-gray-600 mt-1">Monitor and manage system logs</p>
+            <h1 className="text-lg lg:text-2xl font-bold text-gray-900">System Logs</h1>
+            <p className="text-gray-600 mt-1 text-xs lg:text-base">Monitor and manage system logs</p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex gap-1 lg:gap-3">
             <button
               onClick={handleLoadLogs}
               disabled={loading}
-              className="btn btn-secondary flex items-center"
+              className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 px-2 py-1.5 lg:px-4 lg:py-2 rounded text-xs lg:text-sm font-medium transition-colors"
             >
-              <HiRefresh className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <HiRefresh className={`h-3 w-3 lg:h-4 lg:w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="ml-1 hidden sm:inline">Refresh</span>
             </button>
             <button
               onClick={handleClearLogs}
               disabled={loading}
-              className="btn btn-danger flex items-center"
+              className="flex items-center justify-center bg-red-100 hover:bg-red-200 disabled:opacity-50 text-red-700 px-2 py-1.5 lg:px-4 lg:py-2 rounded text-xs lg:text-sm font-medium transition-colors"
             >
-              <HiTrash className="h-5 w-5 mr-2" />
-              Clear Logs
+              <HiTrash className="h-3 w-3 lg:h-4 lg:w-4" />
+              <span className="ml-1 hidden sm:inline">Clear</span>
             </button>
             <button
               onClick={handleDownloadLogs}
               disabled={loading}
-              className="btn btn-primary flex items-center"
+              className="flex items-center justify-center bg-blue-100 hover:bg-blue-200 disabled:opacity-50 text-blue-700 px-2 py-1.5 lg:px-4 lg:py-2 rounded text-xs lg:text-sm font-medium transition-colors"
             >
-              <HiDownload className="h-5 w-5 mr-2" />
-              Download
+              <HiDownload className="h-3 w-3 lg:h-4 lg:w-4" />
+              <span className="ml-1 hidden sm:inline">Download</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-lg shadow-sm p-3 lg:p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Log File
@@ -270,7 +270,7 @@ const AdminLogs = () => {
             <select
               value={selectedFile}
               onChange={(e) => setSelectedFile(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+              className="block w-full px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
               {logFiles.map((file) => (
                 <option key={file} value={file}>
@@ -284,9 +284,9 @@ const AdminLogs = () => {
               Log Level
             </label>
             <select
-              value={logLevel}
-              onChange={(e) => setLogLevel(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value)}
+              className="block w-full px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
               {logLevels.map((level) => (
                 <option key={level.value} value={level.value}>
@@ -297,29 +297,25 @@ const AdminLogs = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search
+              Date Filter
             </label>
-            <div className="relative">
-              {/* HiSearch icon is not imported, so it's removed */}
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search logs..."
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 w-full"
-              />
-            </div>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="block w-full px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+            />
           </div>
           <div className="flex items-end">
             <button
               onClick={() => {
                 setSearchTerm('');
-                setLogLevel('all');
+                setLevelFilter('all');
               }}
-              className="btn btn-secondary w-full"
+              className="px-3 py-1.5 lg:px-4 lg:py-2 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium transition-colors w-full flex items-center justify-center"
             >
-              <HiX className="h-4 w-4 mr-2" />
-              Clear Filters
+              <HiX className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
+              Clear
             </button>
           </div>
         </div>
@@ -327,12 +323,12 @@ const AdminLogs = () => {
 
       {/* Logs Table */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">
-              Log Entries ({filteredLogs.length})
+        <div className="px-3 lg:px-6 py-3 lg:py-4 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h3 className="text-base lg:text-lg font-medium text-gray-900">
+              Log Entries
             </h3>
-            <div className="text-sm text-gray-500">
+            <div className="text-xs lg:text-sm text-gray-500">
               Showing {filteredLogs.length} of {pagination.total} entries
             </div>
           </div>
@@ -341,46 +337,53 @@ const AdminLogs = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Timestamp
+                <th className="px-2 lg:px-6 py-2 lg:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Time
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 lg:px-6 py-2 lg:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Level
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-2 lg:px-6 py-2 lg:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Message
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden lg:table-cell px-2 lg:px-6 py-2 lg:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Context
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                <th className="px-2 lg:px-6 py-2 lg:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  View
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDate(log.timestamp)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="space-y-1">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getLevelColor(log.level)}`}>
-                        {getLevelIcon(log.level)}
-                        <span className="ml-1">{log.level}</span>
-                      </span>
-                      {log.channel && log.channel !== log.level && (
-                        <div className="text-xs text-gray-500">
-                          Channel: {log.channel}
-                        </div>
-                      )}
+                  <td className="px-2 lg:px-6 py-2 lg:py-4 text-xs text-gray-900">
+                    <div className="truncate max-w-[80px] lg:max-w-none">
+                      {new Date(log.timestamp).toLocaleTimeString('en-US', { 
+                        hour12: false, 
+                        hour: '2-digit', 
+                        minute: '2-digit'
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-400 lg:hidden">
+                      {new Date(log.timestamp).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric'
+                      })}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
-                    {log.message}
+                  <td className="px-2 lg:px-6 py-2 lg:py-4">
+                    <span className={`inline-flex items-center justify-center w-6 h-6 lg:w-auto lg:h-auto lg:px-2 lg:py-0.5 rounded-full text-xs font-medium ${getLevelColor(log.level)}`}>
+                      {getLevelIcon(log.level)}
+                      <span className="ml-1 hidden lg:inline">{log.level}</span>
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-2 lg:px-6 py-2 lg:py-4 text-xs text-gray-900">
+                    <div className="truncate max-w-[120px] lg:max-w-md" title={log.message}>
+                      {log.message}
+                    </div>
+                  </td>
+                  <td className="hidden lg:table-cell px-2 lg:px-6 py-2 lg:py-4 text-xs text-gray-900">
                     {log.context && Array.isArray(log.context) && log.context.length > 0 ? (
                       <span className="text-gray-500">
                         {log.context.length} items
@@ -393,12 +396,13 @@ const AdminLogs = () => {
                       <span className="text-gray-400">No context</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-2 lg:px-6 py-2 lg:py-4 text-center">
                     <button
                       onClick={() => handleViewLogDetail(log)}
-                      className="text-primary-600 hover:text-primary-900"
+                      className="inline-flex items-center justify-center w-6 h-6 lg:w-8 lg:h-8 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors"
+                      title="View Details"
                     >
-                      <HiEye className="h-4 w-4" />
+                      <HiEye className="h-3 w-3 lg:h-4 lg:w-4" />
                     </button>
                   </td>
                 </tr>
@@ -407,21 +411,21 @@ const AdminLogs = () => {
           </table>
         </div>
         {pagination.last_page > 1 && (
-          <div className="px-6 py-4 flex justify-center items-center">
+          <div className="px-3 lg:px-6 py-3 lg:py-4 flex flex-col sm:flex-row justify-center items-center gap-2">
             <button
               onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page - 1 }))}
               disabled={pagination.current_page === 1}
-              className="btn btn-secondary mr-2"
+              className="px-3 py-1.5 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded font-medium transition-colors"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-700">
-              Page {pagination.current_page} of {pagination.last_page}
+            <span className="text-xs lg:text-sm text-gray-700 px-2">
+              {pagination.current_page} / {pagination.last_page}
             </span>
             <button
               onClick={() => setPagination(prev => ({ ...prev, current_page: prev.current_page + 1 }))}
               disabled={pagination.current_page === pagination.last_page}
-              className="btn btn-secondary ml-2"
+              className="px-3 py-1.5 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded font-medium transition-colors"
             >
               Next
             </button>
@@ -431,9 +435,9 @@ const AdminLogs = () => {
 
       {/* Log Detail Modal */}
       {showLogDetail && selectedLog && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 p-4">
+          <div className="relative top-4 lg:top-20 mx-auto border w-full max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="p-4 lg:p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Log Entry Details</h3>
                 <button
@@ -449,7 +453,7 @@ const AdminLogs = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Timestamp
                     </label>
-                    <p className="text-sm text-gray-900">{formatDate(selectedLog.timestamp)}</p>
+                    <p className="text-sm text-gray-900 break-words">{formatDate(selectedLog.timestamp)}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -465,7 +469,7 @@ const AdminLogs = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Channel
                       </label>
-                      <p className="text-sm text-gray-900">{selectedLog.channel}</p>
+                      <p className="text-sm text-gray-900 break-words">{selectedLog.channel}</p>
                     </div>
                   )}
                 </div>
@@ -473,7 +477,7 @@ const AdminLogs = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Message
                   </label>
-                  <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md">
+                  <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md break-words">
                     {selectedLog.message}
                   </p>
                 </div>
@@ -482,7 +486,7 @@ const AdminLogs = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Context
                     </label>
-                    <pre className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md overflow-x-auto">
+                    <pre className="text-xs lg:text-sm text-gray-900 bg-gray-50 p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-words">
                       {JSON.stringify(selectedLog.context, null, 2)}
                     </pre>
                   </div>
@@ -492,7 +496,7 @@ const AdminLogs = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Stack Trace
                     </label>
-                    <pre className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md overflow-x-auto max-h-64">
+                    <pre className="text-xs lg:text-sm text-gray-900 bg-gray-50 p-3 rounded-md overflow-x-auto max-h-64 whitespace-pre-wrap break-words">
                       {selectedLog.stack_trace}
                     </pre>
                   </div>

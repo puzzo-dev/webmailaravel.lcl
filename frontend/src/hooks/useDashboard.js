@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { analyticsService } from '../services/api';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandler';
 
 /**
  * Custom hook for managing dashboard state and operations
@@ -51,7 +52,7 @@ const useDashboard = () => {
       } else if (error.response?.status === 403) {
         toast.error('Access denied');
       } else {
-        toast.error('Failed to load dashboard data. Please try again.');
+        toast.error(getErrorMessage(error));
       }
       
       // Set empty data structure to prevent component errors

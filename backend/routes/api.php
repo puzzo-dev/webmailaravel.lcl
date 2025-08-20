@@ -339,6 +339,10 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::get('/campaigns', [CampaignController::class, 'index']);
         Route::put('/campaigns/{campaign}/status', [CampaignController::class, 'updateCampaign']);
+        Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy']);
+        Route::post('/campaigns/{campaign}/start', [CampaignController::class, 'start']);
+        Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pause']);
+        Route::post('/campaigns/{campaign}/stop', [CampaignController::class, 'stop']);
         Route::get('/analytics', [AdminController::class, 'analytics']);
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
         Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
@@ -435,6 +439,7 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/stats', [App\Http\Controllers\QueueController::class, 'getQueueStats']);
             Route::get('/pending', [App\Http\Controllers\QueueController::class, 'getPendingJobs']);
             Route::get('/failed', [App\Http\Controllers\QueueController::class, 'getFailedJobs']);
+            Route::get('/campaigns/{campaignId}/failed', [App\Http\Controllers\QueueController::class, 'getCampaignFailedJobs']);
             Route::post('/failed/{id}/retry', [App\Http\Controllers\QueueController::class, 'retryFailedJob']);
             Route::delete('/failed/{id}', [App\Http\Controllers\QueueController::class, 'deleteFailedJob']);
             Route::delete('/failed', [App\Http\Controllers\QueueController::class, 'clearAllFailedJobs']);

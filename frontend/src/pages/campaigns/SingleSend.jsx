@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import { 
   HiMail, 
   HiPaperAirplane, 
@@ -37,7 +38,7 @@ const SingleSend = () => {
       setSenders(response.data || []);
     } catch (error) {
       console.error('Failed to load senders:', error);
-      toast.error('Failed to load senders');
+      toast.error(getErrorMessage(error));
     }
   };
 
@@ -56,7 +57,7 @@ const SingleSend = () => {
       navigate('/campaigns');
     } catch (error) {
       console.error('Failed to send email:', error);
-      toast.error(error.response?.data?.message || 'Failed to send email');
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

@@ -7,7 +7,8 @@ import {
   fetchPlans,
 } from '../store/slices/billingSlice';
 import { api } from '../utils/api';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandler';
 
 /**
  * Custom hook for managing billing operations and data
@@ -88,7 +89,7 @@ const useBilling = () => {
           errorMessage = downloadResponse.statusText || errorMessage;
         }
         console.error('Download error response:', errorMessage);
-        toast.error(`Failed to download invoice: ${errorMessage}`);
+        toast.error(getErrorMessage(error));
         return false;
       }
 
@@ -133,7 +134,7 @@ const useBilling = () => {
       return true;
     } catch (error) {
       console.error('Invoice download error:', error);
-      toast.error(`Download failed: ${error.message}`);
+      toast.error(getErrorMessage(error));
       return false;
     }
   };
@@ -154,12 +155,12 @@ const useBilling = () => {
         toast.success('Invoice details loaded');
         return response.data || response;
       } else {
-        toast.error(response.message || 'Failed to load invoice details');
+        toast.error(getErrorMessage({ response: { data: response } }));
         return null;
       }
     } catch (error) {
       console.error('Invoice view error:', error);
-      toast.error(`Failed to load invoice: ${error.message}`);
+      toast.error(getErrorMessage(error));
       return null;
     }
   };

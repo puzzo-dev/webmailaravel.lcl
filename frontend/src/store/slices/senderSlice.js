@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { api, handleApiError } from '../../utils/api';
+import { serializeError } from '../../utils/errorHandler';
 
 // Async thunks
 export const fetchSenders = createAsyncThunk(
@@ -59,7 +60,7 @@ export const testSenderConnection = createAsyncThunk(
       const response = await api.post(`/senders/${id}/test`, { test_email });
       return response.data;
     } catch (error) {
-      return rejectWithValue(handleApiError(error).message);
+      return rejectWithValue(serializeError(error));
     }
   }
 );

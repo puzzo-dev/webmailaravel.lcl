@@ -113,13 +113,54 @@ class AuthController extends Controller
                 'Lax' // SameSite
             );
 
-            // Send login notification
+            // Send login notification with location data
             $notificationService = app(NotificationService::class);
             $deviceInfo = \App\Services\UserAgentParser::parse($request->header('User-Agent'));
+            
+            // Get location from IP using direct API call (simplified approach)
+            $locationData = ['success' => false];
+            try {
+                $ip = $request->ip();
+                if (filter_var($ip, FILTER_VALIDATE_IP) && !filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    // For local/private IPs, skip geolocation
+                    $locationData = ['success' => false];
+                } else {
+                    $response = \Illuminate\Support\Facades\Http::timeout(5)->get("http://ip-api.com/json/{$ip}");
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if ($data['status'] === 'success') {
+                            $locationData = [
+                                'success' => true,
+                                'country' => $data['countryCode'],
+                                'country_name' => $data['country'],
+                                'city' => $data['city'],
+                                'state' => $data['region'],
+                                'state_name' => $data['regionName']
+                            ];
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Silently fail and use 'Unknown' location
+                $locationData = ['success' => false];
+            }
+            
+            $location = 'Unknown';
+            if ($locationData['success']) {
+                $location = trim(implode(', ', array_filter([
+                    $locationData['city'] ?? null,
+                    $locationData['state_name'] ?? $locationData['state'] ?? null,
+                    $locationData['country_name'] ?? $locationData['country'] ?? null
+                ])));
+                if (empty($location)) {
+                    $location = $locationData['country_name'] ?? $locationData['country'] ?? 'Unknown';
+                }
+            }
+            
             $loginData = [
                 'device' => $deviceInfo['combined'],
                 'ip' => $request->ip(),
-                'location' => 'Unknown', // Could be enhanced with IP geolocation
+                'location' => $location,
                 'time' => now()->format('Y-m-d H:i:s'),
                 'browser' => $deviceInfo['browser'],
                 'os' => $deviceInfo['os'],
