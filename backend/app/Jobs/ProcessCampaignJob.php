@@ -46,7 +46,7 @@ class ProcessCampaignJob implements ShouldQueue
             ]);
 
             // Check if campaign is still running
-            if (!in_array($campaign->status, ['RUNNING', 'active'])) {
+            if (!in_array($campaign->status, ['sending', 'active'])) {
                 Log::info('Campaign is not running, skipping processing', [
                     'campaign_id' => $this->campaignId,
                     'status' => $campaign->status

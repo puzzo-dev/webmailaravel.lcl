@@ -222,15 +222,16 @@ const Campaigns = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      'DRAFT': { color: 'bg-gray-100 text-gray-800', label: 'Draft' },
-      'RUNNING': { color: 'bg-success-100 text-success-800', label: 'Running' },
-      'PAUSED': { color: 'bg-warning-100 text-warning-800', label: 'Paused' },
-      'STOPPED': { color: 'bg-danger-100 text-danger-800', label: 'Stopped' },
-      'COMPLETED': { color: 'bg-primary-100 text-primary-800', label: 'Completed' },
-      'FAILED': { color: 'bg-red-100 text-red-800', label: 'Failed' },
+      'draft': { color: 'bg-gray-100 text-gray-800', label: 'Draft' },
+      'sending': { color: 'bg-success-100 text-success-800', label: 'Sending' },
+      'scheduled': { color: 'bg-blue-100 text-blue-800', label: 'Scheduled' },
+      'paused': { color: 'bg-warning-100 text-warning-800', label: 'Paused' },
+      'stopped': { color: 'bg-danger-100 text-danger-800', label: 'Stopped' },
+      'completed': { color: 'bg-primary-100 text-primary-800', label: 'Completed' },
+      'failed': { color: 'bg-red-100 text-red-800', label: 'Failed' },
     };
 
-    const config = statusConfig[status] || statusConfig.DRAFT;
+    const config = statusConfig[status] || statusConfig.draft;
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         {config.label}
@@ -249,7 +250,7 @@ const Campaigns = () => {
   const getActionButtons = (campaign) => {
     const buttons = [];
     
-    if (campaign.status === 'DRAFT') {
+    if (campaign.status === 'draft' || campaign.status === 'scheduled') {
       buttons.push(
         <button
           key="start"
@@ -262,7 +263,7 @@ const Campaigns = () => {
       );
     }
     
-    if (campaign.status === 'RUNNING') {
+    if (campaign.status === 'sending') {
       buttons.push(
         <button
           key="pause"
@@ -275,7 +276,20 @@ const Campaigns = () => {
       );
     }
     
-    if (['RUNNING', 'PAUSED'].includes(campaign.status)) {
+    if (campaign.status === 'paused') {
+      buttons.push(
+        <button
+          key="resume"
+          onClick={() => handleAction(campaign.id, 'resume')}
+          className="text-success-600 hover:text-success-900 transition-colors"
+          title="Resume Campaign"
+        >
+          <HiPlay className="h-4 w-4" />
+        </button>
+      );
+    }
+    
+    if (['sending', 'paused'].includes(campaign.status)) {
       buttons.push(
         <button
           key="stop"
@@ -353,12 +367,13 @@ const Campaigns = () => {
               className="input w-full sm:w-auto sm:min-w-[140px]"
             >
               <option value="">All Status</option>
-              <option value="DRAFT">Draft</option>
-              <option value="RUNNING">Running</option>
-              <option value="PAUSED">Paused</option>
-              <option value="STOPPED">Stopped</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="FAILED">Failed</option>
+              <option value="draft">Draft</option>
+              <option value="sending">Sending</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="paused">Paused</option>
+              <option value="stopped">Stopped</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
             </select>
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}

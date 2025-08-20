@@ -960,11 +960,10 @@ class CampaignService
                 }
         }
 
-        // Update campaign statistics including recipient count
+        // Update campaign statistics (don't update recipient_count as it should remain constant)
         $campaign->update([
             'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
             'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
-            'recipient_count' => count($recipients), // Set total recipient count
         ]);
 
         // Log campaign progress for debugging

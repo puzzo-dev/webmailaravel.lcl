@@ -60,8 +60,18 @@ const PageSubscriptionOverlay = ({
       return;
     }
     
-    // Don't show overlay if already visible or if user has subscription and required role
-    if (subscriptionOverlay.isVisible || (hasActiveSubscription() && hasRequiredRole())) {
+    // Don't show overlay if already visible
+    if (subscriptionOverlay.isVisible) {
+      return;
+    }
+
+    // Wait for subscriptions to be loaded before checking
+    if (!subscriptions || subscriptions.length === 0) {
+      return;
+    }
+
+    // Don't show overlay if user has subscription and required role
+    if (hasActiveSubscription() && hasRequiredRole()) {
       return;
     }
 
@@ -77,7 +87,7 @@ const PageSubscriptionOverlay = ({
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [user?.role, adminOnly, subscriptionOverlay.isVisible]); // Simplified dependencies
+  }, [user?.role, adminOnly, subscriptionOverlay.isVisible, subscriptions]); // Added subscriptions dependency
 
   // This component doesn't render anything - it just triggers the overlay
   return null;
