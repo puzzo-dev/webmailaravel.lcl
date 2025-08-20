@@ -526,13 +526,13 @@ class CampaignService
 
         try {
             // Validate campaign can be paused
-            if (! in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
-                throw new \Exception('Campaign can only be paused from RUNNING or SCHEDULED status');
+            if (! in_array($campaign->status, ['sending', 'scheduled'])) {
+                throw new \Exception('Campaign can only be paused from sending or scheduled status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'PAUSED',
+                'status' => 'paused',
                 'paused_at' => now(),
             ]);
 
@@ -571,13 +571,13 @@ class CampaignService
 
         try {
             // Validate campaign can be resumed
-            if ($campaign->status !== 'PAUSED') {
-                throw new \Exception('Campaign can only be resumed from PAUSED status');
+            if ($campaign->status !== 'paused') {
+                throw new \Exception('Campaign can only be resumed from paused status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'RUNNING',
+                'status' => 'sending',
                 'resumed_at' => now(),
             ]);
 
