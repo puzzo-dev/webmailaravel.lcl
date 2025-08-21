@@ -45,16 +45,37 @@ export const getErrorMessage = (error) => {
     
     // Standard API error message
     if (data.message) {
+      // Check for specific backend error messages and provide user-friendly alternatives
+      if (data.message.includes('No active senders found')) {
+        return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
+      }
+      if (data.message.includes('No senders found')) {
+        return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
+      }
       return data.message;
     }
     
     // Error string directly in data
     if (typeof data === 'string') {
+      // Check for specific backend error strings
+      if (data.includes('No active senders found')) {
+        return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
+      }
+      if (data.includes('No senders found')) {
+        return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
+      }
       return data;
     }
     
     // Error with details
     if (data.error) {
+      // Check for specific backend error messages
+      if (data.error.includes('No active senders found')) {
+        return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
+      }
+      if (data.error.includes('No senders found')) {
+        return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
+      }
       return data.error;
     }
   }
@@ -80,6 +101,10 @@ export const getErrorMessage = (error) => {
       case 429:
         return 'Too many requests. Please try again later.';
       case 500:
+        // Check if this is a sender-related 500 error by examining the URL or context
+        if (error?.config?.url?.includes('/campaigns') || error?.config?.data?.includes('campaign')) {
+          return 'Campaign creation failed. This might be because you don\'t have any active senders configured. Please set up a sender first by going to Senders → Add New Sender.';
+        }
         return 'Server error. Please try again later.';
       case 503:
         return 'Service temporarily unavailable.';
