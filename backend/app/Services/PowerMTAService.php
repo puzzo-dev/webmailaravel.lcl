@@ -18,12 +18,14 @@ class PowerMTAService
     protected $baseUrl;
     protected $apiKey;
     protected $timeout;
+    protected $logPath;
 
     public function __construct()
     {
         $this->baseUrl = config('services.powermta.base_url', 'http://localhost:8080');
         $this->apiKey = config('services.powermta.api_key');
         $this->timeout = config('services.powermta.timeout', 30);
+        $this->logPath = config('services.powermta.log_path', '/root/pmta5/logs');
     }
 
     /**
@@ -647,6 +649,444 @@ class PowerMTAService
             return [
                 'success' => false,
                 'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Process local PowerMTA log files from production path
+     */
+    public function processLocalLogFiles(string $date = null): array
+    {
+        try {
+            $date = $date ?? now()->format('Y-m-d');
+            $results = [
+                'success' => true,
+                'date' => $date,
+                'processed_files' => [],
+                'errors' => [],
+                'suppression_updates' => 0,
+                'timestamp' => now()->toISOString()
+            ];
+
+            // Process accounting logs
+            $acctResult = $this->processAccountingLogs($date);
+            if ($acctResult['success']) {
+                $results['processed_files']['accounting'] = $acctResult;
+                $results['suppression_updates'] += $acctResult['suppression_updates'] ?? 0;
+            } else {
+                $results['errors']['accounting'] = $acctResult['error'];
+            }
+
+            // Process diagnostic logs
+            $diagResult = $this->processDiagnosticLogs($date);
+            if ($diagResult['success']) {
+                $results['processed_files']['diagnostic'] = $diagResult;
+                $results['suppression_updates'] += $diagResult['suppression_updates'] ?? 0;
+            } else {
+                $results['errors']['diagnostic'] = $diagResult['error'];
+            }
+
+            // Process FBL CSV files
+            $fblResult = $this->processFBLLogs($date);
+            if ($fblResult['success']) {
+                $results['processed_files']['fbl'] = $fblResult;
+                $results['suppression_updates'] += $fblResult['suppression_updates'] ?? 0;
+            } else {
+                $results['errors']['fbl'] = $fblResult['error'];
+            }
+
+            // Process PMTA and HTTP daemon logs
+            $pmtaResult = $this->processPMTALogs($date);
+            if ($pmtaResult['success']) {
+                $results['processed_files']['pmta_logs'] = $pmtaResult;
+            } else {
+                $results['errors']['pmta_logs'] = $pmtaResult['error'];
+            }
+
+            return $results;
+
+        } catch (\Exception $e) {
+            $this->logError('PowerMTA local log processing failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'date' => $date ?? now()->format('Y-m-d'),
+                'timestamp' => now()->toISOString()
+            ];
+        }
+    }
+
+    /**
+     * Process PowerMTA accounting logs
+     */
+    protected function processAccountingLogs(string $date): array
+    {
+        try {
+            $acctPattern = $this->logPath . '/acct*' . str_replace('-', '', $date) . '*';
+            $acctFiles = glob($acctPattern);
+
+            if (empty($acctFiles)) {
+                return [
+                    'success' => true,
+                    'message' => 'No accounting files found for date: ' . $date,
+                    'files_processed' => 0,
+                    'records_processed' => 0,
+                    'suppression_updates' => 0
+                ];
+            }
+
+            $totalRecords = 0;
+            $suppressionUpdates = 0;
+            $bouncedEmails = [];
+
+            foreach ($acctFiles as $file) {
+                if (!is_readable($file)) {
+                    $this->logError('Accounting file not readable', ['file' => $file]);
+                    continue;
+                }
+
+                $handle = fopen($file, 'r');
+                if (!$handle) continue;
+
+                while (($line = fgets($handle)) !== false) {
+                    $record = $this->parseAccountingRecord(trim($line));
+                    if ($record && isset($record['email'], $record['status'])) {
+                        $totalRecords++;
+                        
+                        // Check for bounces and failures
+                        if (in_array($record['status'], ['bounce', 'failed', 'rejected'])) {
+                            $bouncedEmails[] = $record['email'];
+                        }
+                    }
+                }
+                fclose($handle);
+            }
+
+            // Process bounced emails for suppression list
+            if (!empty($bouncedEmails)) {
+                $suppressionFile = 'fbl_files/' . $date . '_pmta_accounting_bounces.txt';
+                $this->saveFile($suppressionFile, implode("\n", array_unique($bouncedEmails)));
+                $suppressionResult = $this->processFBLFile($suppressionFile, 'pmta_accounting_bounces');
+                $suppressionUpdates = $suppressionResult['processed'] ?? 0;
+            }
+
+            return [
+                'success' => true,
+                'files_processed' => count($acctFiles),
+                'records_processed' => $totalRecords,
+                'bounced_emails' => count($bouncedEmails),
+                'suppression_updates' => $suppressionUpdates,
+                'files' => array_map('basename', $acctFiles)
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Accounting log processing failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Process PowerMTA diagnostic logs
+     */
+    protected function processDiagnosticLogs(string $date): array
+    {
+        try {
+            $diagPattern = $this->logPath . '/diag*' . str_replace('-', '', $date) . '*';
+            $diagFiles = glob($diagPattern);
+
+            if (empty($diagFiles)) {
+                return [
+                    'success' => true,
+                    'message' => 'No diagnostic files found for date: ' . $date,
+                    'files_processed' => 0,
+                    'records_processed' => 0,
+                    'suppression_updates' => 0
+                ];
+            }
+
+            $totalRecords = 0;
+            $suppressionUpdates = 0;
+            $problemEmails = [];
+
+            foreach ($diagFiles as $file) {
+                if (!is_readable($file)) {
+                    $this->logError('Diagnostic file not readable', ['file' => $file]);
+                    continue;
+                }
+
+                $handle = fopen($file, 'r');
+                if (!$handle) continue;
+
+                while (($line = fgets($handle)) !== false) {
+                    $record = $this->parseDiagnosticRecord(trim($line));
+                    if ($record && isset($record['email'], $record['status'])) {
+                        $totalRecords++;
+                        
+                        // Check for permanent failures
+                        if (in_array($record['status'], ['perm_fail', 'hard_bounce', 'rejected'])) {
+                            $problemEmails[] = $record['email'];
+                        }
+                    }
+                }
+                fclose($handle);
+            }
+
+            // Process problem emails for suppression list
+            if (!empty($problemEmails)) {
+                $suppressionFile = 'fbl_files/' . $date . '_pmta_diagnostic_failures.txt';
+                $this->saveFile($suppressionFile, implode("\n", array_unique($problemEmails)));
+                $suppressionResult = $this->processFBLFile($suppressionFile, 'pmta_diagnostic_failures');
+                $suppressionUpdates = $suppressionResult['processed'] ?? 0;
+            }
+
+            return [
+                'success' => true,
+                'files_processed' => count($diagFiles),
+                'records_processed' => $totalRecords,
+                'problem_emails' => count($problemEmails),
+                'suppression_updates' => $suppressionUpdates,
+                'files' => array_map('basename', $diagFiles)
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Diagnostic log processing failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Process PowerMTA FBL CSV files
+     */
+    protected function processFBLLogs(string $date): array
+    {
+        try {
+            $fblPattern = $this->logPath . '/*fbl*.csv';
+            $fblFiles = glob($fblPattern);
+
+            // Filter files by date if possible
+            $dateFiles = array_filter($fblFiles, function($file) use ($date) {
+                $fileDate = date('Y-m-d', filemtime($file));
+                return $fileDate === $date;
+            });
+
+            if (empty($dateFiles)) {
+                $dateFiles = $fblFiles; // Use all FBL files if date filtering doesn't work
+            }
+
+            if (empty($dateFiles)) {
+                return [
+                    'success' => true,
+                    'message' => 'No FBL CSV files found for date: ' . $date,
+                    'files_processed' => 0,
+                    'complaints_processed' => 0,
+                    'suppression_updates' => 0
+                ];
+            }
+
+            $totalComplaints = 0;
+            $suppressionUpdates = 0;
+            $complaintEmails = [];
+
+            foreach ($dateFiles as $file) {
+                if (!is_readable($file)) {
+                    $this->logError('FBL file not readable', ['file' => $file]);
+                    continue;
+                }
+
+                $csvData = file_get_contents($file);
+                $parsedData = $this->parseCSVData($csvData);
+                
+                foreach ($parsedData as $record) {
+                    if (isset($record['email']) && $this->validateEmail($record['email'])) {
+                        $complaintEmails[] = $record['email'];
+                        $totalComplaints++;
+                    }
+                }
+            }
+
+            // Process complaint emails for suppression list
+            if (!empty($complaintEmails)) {
+                $suppressionFile = 'fbl_files/' . $date . '_pmta_fbl_complaints.txt';
+                $this->saveFile($suppressionFile, implode("\n", array_unique($complaintEmails)));
+                $suppressionResult = $this->processFBLFile($suppressionFile, 'pmta_fbl_complaints');
+                $suppressionUpdates = $suppressionResult['processed'] ?? 0;
+            }
+
+            return [
+                'success' => true,
+                'files_processed' => count($dateFiles),
+                'complaints_processed' => $totalComplaints,
+                'unique_complaints' => count(array_unique($complaintEmails)),
+                'suppression_updates' => $suppressionUpdates,
+                'files' => array_map('basename', $dateFiles)
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('FBL log processing failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Process PowerMTA daemon logs (pmta and pmtahttpd)
+     */
+    protected function processPMTALogs(string $date): array
+    {
+        try {
+            $logsDir = $this->logPath . '/logs';
+            $pmtaLogPattern = $logsDir . '/pmta*' . str_replace('-', '', $date) . '*';
+            $httpdLogPattern = $logsDir . '/pmtahttpd*' . str_replace('-', '', $date) . '*';
+            
+            $pmtaFiles = glob($pmtaLogPattern);
+            $httpdFiles = glob($httpdLogPattern);
+            $allFiles = array_merge($pmtaFiles, $httpdFiles);
+
+            if (empty($allFiles)) {
+                return [
+                    'success' => true,
+                    'message' => 'No PMTA daemon log files found for date: ' . $date,
+                    'files_processed' => 0,
+                    'log_entries' => 0
+                ];
+            }
+
+            $totalEntries = 0;
+            $errorCount = 0;
+            $warningCount = 0;
+
+            foreach ($allFiles as $file) {
+                if (!is_readable($file)) {
+                    $this->logError('PMTA log file not readable', ['file' => $file]);
+                    continue;
+                }
+
+                $handle = fopen($file, 'r');
+                if (!$handle) continue;
+
+                while (($line = fgets($handle)) !== false) {
+                    $totalEntries++;
+                    
+                    // Count errors and warnings
+                    if (stripos($line, 'error') !== false) {
+                        $errorCount++;
+                    } elseif (stripos($line, 'warning') !== false) {
+                        $warningCount++;
+                    }
+                }
+                fclose($handle);
+            }
+
+            return [
+                'success' => true,
+                'files_processed' => count($allFiles),
+                'log_entries' => $totalEntries,
+                'errors' => $errorCount,
+                'warnings' => $warningCount,
+                'files' => array_map('basename', $allFiles)
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('PMTA daemon log processing failed', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Parse PowerMTA accounting record
+     */
+    protected function parseAccountingRecord(string $line): ?array
+    {
+        // PowerMTA accounting format: timestamp|type|email|status|additional_info
+        $parts = explode('|', $line);
+        
+        if (count($parts) < 4) {
+            return null;
+        }
+
+        return [
+            'timestamp' => $parts[0] ?? '',
+            'type' => $parts[1] ?? '',
+            'email' => $parts[2] ?? '',
+            'status' => $parts[3] ?? '',
+            'info' => $parts[4] ?? ''
+        ];
+    }
+
+    /**
+     * Parse PowerMTA diagnostic record
+     */
+    protected function parseDiagnosticRecord(string $line): ?array
+    {
+        // PowerMTA diagnostic format varies, try to extract email and status
+        if (preg_match('/(\S+@\S+\.\S+).*?(bounce|fail|reject|deliver)/i', $line, $matches)) {
+            return [
+                'email' => $matches[1],
+                'status' => strtolower($matches[2]),
+                'line' => $line
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Get available log files for a specific date
+     */
+    public function getAvailableLogFiles(string $date = null): array
+    {
+        try {
+            $date = $date ?? now()->format('Y-m-d');
+            $datePattern = str_replace('-', '', $date);
+            
+            $files = [
+                'accounting' => glob($this->logPath . '/acct*' . $datePattern . '*'),
+                'diagnostic' => glob($this->logPath . '/diag*' . $datePattern . '*'),
+                'fbl_csv' => glob($this->logPath . '/*fbl*.csv'),
+                'pmta_logs' => glob($this->logPath . '/logs/pmta*' . $datePattern . '*'),
+                'httpd_logs' => glob($this->logPath . '/logs/pmtahttpd*' . $datePattern . '*')
+            ];
+
+            // Convert to relative paths and add file info
+            foreach ($files as $type => &$fileList) {
+                $fileList = array_map(function($file) {
+                    return [
+                        'name' => basename($file),
+                        'path' => $file,
+                        'size' => filesize($file),
+                        'modified' => date('Y-m-d H:i:s', filemtime($file)),
+                        'readable' => is_readable($file)
+                    ];
+                }, $fileList);
+            }
+
+            return [
+                'success' => true,
+                'date' => $date,
+                'log_path' => $this->logPath,
+                'files' => $files,
+                'timestamp' => now()->toISOString()
+            ];
+
+        } catch (\Exception $e) {
+            $this->logError('Failed to get available log files', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'date' => $date ?? now()->format('Y-m-d'),
+                'timestamp' => now()->toISOString()
             ];
         }
     }

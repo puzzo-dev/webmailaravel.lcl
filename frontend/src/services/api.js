@@ -1138,6 +1138,16 @@ export const adminService = {
         return response.data;
     },
 
+    async processLocalPowerMTALogs(date) {
+        const response = await api.post('/admin/powermta/process-local-logs', { date });
+        return response.data;
+    },
+
+    async getAvailablePowerMTALogFiles(date) {
+        const response = await api.get('/admin/powermta/available-log-files', { params: { date } });
+        return response.data;
+    },
+
     // Notification management
     async getNotifications(params = {}) {
         const response = await api.get('/admin/notifications', { params });

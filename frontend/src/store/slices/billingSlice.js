@@ -92,11 +92,9 @@ export const fetchPlans = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await billingService.getPlans();
-      console.log('fetchPlans - API response:', response);
-      return response;
+      return response.data;
     } catch (error) {
-      console.error('fetchPlans - API error:', error);
-      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch plans');
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch plans');
     }
   }
 );

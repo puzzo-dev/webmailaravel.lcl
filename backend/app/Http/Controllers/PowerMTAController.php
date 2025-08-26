@@ -351,5 +351,33 @@ class PowerMTAController extends Controller
         );
     }
 
+    /**
+     * Process local PowerMTA log files from production path
+     */
+    public function processLocalLogFiles(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date');
+            $result = $this->powerMTAService->processLocalLogFiles($date);
+            return $this->successResponse($result, 'Local PowerMTA log files processed successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to process local log files: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get available PowerMTA log files for a specific date
+     */
+    public function getAvailableLogFiles(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date');
+            $result = $this->powerMTAService->getAvailableLogFiles($date);
+            return $this->successResponse($result, 'Available PowerMTA log files retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get available log files: ' . $e->getMessage(), 500);
+        }
+    }
+
     // Training methods moved to TrainingController for consolidation
 }

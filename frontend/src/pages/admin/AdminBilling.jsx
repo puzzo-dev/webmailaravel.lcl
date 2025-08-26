@@ -48,9 +48,6 @@ const AdminBilling = () => {
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   
-  // Track if data has been loaded to prevent infinite loops
-  const hasLoadedData = useRef(false);
-  
   // Form states
   const [planForm, setPlanForm] = useState({
     name: '',
@@ -94,15 +91,13 @@ const AdminBilling = () => {
     let timeoutId = null;
     
     const loadAdminBillingData = async () => {
-      // Only proceed if we have a user ID and haven't already loaded data
-      if (!user?.id || hasLoadedData.current) return;
+      // Only proceed if we have a user ID
+      if (!user?.id) return;
       
       // Prevent concurrent loading attempts
       if (isLoading) return;
       
       try {
-        hasLoadedData.current = true;
-        
         // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
@@ -111,7 +106,7 @@ const AdminBilling = () => {
           }
         }, 15000); // 15 second timeout
         
-        // Load admin billing data sequentially to avoid overwhelming the backend
+        // Load admin billing data - always fetch fresh data
         const results = await Promise.allSettled([
           dispatch(fetchPlans()),
           dispatch(fetchBillingStats()),
@@ -134,7 +129,6 @@ const AdminBilling = () => {
         
       } catch (error) {
         console.error('Failed to load admin billing data:', error);
-        hasLoadedData.current = false; // Reset on error to allow retry
         if (timeoutId) {
           clearTimeout(timeoutId);
         }

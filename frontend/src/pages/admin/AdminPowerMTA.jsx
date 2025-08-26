@@ -16,6 +16,8 @@ import {
   HiTrendingDown,
   HiClock,
   HiGlobe,
+  HiSave,
+  HiFolderOpen,
 } from 'react-icons/hi';
 import { adminService } from '../../services/api';
 // Force cache refresh
@@ -33,6 +35,9 @@ const AdminPowerMTA = () => {
   const [fblAccounts, setFblAccounts] = useState([]);
   const [diagnosticFiles, setDiagnosticFiles] = useState([]);
   const [reputationSummary, setReputationSummary] = useState({});
+  const [logPath, setLogPath] = useState('/root/pmta5/logs');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [availableLogFiles, setAvailableLogFiles] = useState([]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -129,6 +134,44 @@ const AdminPowerMTA = () => {
     } catch (error) {
       toast.error('Failed to download diagnostic file');
       console.error('Download diagnostic file error:', error);
+    }
+  };
+
+  const handleSaveLogPath = async () => {
+    try {
+      setSavingConfig(true);
+      // Save log path configuration
+      await adminService.updateSystemConfig({ powermta_log_path: logPath });
+      toast.success('PowerMTA log path updated successfully');
+    } catch (error) {
+      toast.error('Failed to update PowerMTA log path');
+      console.error('Save log path error:', error);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleProcessLocalLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await adminService.processLocalPowerMTALogs(selectedDate);
+      toast.success('Local PowerMTA logs processed successfully');
+      // Refresh available log files
+      await loadAvailableLogFiles();
+    } catch (error) {
+      toast.error('Failed to process local PowerMTA logs');
+      console.error('Process local logs error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAvailableLogFiles = async () => {
+    try {
+      const response = await adminService.getAvailablePowerMTALogFiles(selectedDate);
+      setAvailableLogFiles(response.data.files || []);
+    } catch (error) {
+      console.error('Load available log files error:', error);
     }
   };
 
@@ -310,6 +353,7 @@ const AdminPowerMTA = () => {
               { id: 'fbl', name: 'FBL Accounts', icon: HiGlobe },
               { id: 'diagnostics', name: 'Diagnostics', icon: HiDocumentText },
               { id: 'reputation', name: 'Reputation', icon: HiChartBar },
+              { id: 'config', name: 'Configuration', icon: HiCog },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -615,7 +659,7 @@ const AdminPowerMTA = () => {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h4 className="text-lg font-medium text-gray-900 mb-4">Top Domains by Reputation</h4>
                 <div className="space-y-3">
-                  {reputationSummary.top_domains.map((domain, index) => (
+                  {reputationSummary.top_domains?.map((domain, index) => (
                     <div key={domain.domain} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center">
                         <span className="text-sm font-medium text-gray-900 mr-3">#{index + 1}</span>
@@ -655,6 +699,153 @@ const AdminPowerMTA = () => {
                   >
                     {loading ? 'Analyzing...' : 'Analyze Reputation'}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Configuration Tab */}
+          {activeTab === 'config' && (
+            <div className="space-y-6">
+              {/* Log Path Configuration */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">PowerMTA Log Path Configuration</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      PowerMTA Log Directory Path
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-1 relative">
+                        <HiFolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={logPath}
+                          onChange={(e) => setLogPath(e.target.value)}
+                          placeholder="/root/pmta5/logs"
+                          className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveLogPath}
+                        disabled={savingConfig}
+                        className="btn btn-primary flex items-center"
+                      >
+                        <HiSave className="h-4 w-4 mr-2" />
+                        {savingConfig ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Specify the directory path where PowerMTA stores log files (acct, diag, fbl, pmta logs).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Local Log Processing */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Local Log Processing</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Date
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={handleProcessLocalLogs}
+                        disabled={loading}
+                        className="btn btn-primary"
+                      >
+                        {loading ? 'Processing...' : 'Process Local Logs'}
+                      </button>
+                      <button
+                        onClick={loadAvailableLogFiles}
+                        disabled={loading}
+                        className="btn btn-secondary"
+                      >
+                        <HiRefresh className="h-4 w-4 mr-2" />
+                        Refresh Files
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Process PowerMTA log files directly from the configured log directory for the selected date.
+                  </p>
+                </div>
+              </div>
+
+              {/* Available Log Files */}
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Available Log Files</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          File Type
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Filename
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Size
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Modified
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {availableLogFiles.map((file, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              file.type === 'accounting' ? 'bg-blue-100 text-blue-800' :
+                              file.type === 'diagnostic' ? 'bg-red-100 text-red-800' :
+                              file.type === 'fbl' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {file.type}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {file.filename}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatNumber(file.size)} bytes
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDate(file.modified)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              file.readable ? 'bg-success-100 text-success-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {file.readable ? 'Readable' : 'Unreadable'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {availableLogFiles.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                            No log files found for the selected date
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

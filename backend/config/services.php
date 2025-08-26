@@ -56,6 +56,7 @@ return [
         'base_url' => env('POWERMTA_BASE_URL', 'http://localhost:8080'),
         'api_key' => env('POWERMTA_API_KEY'),
         'timeout' => env('POWERMTA_TIMEOUT', 30),
+        'log_path' => env('POWERMTA_LOG_PATH', '/root/pmta5/logs'),
     ],
 
 
