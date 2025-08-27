@@ -13,16 +13,29 @@ use Illuminate\Queue\SerializesModels;
 
 class CampaignStatusChanged implements ShouldBroadcast
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, InteractsWithSockets;
 
-    public $campaign;
+    public $campaignId;
+    public $campaignName;
+    public $status;
+    public $totalSent;
+    public $totalFailed;
+    public $userId;
+    public $updatedAt;
 
     /**
      * Create a new event instance.
      */
     public function __construct(Campaign $campaign)
     {
-        $this->campaign = $campaign;
+        // Store campaign data as properties instead of the model to avoid serialization issues
+        $this->campaignId = $campaign->id;
+        $this->campaignName = $campaign->name;
+        $this->status = $campaign->status;
+        $this->totalSent = $campaign->total_sent;
+        $this->totalFailed = $campaign->total_failed;
+        $this->userId = $campaign->user_id;
+        $this->updatedAt = $campaign->updated_at;
     }
 
     /**
@@ -33,7 +46,7 @@ class CampaignStatusChanged implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('user.' . $this->campaign->user_id),
+            new PrivateChannel('user.' . $this->userId),
         ];
     }
 
@@ -43,12 +56,12 @@ class CampaignStatusChanged implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'campaign_id' => $this->campaign->id,
-            'campaign_name' => $this->campaign->name,
-            'status' => $this->campaign->status,
-            'total_sent' => $this->campaign->total_sent,
-            'total_failed' => $this->campaign->total_failed,
-            'updated_at' => $this->campaign->updated_at,
+            'campaign_id' => $this->campaignId,
+            'campaign_name' => $this->campaignName,
+            'status' => $this->status,
+            'total_sent' => $this->totalSent,
+            'total_failed' => $this->totalFailed,
+            'updated_at' => $this->updatedAt,
         ];
     }
 }

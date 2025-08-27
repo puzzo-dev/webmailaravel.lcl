@@ -597,13 +597,13 @@ const Campaigns = () => {
                       <td className="table-cell">
                         <div className="flex items-center">
                           <HiUserGroup className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.total_recipients || 0}</span>
+                          <span className="text-sm text-gray-900">{campaign.recipient_count || 0}</span>
                         </div>
                       </td>
                       <td className="table-cell">
                         <div className="flex items-center">
                           <HiMail className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.emails_sent || 0}</span>
+                          <span className="text-sm text-gray-900">{campaign.total_sent || 0}</span>
                         </div>
                       </td>
                       <td className="table-cell">

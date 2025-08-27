@@ -101,16 +101,23 @@ class SendEmailJob implements ShouldQueue
             // Configure mail settings for this specific sender's domain
             $this->configureMailForSender();
 
+            // Get campaign attachments if any
+            $attachments = [];
+            if ($this->campaign->attachments) {
+                $attachments = json_decode($this->campaign->attachments, true) ?? [];
+            }
+
             // Send email using Laravel's Mail facade
             Mail::to($this->recipient)
-                ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData));
+                ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData, $attachments));
 
-            // INCREMENT SENDER COUNT AND CLEAR USER CACHE AFTER SUCCESSFUL SEND
+            // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND
             $sender->incrementDailySent();
             
             // Clear user daily cache to reflect new count
             $userCacheKey = "user_daily_sent:{$user->id}:" . now()->format('Y-m-d');
-            // Increment sent count for this campaign
+            
+            // Increment campaign stats for queued jobs only
             $this->campaign->increment('total_sent');
 
             // Get updated campaign data for status logging
@@ -135,7 +142,7 @@ class SendEmailJob implements ShouldQueue
             $this->checkCampaignCompletion();
 
         } catch (\Exception $e) {
-            // Increment failed count for this campaign
+            // Increment failed count for queued jobs only
             $this->campaign->increment('total_failed');
             
             // Get updated campaign data for status logging

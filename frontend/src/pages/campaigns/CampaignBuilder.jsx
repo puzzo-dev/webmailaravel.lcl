@@ -86,11 +86,13 @@ const CampaignBuilder = () => {
     enable_template_variables: false,
     template_variables: '',
     recipient_file: null,
+    attachments: [],
   });
 
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedAttachments, setSelectedAttachments] = useState([]);
   const [enableContentSwitching, setEnableContentSwitching] = useState(false);
   const [contentVariations, setContentVariations] = useState([
     { subject: '', content: '' }
@@ -142,6 +144,25 @@ const CampaignBuilder = () => {
         recipient_file: file,
       }));
     }
+  };
+
+  const handleAttachmentUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setSelectedAttachments(prev => [...prev, ...files]);
+      setFormData(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...files],
+      }));
+    }
+  };
+
+  const removeAttachment = (index) => {
+    setSelectedAttachments(prev => prev.filter((_, i) => i !== index));
+    setFormData(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index),
+    }));
   };
 
   const handleContentVariationChange = (idx, field, value) => {
@@ -246,6 +267,11 @@ const CampaignBuilder = () => {
       if (selectedFile) {
         campaignData.append('recipient_file', selectedFile);
       }
+
+      // Add attachments
+      selectedAttachments.forEach((file, index) => {
+        campaignData.append(`attachments[${index}]`, file);
+      });
 
       if (formData.template_variables) {
         campaignData.append('template_variables', formData.template_variables);
@@ -589,7 +615,6 @@ const CampaignBuilder = () => {
                         <HiTrash className="h-4 w-4 mr-1" />
                         Remove
                       </button>
-
                     </div>
                   </div>
                 ) : (
@@ -615,6 +640,60 @@ const CampaignBuilder = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* File Attachments */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">File Attachments</h3>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <div className="text-center">
+                  <HiUpload className="mx-auto h-8 w-8 text-gray-400" />
+                  <div className="mt-4">
+                    <label htmlFor="attachment-upload" className="btn btn-secondary cursor-pointer">
+                      <HiUpload className="h-5 w-5 mr-2" />
+                      Add Attachments
+                    </label>
+                    <input
+                      id="attachment-upload"
+                      name="attachments"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+                      onChange={handleAttachmentUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Supported formats: PDF, DOC, XLS, PPT, Images, ZIP (Max 10MB each)
+                  </p>
+                </div>
+              </div>
+              
+              {selectedAttachments.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-900">Selected Attachments:</h4>
+                  {selectedAttachments.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <HiUpload className="h-5 w-5 text-gray-400" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                          <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <HiTrash className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

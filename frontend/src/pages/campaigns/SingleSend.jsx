@@ -8,7 +8,9 @@ import {
   HiEye,
   HiUsers,
   HiCog,
-  HiInformationCircle
+  HiInformationCircle,
+  HiUpload,
+  HiTrash
 } from 'react-icons/hi';
 import { campaignService, senderService } from '../../services/api';
 
@@ -25,7 +27,9 @@ const SingleSend = () => {
     enable_open_tracking: true,
     enable_click_tracking: true,
     enable_unsubscribe_link: true,
+    attachments: [],
   });
+  const [selectedAttachments, setSelectedAttachments] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
@@ -52,7 +56,21 @@ const SingleSend = () => {
 
     setLoading(true);
     try {
-      const response = await campaignService.sendSingle(formData);
+      const submitData = new FormData();
+      
+      // Add basic form fields
+      Object.keys(formData).forEach(key => {
+        if (key !== 'attachments') {
+          submitData.append(key, formData[key]);
+        }
+      });
+      
+      // Add attachments
+      selectedAttachments.forEach((file, index) => {
+        submitData.append(`attachments[${index}]`, file);
+      });
+
+      const response = await campaignService.sendSingle(submitData);
       toast.success(response.message || 'Email sent successfully!');
       navigate('/campaigns');
     } catch (error) {
@@ -68,6 +86,25 @@ const SingleSend = () => {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleAttachmentUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setSelectedAttachments(prev => [...prev, ...files]);
+      setFormData(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, ...files],
+      }));
+    }
+  };
+
+  const removeAttachment = (index) => {
+    setSelectedAttachments(prev => prev.filter((_, i) => i !== index));
+    setFormData(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index),
     }));
   };
 
@@ -190,6 +227,58 @@ const SingleSend = () => {
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">HTML formatting is supported</p>
+                </div>
+
+                {/* File Attachments */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">File Attachments</h3>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                    <div className="text-center">
+                      <HiUpload className="mx-auto h-8 w-8 text-gray-400" />
+                      <div className="mt-2">
+                        <label htmlFor="attachment-upload" className="btn btn-secondary cursor-pointer">
+                          <HiUpload className="h-4 w-4 mr-2" />
+                          Add Attachments
+                        </label>
+                        <input
+                          id="attachment-upload"
+                          name="attachments"
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+                          onChange={handleAttachmentUpload}
+                          className="hidden"
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        PDF, DOC, XLS, PPT, Images, ZIP (Max 10MB each)
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {selectedAttachments.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <h4 className="text-xs font-medium text-gray-700">Selected Files:</h4>
+                      {selectedAttachments.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div className="flex items-center space-x-2">
+                            <HiUpload className="h-4 w-4 text-gray-400" />
+                            <div>
+                              <p className="text-xs font-medium text-gray-900">{file.name}</p>
+                              <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(index)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <HiTrash className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Tracking Options */}

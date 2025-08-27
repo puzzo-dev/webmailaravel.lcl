@@ -78,7 +78,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Send single email - refactored to use unified email sending service
+     * Send single email - direct dispatch without queue
      */
     public function sendSingle(Request $request): JsonResponse
     {
@@ -90,6 +90,8 @@ class CampaignController extends Controller
                 'sender_id' => 'required|exists:senders,id',
                 'subject' => 'required|string|max:255',
                 'content' => 'required|string',
+                'attachments' => 'nullable|array',
+                'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png,gif,zip',
                 'enable_open_tracking' => 'boolean',
                 'enable_click_tracking' => 'boolean',
                 'enable_unsubscribe_link' => 'boolean',
@@ -97,8 +99,23 @@ class CampaignController extends Controller
             function () use ($request) {
                 $data = $request->input('validated_data');
                 
-                // Use unified email sending service
-                $result = $this->emailSendingService->sendSingleEmail($data);
+                // Handle file attachments
+                $attachmentPaths = [];
+                if ($request->hasFile('attachments')) {
+                    foreach ($request->file('attachments') as $file) {
+                        $path = $file->store('attachments', 'local');
+                        $attachmentPaths[] = [
+                            'path' => $path,
+                            'name' => $file->getClientOriginalName(),
+                            'size' => $file->getSize(),
+                            'mime' => $file->getMimeType()
+                        ];
+                    }
+                }
+                $data['attachments'] = $attachmentPaths;
+                
+                // Send email directly without queue for immediate dispatch
+                $result = $this->campaignService->sendSingleEmailDirect($data);
                 
                 if (!$result['success']) {
                     return $this->errorResponse($result['error'], 400);
@@ -106,7 +123,6 @@ class CampaignController extends Controller
 
                 return $this->successResponse([
                     'campaign' => $result['campaign'],
-                    'recipients_count' => $result['recipients_count'],
                     'message' => $result['message']
                 ], 'Single email sent successfully');
             },
@@ -126,6 +142,8 @@ class CampaignController extends Controller
                 'subject' => 'nullable|string|max:255',
                 'content' => 'nullable|string',
                 'recipient_file' => 'required|file|mimes:txt,csv,xls,xlsx|max:10240',
+                'attachments' => 'nullable|array',
+                'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png,gif,zip',
                 'enable_content_switching' => 'nullable|string',
                 'content_variations' => 'nullable|string',
                 'template_variables' => 'nullable|string',
@@ -166,6 +184,21 @@ class CampaignController extends Controller
                 if (isset($data['content_variations']) && is_string($data['content_variations'])) {
                     $data['content_variations'] = json_decode($data['content_variations'], true);
                 }
+
+                // Handle file attachments for full campaigns
+                $attachmentPaths = [];
+                if ($request->hasFile('attachments')) {
+                    foreach ($request->file('attachments') as $file) {
+                        $path = $file->store('attachments', 'local');
+                        $attachmentPaths[] = [
+                            'path' => $path,
+                            'name' => $file->getClientOriginalName(),
+                            'size' => $file->getSize(),
+                            'mime' => $file->getMimeType()
+                        ];
+                    }
+                }
+                $data['attachments'] = $attachmentPaths;
 
                 $campaign = $this->campaignService->createCampaign($data, $request->file('recipient_file'));
                 

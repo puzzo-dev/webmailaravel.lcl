@@ -26,17 +26,19 @@ class CampaignEmail extends Mailable
     public $recipient;
     public $recipientData;
     public $emailTracking;
+    public $attachments;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(Campaign $campaign, Content $content, Sender $sender, string $recipient, array $recipientData = [])
+    public function __construct(Campaign $campaign, Content $content, Sender $sender, string $recipient, array $recipientData = [], array $attachments = [])
     {
         $this->campaign = $campaign;
         $this->content = $content;
         $this->sender = $sender;
         $this->recipient = $recipient;
         $this->recipientData = $recipientData;
+        $this->attachments = $attachments;
 
         // Create email tracking record only if tracking is enabled
         if ($this->campaign->isTrackingEnabled()) {
@@ -318,6 +320,16 @@ class CampaignEmail extends Mailable
      */
     public function attachments(): array
     {
-        return [];
+        $attachmentObjects = [];
+        
+        foreach ($this->attachments as $attachment) {
+            if (isset($attachment['path']) && \Storage::disk('local')->exists($attachment['path'])) {
+                $attachmentObjects[] = \Illuminate\Mail\Mailables\Attachment::fromStorageDisk('local', $attachment['path'])
+                    ->as($attachment['name'] ?? basename($attachment['path']))
+                    ->withMime($attachment['mime'] ?? 'application/octet-stream');
+            }
+        }
+        
+        return $attachmentObjects;
     }
 } 

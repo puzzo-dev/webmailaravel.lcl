@@ -105,8 +105,8 @@ export const authService = {
 
 // Campaign service methods
 export const campaignService = {
-    async getCampaigns() {
-        const response = await api.get('/campaigns');
+    async getCampaigns(params = {}) {
+        const response = await api.get('/campaigns', { params });
         return response.data;
     },
 
