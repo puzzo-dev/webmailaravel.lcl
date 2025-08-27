@@ -131,6 +131,43 @@ class CampaignController extends Controller
     }
 
     /**
+     * Download campaign attachment
+     */
+    public function downloadAttachment(Request $request, $campaignId, $attachmentIndex): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        return $this->validateAndExecute(
+            $request,
+            [],
+            function () use ($campaignId, $attachmentIndex) {
+                $campaign = Campaign::findOrFail($campaignId);
+                
+                // Check authorization
+                $user = Auth::user();
+                if ($user->role !== 'admin' && $campaign->user_id !== $user->id) {
+                    throw new \Exception('Unauthorized access to campaign attachments');
+                }
+                
+                // Get attachments
+                $attachments = $campaign->attachments ? json_decode($campaign->attachments, true) : [];
+                
+                if (!isset($attachments[$attachmentIndex])) {
+                    throw new \Exception('Attachment not found');
+                }
+                
+                $attachment = $attachments[$attachmentIndex];
+                $filePath = storage_path('app/' . $attachment['path']);
+                
+                if (!file_exists($filePath)) {
+                    throw new \Exception('Attachment file not found on disk');
+                }
+                
+                return response()->download($filePath, $attachment['name']);
+            },
+            'download_attachment'
+        );
+    }
+
+    /**
      * Store a newly created resource.
      */
     public function store(Request $request): JsonResponse

@@ -97,6 +97,7 @@ class CampaignService
                 'enable_click_tracking' => $data['enable_click_tracking'] ?? true,
                 'enable_unsubscribe_link' => $data['enable_unsubscribe_link'] ?? true,
                 'recipient_field_mapping' => $data['recipient_field_mapping'] ?? null,
+                'attachments' => !empty($data['attachments']) ? json_encode($data['attachments']) : null,
                 'status' => 'DRAFT',
             ]);
 
@@ -550,7 +551,7 @@ class CampaignService
 
         try {
             // Validate campaign can be started
-            if (!in_array(strtoupper($campaign->status), ['DRAFT', 'PAUSED'])) {
+            if (!in_array(strtolower($campaign->status), ['draft', 'paused'])) {
                 throw new \Exception('Campaign can only be started from DRAFT or PAUSED status');
             }
 
@@ -571,7 +572,7 @@ class CampaignService
 
             // Update campaign status
             $campaign->update([
-                'status' => 'RUNNING',
+                'status' => 'running',
                 'started_at' => now(),
             ]);
 
@@ -613,7 +614,7 @@ class CampaignService
 
             $this->logMethodExit(__METHOD__, [
                 'campaign_id' => $campaign->id,
-                'status' => 'RUNNING'
+                'status' => 'running'
             ]);
 
             return [
@@ -644,13 +645,13 @@ class CampaignService
 
         try {
             // Validate campaign can be paused
-            if (! in_array(strtoupper($campaign->status), ['RUNNING', 'ACTIVE', 'PROCESSING', 'SENDING', 'SCHEDULED'])) {
+            if (! in_array(strtolower($campaign->status), ['running', 'active', 'processing', 'sending', 'scheduled'])) {
                 throw new \Exception('Campaign can only be paused from running, active, processing, sending, or scheduled status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'PAUSED',
+                'status' => 'paused',
                 'paused_at' => now(),
             ]);
 
@@ -661,7 +662,7 @@ class CampaignService
             event(new CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new CampaignStatusNotification($campaign, 'RUNNING', 'PAUSED'));
+            $campaign->user->notify(new CampaignStatusNotification($campaign, 'running', 'paused'));
 
             $this->logInfo('Campaign paused', [
                 'campaign_id' => $campaign->id,
@@ -689,13 +690,13 @@ class CampaignService
 
         try {
             // Validate campaign can be stopped
-            if (! in_array(strtoupper($campaign->status), ['RUNNING', 'ACTIVE', 'PROCESSING', 'PAUSED', 'SCHEDULED', 'SENDING'])) {
+            if (! in_array(strtolower($campaign->status), ['running', 'active', 'processing', 'paused', 'scheduled', 'sending'])) {
                 throw new \Exception('Campaign can only be stopped from running, active, processing, paused, scheduled, or sending status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'STOPPED',
+                'status' => 'stopped',
                 'stopped_at' => now(),
             ]);
 
@@ -706,7 +707,7 @@ class CampaignService
             event(new CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new CampaignStatusNotification($campaign, 'RUNNING', 'STOPPED'));
+            $campaign->user->notify(new CampaignStatusNotification($campaign, 'running', 'stopped'));
 
             $this->logInfo('Campaign stopped', [
                 'campaign_id' => $campaign->id,
@@ -855,13 +856,13 @@ class CampaignService
 
         try {
             // Validate campaign can be resumed
-            if (! in_array(strtoupper($campaign->status), ['PAUSED'])) {
+            if (! in_array(strtolower($campaign->status), ['paused'])) {
                 throw new \Exception('Campaign can only be resumed from paused status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'SENDING',
+                'status' => 'sending',
                 'resumed_at' => now(),
             ]);
 
@@ -907,7 +908,7 @@ class CampaignService
             event(new \App\Events\CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new \App\Notifications\CampaignStatusNotification($campaign, 'PAUSED', 'SENDING'));
+            $campaign->user->notify(new \App\Notifications\CampaignStatusUpdated($campaign, 'paused', 'sending'));
 
             $this->logInfo('Campaign resumed', [
                 'campaign_id' => $campaign->id,
@@ -1104,7 +1105,7 @@ class CampaignService
         event(new CampaignStatusChanged($campaign));
 
         // Send notification
-        $campaign->user->notify(new CampaignStatusNotification($campaign));
+        $campaign->user->notify(new CampaignStatusNotification($campaign, 'draft', 'sending'));
 
         $this->logInfo('Campaign status updated', [
             'campaign_id' => $campaign->id,
@@ -1407,7 +1408,7 @@ class CampaignService
             // Broadcast status change if status was updated
             if (isset($data['status'])) {
                 event(new CampaignStatusChanged($campaign));
-                $campaign->user->notify(new CampaignStatusNotification($campaign));
+                $campaign->user->notify(new CampaignStatusNotification($campaign, $campaign->getOriginal('status'), $data['status']));
             }
 
             $this->logInfo('Campaign updated by admin', [
@@ -1444,6 +1445,8 @@ class CampaignService
 
             foreach ($campaigns as $campaign) {
                 try {
+                    $oldStatus = $campaign->status;
+                    
                     // Validate status transitions if status is being updated
                     if (isset($data['status'])) {
                         $this->validateStatusTransition($campaign, $data['status']);
@@ -1455,7 +1458,7 @@ class CampaignService
                     // Broadcast status change if status was updated
                     if (isset($data['status'])) {
                         event(new CampaignStatusChanged($campaign));
-                        $campaign->user->notify(new CampaignStatusNotification($campaign));
+                        $campaign->user->notify(new CampaignStatusNotification($campaign, $oldStatus, $data['status']));
                     }
 
                 } catch (\Exception $e) {

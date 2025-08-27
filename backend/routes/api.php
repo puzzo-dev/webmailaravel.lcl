@@ -212,6 +212,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/', [CampaignController::class, 'index']);
         Route::post('/', [CampaignController::class, 'store']);
         Route::get('/{campaign}', [CampaignController::class, 'show']);
+        Route::get('/{campaign}/attachments/{index}/download', [CampaignController::class, 'downloadAttachment']);
         Route::put('/{campaign}', [CampaignController::class, 'update']);
         Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
         Route::post('/{campaign}/duplicate', [CampaignController::class, 'duplicateCampaign']);

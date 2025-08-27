@@ -398,7 +398,7 @@ const CampaignDetail = () => {
       <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex overflow-x-auto space-x-4 lg:space-x-8 px-6 scrollbar-hide">
-            {['overview', 'content', 'senders', 'recipients', 'tracking', 'analytics'].map((tab) => (
+            {['overview', 'content', 'senders', 'recipients', 'attachments', 'tracking', 'analytics'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -642,6 +642,110 @@ const CampaignDetail = () => {
                   <div className="mt-1 text-sm text-gray-900">{currentCampaign.recipient_file || 'No file uploaded'}</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'attachments' && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Attachments</h3>
+              <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
+                <strong>Debug Info:</strong><br/>
+                Attachments field exists: {currentCampaign?.attachments ? 'Yes' : 'No'}<br/>
+                Attachments type: {typeof currentCampaign?.attachments}<br/>
+                Attachments value: {JSON.stringify(currentCampaign?.attachments)}<br/>
+                Is array: {Array.isArray(currentCampaign?.attachments) ? 'Yes' : 'No'}<br/>
+                Length: {currentCampaign?.attachments?.length || 'N/A'}
+              </div>
+              {(() => {
+                // Parse attachments if it's a JSON string
+                let attachments = currentCampaign?.attachments;
+                if (typeof attachments === 'string') {
+                  try {
+                    attachments = JSON.parse(attachments);
+                  } catch (e) {
+                    console.error('Failed to parse attachments JSON:', e);
+                    attachments = null;
+                  }
+                }
+                
+                return attachments && Array.isArray(attachments) && attachments.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> These attachments were included with every email sent in this campaign.
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {attachments.map((attachment, index) => (
+                      <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.original_name}>
+                              {attachment.original_name}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Size: {(attachment.size / 1024).toFixed(1)} KB
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Type: {attachment.mime_type}
+                            </p>
+                          </div>
+                          <div className="ml-3 flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                const downloadUrl = `/api/campaigns/${currentCampaign.id}/attachments/${index}/download`;
+                                const link = document.createElement('a');
+                                link.href = downloadUrl;
+                                link.download = attachment.original_name;
+                                link.target = '_blank';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                            >
+                              <HiDownload className="h-3 w-3 mr-1" />
+                              Download
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-2">Attachment Summary</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Total Files:</span>
+                        <span className="ml-2 font-medium text-gray-900">{attachments.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total Size:</span>
+                        <span className="ml-2 font-medium text-gray-900">
+                          {(attachments.reduce((total, att) => total + att.size, 0) / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Recipients:</span>
+                        <span className="ml-2 font-medium text-gray-900">{currentCampaign.total_recipients || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                ) : (
+                <div className="text-center py-8">
+                  <div className="mx-auto h-12 w-12 text-gray-400">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No attachments</h3>
+                  <p className="mt-1 text-sm text-gray-500">This campaign was sent without any file attachments.</p>
+                </div>
+              );
+              })()}
             </div>
           )}
 
