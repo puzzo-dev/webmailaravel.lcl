@@ -366,7 +366,11 @@ const campaignSlice = createSlice({
       })
 
       // Pause Campaign
+      .addCase(pauseCampaign.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(pauseCampaign.fulfilled, (state, action) => {
+        state.loading = false;
         const campaign = action.payload.data || action.payload;
         const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
@@ -375,6 +379,10 @@ const campaignSlice = createSlice({
         if (state.currentCampaign?.id === campaign.id) {
           state.currentCampaign = campaign;
         }
+      })
+      .addCase(pauseCampaign.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || 'Failed to pause campaign';
       })
 
       // Stop Campaign
@@ -390,7 +398,11 @@ const campaignSlice = createSlice({
       })
 
       // Resume Campaign
+      .addCase(resumeCampaign.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(resumeCampaign.fulfilled, (state, action) => {
+        state.loading = false;
         const campaign = action.payload.data || action.payload;
         const index = state.campaigns.findIndex(c => c.id === campaign.id);
         if (index !== -1) {
@@ -399,6 +411,10 @@ const campaignSlice = createSlice({
         if (state.currentCampaign?.id === campaign.id) {
           state.currentCampaign = campaign;
         }
+      })
+      .addCase(resumeCampaign.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || 'Failed to resume campaign';
       })
 
       // Duplicate Campaign

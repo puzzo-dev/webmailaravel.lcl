@@ -342,7 +342,8 @@ class CampaignController extends Controller
                 return $this->errorResponse('Campaign not found', 404);
             }
             
-            if (!$this->canAccessResource($campaign)) {
+            // Admin can delete any campaign, regular users can only delete their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -392,7 +393,8 @@ class CampaignController extends Controller
     public function startCampaign(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            if (!$this->canAccessResource($campaign)) {
+            // Admin can start any campaign, regular users can only start their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -412,7 +414,8 @@ class CampaignController extends Controller
     public function pauseCampaign(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            if (!$this->canAccessResource($campaign)) {
+            // Admin can pause any campaign, regular users can only pause their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -432,7 +435,8 @@ class CampaignController extends Controller
     public function resumeCampaign(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            if (!$this->canAccessResource($campaign)) {
+            // Admin can resume any campaign, regular users can only resume their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -452,7 +456,8 @@ class CampaignController extends Controller
     public function stopCampaign(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            if (!$this->canAccessResource($campaign)) {
+            // Admin can stop any campaign, regular users can only stop their own
+            if (!Auth::user()->hasRole('admin') && !$this->canAccessResource($campaign)) {
                 return $this->forbiddenResponse('Access denied');
             }
             
@@ -592,17 +597,10 @@ class CampaignController extends Controller
                 'user_id' => $campaign->user_id,
                 'campaign_name' => $campaign->name
             ];
-
-            // Send to Telegram if configured (using Http facade directly)
-            $this->sendTelegramNotification("Campaign {$action}: {$campaign->name}");
-
-            return ['success' => true];
-
+            
+            return ['success' => true, 'data' => $webhookData];
         } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 

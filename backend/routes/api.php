@@ -340,9 +340,10 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/campaigns', [CampaignController::class, 'index']);
         Route::put('/campaigns/{campaign}/status', [CampaignController::class, 'updateCampaign']);
         Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy']);
-        Route::post('/campaigns/{campaign}/start', [CampaignController::class, 'start']);
-        Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pause']);
-        Route::post('/campaigns/{campaign}/stop', [CampaignController::class, 'stop']);
+        Route::post('/campaigns/{campaign}/start', [CampaignController::class, 'startCampaign']);
+        Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
+        Route::post('/campaigns/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
+        Route::post('/campaigns/{campaign}/stop', [CampaignController::class, 'stopCampaign']);
         Route::get('/analytics', [AdminController::class, 'analytics']);
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
         Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);

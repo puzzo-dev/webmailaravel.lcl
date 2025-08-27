@@ -25,10 +25,10 @@ class ProcessCampaignJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(int $campaignId, int $batchSize = 100)
+    public function __construct($campaignId, $batchSize = 200)
     {
         $this->campaignId = $campaignId;
-        $this->batchSize = $batchSize;
+        $this->batchSize = $batchSize; // Increased batch size for better performance
     }
 
     /**
@@ -46,7 +46,7 @@ class ProcessCampaignJob implements ShouldQueue
             ]);
 
             // Check if campaign is still running
-            if (!in_array($campaign->status, ['sending', 'active'])) {
+            if (!in_array(strtoupper($campaign->status), ['SENDING', 'ACTIVE', 'RUNNING', 'PROCESSING'])) {
                 Log::info('Campaign is not running, skipping processing', [
                     'campaign_id' => $this->campaignId,
                     'status' => $campaign->status
@@ -66,10 +66,12 @@ class ProcessCampaignJob implements ShouldQueue
 
             // Schedule next batch if there are more recipients
             if (($result['emails_sent'] ?? 0) > 0 && ($result['remaining_recipients'] ?? 0) > 0) {
-                $nextDelay = 60; // Add 1 minute delay between batches
+                $nextDelay = 30; // Reduced delay for faster processing
                 
                 self::dispatch($this->campaignId, $this->batchSize)
-                    ->delay(now()->addSeconds($nextDelay));
+                    ->delay(now()->addSeconds($nextDelay))
+                    ->onQueue('campaigns')
+                    ->onConnection('database');
                 
                 Log::info('Scheduled next campaign batch', [
                     'campaign_id' => $this->campaignId,

@@ -12,8 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->json('notification_preferences')->nullable()->after('manual_training_percentage');
-            $table->boolean('email_notifications_enabled')->default(true)->after('notification_preferences');
+            // Check if columns don't already exist before adding
+            if (!Schema::hasColumn('users', 'notification_preferences')) {
+                $table->json('notification_preferences')->nullable()->after('manual_training_percentage');
+            }
+            if (!Schema::hasColumn('users', 'email_notifications_enabled')) {
+                $table->boolean('email_notifications_enabled')->default(true)->after('notification_preferences');
+            }
         });
     }
 
@@ -23,7 +28,13 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['notification_preferences', 'email_notifications_enabled']);
+            // Only drop columns if they exist
+            if (Schema::hasColumn('users', 'notification_preferences')) {
+                $table->dropColumn('notification_preferences');
+            }
+            if (Schema::hasColumn('users', 'email_notifications_enabled')) {
+                $table->dropColumn('email_notifications_enabled');
+            }
         });
     }
 };

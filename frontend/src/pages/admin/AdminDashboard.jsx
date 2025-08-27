@@ -349,37 +349,8 @@ const AdminDashboard = () => {
       }));
     }
     
-    // Fallback to sample campaign data if no real data available
-    return [
-      { 
-        name: 'Summer Sale', 
-        delivery_rate: 96.5, 
-        bounce_rate: 2.1, 
-        open_rate: 28.3, 
-        click_rate: 4.2 
-      },
-      { 
-        name: 'Newsletter #47', 
-        delivery_rate: 94.8, 
-        bounce_rate: 3.2, 
-        open_rate: 22.7, 
-        click_rate: 3.1 
-      },
-      { 
-        name: 'Product Launch', 
-        delivery_rate: 97.2, 
-        bounce_rate: 1.8, 
-        open_rate: 31.5, 
-        click_rate: 5.8 
-      },
-      { 
-        name: 'Welcome Series', 
-        delivery_rate: 95.1, 
-        bounce_rate: 2.9, 
-        open_rate: 35.2, 
-        click_rate: 6.4 
-      },
-    ];
+    // Return empty array when no data available
+    return [];
   };
 
   const getCampaignStatusData = () => {

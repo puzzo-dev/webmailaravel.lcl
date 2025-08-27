@@ -169,6 +169,8 @@ const Campaigns = () => {
       if (!handleSubscriptionError(error)) {
         toast.error(getErrorMessage(error));
       }
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -189,10 +191,13 @@ const Campaigns = () => {
       setBulkAction('');
     } catch (error) {
       if (!handleSubscriptionError(error)) {
-        toast.error(getErrorMessage(error));
+        const errorMessage = getErrorMessage(error);
+        toast.error(errorMessage);
       }
     } finally {
-      setIsPerformingBulkAction(false);
+      setActionLoading(false);
+      // Refresh campaigns list to ensure UI is in sync
+      dispatch(fetchCampaigns());
     }
   };
 
@@ -223,15 +228,18 @@ const Campaigns = () => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       'draft': { color: 'bg-gray-100 text-gray-800', label: 'Draft' },
+      'running': { color: 'bg-green-100 text-green-800', label: 'Running' },
+      'active': { color: 'bg-green-100 text-green-800', label: 'Active' },
+      'processing': { color: 'bg-blue-100 text-blue-800', label: 'Processing' },
       'sending': { color: 'bg-success-100 text-success-800', label: 'Sending' },
       'scheduled': { color: 'bg-blue-100 text-blue-800', label: 'Scheduled' },
-      'paused': { color: 'bg-warning-100 text-warning-800', label: 'Paused' },
-      'stopped': { color: 'bg-danger-100 text-danger-800', label: 'Stopped' },
+      'paused': { color: 'bg-yellow-100 text-yellow-800', label: 'Paused' },
+      'stopped': { color: 'bg-red-100 text-red-800', label: 'Stopped' },
       'completed': { color: 'bg-primary-100 text-primary-800', label: 'Completed' },
       'failed': { color: 'bg-red-100 text-red-800', label: 'Failed' },
     };
 
-    const config = statusConfig[status] || statusConfig.draft;
+    const config = statusConfig[status?.toLowerCase()] || statusConfig.draft;
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         {config.label}

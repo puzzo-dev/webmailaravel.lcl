@@ -1471,59 +1471,32 @@ class AnalyticsService
      */
     public function getDeliverabilityTrendsChartData(Carbon $endDate, Carbon $startDate): array
     {
-        $campaigns = Campaign::whereBetween('created_at', [$startDate, $endDate])
-            ->where('total_sent', '>', 0)
+        // Expand date range to last 30 days to capture more campaigns
+        $expandedStartDate = $endDate->copy()->subDays(30);
+        
+        $campaigns = Campaign::whereBetween('created_at', [$expandedStartDate, $endDate])
+            ->where(function($query) {
+                $query->where('total_sent', '>', 0)
+                      ->orWhere('status', 'completed')
+                      ->orWhere('status', 'running');
+            })
             ->select([
                 'name',
                 'total_sent',
                 'total_failed',
                 'bounces',
                 'opens',
-                'clicks'
+                'clicks',
+                'status',
+                'created_at'
             ])
             ->orderBy('created_at', 'desc')
-            ->limit(10) // Show top 10 most recent campaigns
+            ->limit(10)
             ->get();
 
-        // If no data found, generate sample campaign data
+        // Return empty array instead of mock data when no campaigns exist
         if ($campaigns->isEmpty()) {
-            return [
-                [
-                    'name' => 'Summer Sale Campaign',
-                    'delivery_rate' => 96.5,
-                    'bounce_rate' => 2.1,
-                    'open_rate' => 28.3,
-                    'click_rate' => 4.2,
-                ],
-                [
-                    'name' => 'Newsletter #47',
-                    'delivery_rate' => 94.8,
-                    'bounce_rate' => 3.2,
-                    'open_rate' => 22.7,
-                    'click_rate' => 3.1,
-                ],
-                [
-                    'name' => 'Product Launch',
-                    'delivery_rate' => 97.2,
-                    'bounce_rate' => 1.8,
-                    'open_rate' => 31.5,
-                    'click_rate' => 5.8,
-                ],
-                [
-                    'name' => 'Welcome Series #1',
-                    'delivery_rate' => 95.1,
-                    'bounce_rate' => 2.9,
-                    'open_rate' => 35.2,
-                    'click_rate' => 6.4,
-                ],
-                [
-                    'name' => 'Flash Sale Alert',
-                    'delivery_rate' => 93.7,
-                    'bounce_rate' => 4.1,
-                    'open_rate' => 19.8,
-                    'click_rate' => 2.9,
-                ],
-            ];
+            return [];
         }
 
         return $campaigns->map(function ($campaign) {

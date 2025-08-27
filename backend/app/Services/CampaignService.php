@@ -12,7 +12,7 @@ use App\Notifications\CampaignCompleted;
 use App\Notifications\CampaignCreated;
 use App\Notifications\CampaignFailed;
 use App\Notifications\CampaignMilestone;
-use App\Notifications\CampaignStatusChanged as CampaignStatusNotification;
+use App\Notifications\CampaignStatusUpdated as CampaignStatusNotification;
 use App\Notifications\HighBounceRateAlert;
 use App\Traits\CacheManagementTrait;
 use App\Traits\FileProcessingTrait;
@@ -443,7 +443,89 @@ class CampaignService
     }
 
     /**
-     * Get recipient data for template variable processing
+     * Pre-cache campaign data for performance
+     */
+    private function precacheCampaignData(Campaign $campaign): void
+    {
+        $cacheKey = "campaign_data_{$campaign->id}";
+        $ttl = 3600; // 1 hour cache
+        
+        $campaignData = $this->loadCampaignData($campaign);
+        
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $campaignData, $ttl);
+        
+        $this->logInfo('Campaign data cached', [
+            'campaign_id' => $campaign->id,
+            'cache_key' => $cacheKey,
+            'recipients_count' => count($campaignData['recipients']),
+            'senders_count' => count($campaignData['senders']),
+            'contents_count' => count($campaignData['contents']),
+        ]);
+    }
+
+    /**
+     * Get cached campaign data
+     */
+    private function getCachedCampaignData(Campaign $campaign): ?array
+    {
+        $cacheKey = "campaign_data_{$campaign->id}";
+        $cachedData = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        
+        // If cached data exists but contains arrays instead of models, convert back to collections
+        if ($cachedData && is_array($cachedData['senders']) && isset($cachedData['senders'][0]['id'])) {
+            $cachedData['senders'] = collect($cachedData['senders'])->map(function($senderData) {
+                return \App\Models\Sender::find($senderData['id']);
+            })->filter();
+        }
+        
+        if ($cachedData && is_array($cachedData['contents']) && isset($cachedData['contents'][0]['id'])) {
+            $cachedData['contents'] = collect($cachedData['contents'])->map(function($contentData) {
+                return \App\Models\Content::find($contentData['id']);
+            })->filter();
+        }
+        
+        return $cachedData;
+    }
+
+    /**
+     * Load campaign data directly (fallback for cache miss)
+     */
+    private function loadCampaignData(Campaign $campaign): array
+    {
+        // Check if recipient list exists
+        if (! $campaign->recipient_list_path || ! $this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
+            throw new \Exception('Recipient list file not found');
+        }
+
+        // Read recipient list
+        $recipientContent = $this->readFile($campaign->recipient_list_path, ['disk' => 'local']);
+        $recipients = array_filter(array_map('trim', explode("\n", $recipientContent)));
+
+        if (empty($recipients)) {
+            throw new \Exception('No recipients found in recipient list');
+        }
+
+        // Get campaign's senders for shuffling
+        $senders = $campaign->getSenders();
+        if ($senders->isEmpty()) {
+            throw new \Exception('No senders found for campaign');
+        }
+
+        // Get campaign's content variations
+        $contents = $campaign->getContentVariations();
+        if ($contents->isEmpty()) {
+            throw new \Exception('No content found for campaign');
+        }
+
+        return [
+            'recipients' => $recipients,
+            'senders' => $senders,
+            'contents' => $contents,
+        ];
+    }
+
+    /**
+     * Get recipient data for template variables processing
      */
     public function getRecipientData(int $campaignId, string $email): array
     {
@@ -484,14 +566,17 @@ class CampaignService
                 throw new \Exception('Recipient list not found');
             }
 
+            // Pre-cache campaign data for performance
+            $this->precacheCampaignData($campaign);
+
             // Update campaign status
             $campaign->update([
                 'status' => 'RUNNING',
                 'started_at' => now(),
             ]);
 
-            // Dispatch campaign processing job
-            ProcessCampaignJob::dispatch($campaign->id)->onQueue('campaigns');
+            // Dispatch campaign processing job with high priority
+            ProcessCampaignJob::dispatch($campaign->id)->onQueue('campaigns')->onConnection('database');
 
             $this->logMethodExit(__METHOD__, [
                 'campaign_id' => $campaign->id,
@@ -526,13 +611,13 @@ class CampaignService
 
         try {
             // Validate campaign can be paused
-            if (! in_array($campaign->status, ['sending', 'scheduled'])) {
-                throw new \Exception('Campaign can only be paused from sending or scheduled status');
+            if (! in_array(strtoupper($campaign->status), ['RUNNING', 'ACTIVE', 'PROCESSING', 'SENDING', 'SCHEDULED'])) {
+                throw new \Exception('Campaign can only be paused from running, active, processing, sending, or scheduled status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'paused',
+                'status' => 'PAUSED',
                 'paused_at' => now(),
             ]);
 
@@ -543,14 +628,17 @@ class CampaignService
             event(new CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new CampaignStatusNotification($campaign));
+            $campaign->user->notify(new CampaignStatusNotification($campaign, 'RUNNING', 'PAUSED'));
 
             $this->logInfo('Campaign paused', [
                 'campaign_id' => $campaign->id,
                 'user_id' => $campaign->user_id,
             ]);
 
-            return ['success' => true, 'campaign' => $campaign];
+            // Refresh campaign from database to get latest data
+            $campaign->refresh();
+            
+            return ['success' => true, 'campaign' => $campaign->fresh()];
 
         } catch (\Exception $e) {
             $this->logError('Campaign pause failed', [
@@ -571,13 +659,13 @@ class CampaignService
 
         try {
             // Validate campaign can be resumed
-            if ($campaign->status !== 'paused') {
+            if (strtoupper($campaign->status) !== 'PAUSED') {
                 throw new \Exception('Campaign can only be resumed from paused status');
             }
 
             // Update campaign status
             $campaign->update([
-                'status' => 'sending',
+                'status' => 'RUNNING',
                 'resumed_at' => now(),
             ]);
 
@@ -588,14 +676,17 @@ class CampaignService
             event(new CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new CampaignStatusNotification($campaign));
+            $campaign->user->notify(new CampaignStatusNotification($campaign, 'PAUSED', 'RUNNING'));
 
             $this->logInfo('Campaign resumed', [
                 'campaign_id' => $campaign->id,
                 'user_id' => $campaign->user_id,
             ]);
 
-            return ['success' => true, 'campaign' => $campaign];
+            // Refresh campaign from database to get latest data
+            $campaign->refresh();
+            
+            return ['success' => true, 'campaign' => $campaign->fresh()];
 
         } catch (\Exception $e) {
             $this->logError('Campaign resume failed', [
@@ -616,8 +707,8 @@ class CampaignService
 
         try {
             // Validate campaign can be stopped
-            if (! in_array($campaign->status, ['RUNNING', 'PAUSED', 'SCHEDULED'])) {
-                throw new \Exception('Campaign can only be stopped from RUNNING, PAUSED, or SCHEDULED status');
+            if (! in_array(strtoupper($campaign->status), ['RUNNING', 'ACTIVE', 'PROCESSING', 'PAUSED', 'SCHEDULED', 'SENDING'])) {
+                throw new \Exception('Campaign can only be stopped from running, active, processing, paused, scheduled, or sending status');
             }
 
             // Update campaign status
@@ -633,7 +724,7 @@ class CampaignService
             event(new CampaignStatusChanged($campaign));
 
             // Send notification
-            $campaign->user->notify(new CampaignStatusNotification($campaign));
+            $campaign->user->notify(new CampaignStatusNotification($campaign, 'RUNNING', 'STOPPED'));
 
             $this->logInfo('Campaign stopped', [
                 'campaign_id' => $campaign->id,
@@ -840,7 +931,7 @@ class CampaignService
     }
 
     /**
-     * Process campaign - send emails to recipients in batches
+     * Process campaign - send emails to recipients in batches (optimized)
      */
     public function processCampaign(Campaign $campaign, int $batchSize = 100): array
     {
@@ -870,30 +961,17 @@ class CampaignService
                 ];
             }
 
-            // Check if recipient list exists
-            if (! $campaign->recipient_list_path || ! $this->fileExists($campaign->recipient_list_path, ['disk' => 'local'])) {
-                throw new \Exception('Recipient list file not found');
+            // Get cached campaign data for performance
+            $campaignData = $this->getCachedCampaignData($campaign);
+            
+            if (!$campaignData) {
+                // Fallback to direct loading if cache miss
+                $campaignData = $this->loadCampaignData($campaign);
             }
 
-            // Read recipient list
-            $recipientContent = $this->readFile($campaign->recipient_list_path, ['disk' => 'local']);
-            $recipients = array_filter(array_map('trim', explode("\n", $recipientContent)));
-
-            if (empty($recipients)) {
-                throw new \Exception('No recipients found in recipient list');
-            }
-
-            // Get campaign's senders for shuffling
-            $senders = $campaign->getSenders();
-            if ($senders->isEmpty()) {
-                throw new \Exception('No senders found for campaign');
-            }
-
-            // Get campaign's content variations
-            $contents = $campaign->getContentVariations();
-            if ($contents->isEmpty()) {
-                throw new \Exception('No content found for campaign');
-            }
+            $recipients = $campaignData['recipients'];
+            $senders = is_array($campaignData['senders']) ? collect($campaignData['senders']) : $campaignData['senders'];
+            $contents = is_array($campaignData['contents']) ? collect($campaignData['contents']) : $campaignData['contents'];
 
             // Process recipients in batches
             $processedCount = $campaign->total_sent ?? 0;
@@ -908,7 +986,8 @@ class CampaignService
                 'remaining_recipients' => $remainingRecipients,
             ]);
 
-            // Process each recipient in this batch
+            // Batch dispatch jobs for better performance
+            $jobs = [];
             foreach ($recipientsToProcess as $index => $recipient) {
                 try {
                     // Validate email
@@ -918,114 +997,116 @@ class CampaignService
                             'recipient' => $recipient,
                         ]);
                         $emailsFailed++;
-
                         continue;
                     }
 
                     // Get sender for this email (shuffling)
                     $currentIndex = $processedCount + $index;
-                    $sender = $senders[$currentIndex % $senders->count()];
+                    $sender = $senders[$currentIndex % count($senders)];
 
                     // Get content for this email (content switching if enabled)
-                    if ($campaign->enable_content_switching && $contents->count() > 1) {
-                        $content = $contents[$currentIndex % $contents->count()];
+                    if ($campaign->enable_content_switching && count($contents) > 1) {
+                        $content = $contents[$currentIndex % count($contents)];
                     } else {
-                        $content = $contents->first();
+                        $content = $contents[0];
                     }
 
                     // Get recipient data for template variables
                     $recipientData = $this->getRecipientData($campaign->id, $recipient);
 
-                    // Dispatch email sending job
-                    \App\Jobs\SendEmailJob::dispatch($recipient, $sender, $content, $campaign, $recipientData);
-
+                    // Prepare job for batch dispatch
+                    $jobs[] = new \App\Jobs\SendEmailJob($recipient, $sender, $content, $campaign, $recipientData);
                     $emailsSent++;
 
-                    $this->logInfo('Email job dispatched', [
-                        'campaign_id' => $campaign->id,
-                        'recipient' => $recipient,
-                        'sender_id' => $sender->id,
-                        'sender_name' => $sender->name,
-                        'sender_email' => $sender->email,
-                        'content_id' => $content->id,
-                    ]);
-
                 } catch (\Exception $e) {
-                    $this->logError('Failed to dispatch email job', [
+                    $this->logError('Failed to prepare email job', [
                         'campaign_id' => $campaign->id,
                         'recipient' => $recipient,
                         'error' => $e->getMessage(),
                     ]);
                     $emailsFailed++;
                 }
-        }
+            }
 
-        // Update campaign statistics (don't update recipient_count as it should remain constant)
-        $campaign->update([
-            'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
-            'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
-        ]);
-
-        // Log campaign progress for debugging
-        $this->logInfo('Campaign batch processed', [
-            'campaign_id' => $campaign->id,
-            'batch_emails_sent' => $emailsSent,
-            'batch_emails_failed' => $emailsFailed,
-            'total_sent' => $campaign->fresh()->total_sent,
-            'total_failed' => $campaign->fresh()->total_failed,
-            'recipient_count' => count($recipients),
-            'remaining_recipients' => $remainingRecipients
-        ]);
-
-        // Check for milestones and send notifications
-        $this->checkCampaignMilestones($campaign);
-
-        // Check if all jobs are completed before marking campaign as completed
-        $totalProcessed = ($campaign->total_sent ?? 0) + ($campaign->total_failed ?? 0);
-        $totalRecipients = $campaign->recipient_count ?? count($recipients);
-        
-        // Only mark as completed if we've processed all recipients AND no more batches remain
-        if ($remainingRecipients <= 0 && $totalProcessed >= $totalRecipients) {
-            // Double-check that no jobs are still pending in the queue
-            $pendingJobs = \DB::table('jobs')
-                ->where('payload', 'LIKE', '%SendEmailJob%')
-                ->where('payload', 'LIKE', '%"campaign_id":' . $campaign->id . '%')
-                ->count();
-                
-            if ($pendingJobs == 0) {
-                $campaign->update([
-                    'status' => 'completed', // Use lowercase to match frontend expectations
-                    'completed_at' => now(),
+            // Batch dispatch all jobs at once for better performance
+            if (!empty($jobs)) {
+                \Illuminate\Support\Facades\Bus::batch($jobs)
+                    ->name("Campaign {$campaign->id} Batch")
+                    ->onQueue('emails')
+                    ->dispatch();
+                    
+                $this->logInfo('Batch email jobs dispatched', [
+                    'campaign_id' => $campaign->id,
+                    'jobs_count' => count($jobs),
                 ]);
+            }
 
-                // Sender statistics are now calculated on-demand via getSenderStatistics()
+            // Update campaign statistics (don't update recipient_count as it should remain constant)
+            $campaign->update([
+                'total_sent' => ($campaign->total_sent ?? 0) + $emailsSent,
+                'total_failed' => ($campaign->total_failed ?? 0) + $emailsFailed,
+            ]);
 
-                // Send campaign completed notification
-                $campaign->user->notify(new CampaignCompleted($campaign));
+            // Log campaign progress for debugging
+            $this->logInfo('Campaign batch processed', [
+                'campaign_id' => $campaign->id,
+                'batch_emails_sent' => $emailsSent,
+                'batch_emails_failed' => $emailsFailed,
+                'total_sent' => $campaign->fresh()->total_sent,
+                'total_failed' => $campaign->fresh()->total_failed,
+                'recipient_count' => count($recipients),
+                'remaining_recipients' => $remainingRecipients
+            ]);
 
-                $this->logInfo('Campaign completed', [
+            // Check for milestones and send notifications
+            $this->checkCampaignMilestones($campaign);
+
+            // Check if all jobs are completed before marking campaign as completed
+            $totalProcessed = ($campaign->total_sent ?? 0) + ($campaign->total_failed ?? 0);
+            $totalRecipients = $campaign->recipient_count ?? count($recipients);
+            
+            // Only mark as completed if we've processed all recipients AND no more batches remain
+            if ($remainingRecipients <= 0 && $totalProcessed >= $totalRecipients) {
+                // Double-check that no jobs are still pending in the queue
+                $pendingJobs = \DB::table('jobs')
+                    ->where('payload', 'LIKE', '%SendEmailJob%')
+                    ->where('payload', 'LIKE', '%"campaign_id":' . $campaign->id . '%')
+                    ->count();
+                    
+                if ($pendingJobs == 0) {
+                    $campaign->update([
+                        'status' => 'completed', // Use lowercase to match frontend expectations
+                        'completed_at' => now(),
+                    ]);
+
+                    // Sender statistics are now calculated on-demand via getSenderStatistics()
+
+                    // Send campaign completed notification
+                    $campaign->user->notify(new CampaignCompleted($campaign));
+
+                    $this->logInfo('Campaign completed', [
+                            'campaign_id' => $campaign->id,
+                            'total_sent' => $campaign->total_sent,
+                            'total_failed' => $campaign->total_failed,
+                            'total_processed' => $totalProcessed,
+                            'total_recipients' => $totalRecipients,
+                        ]);
+                } else {
+                    // Mark as processing while jobs are still pending
+                    $campaign->update(['status' => 'processing']);
+                    
+                    $this->logInfo('Campaign processing complete but jobs still pending', [
                         'campaign_id' => $campaign->id,
-                        'total_sent' => $campaign->total_sent,
-                        'total_failed' => $campaign->total_failed,
+                        'pending_jobs' => $pendingJobs,
                         'total_processed' => $totalProcessed,
                         'total_recipients' => $totalRecipients,
                     ]);
+                }
             } else {
-                // Mark as processing while jobs are still pending
-                $campaign->update(['status' => 'processing']);
-                
-                $this->logInfo('Campaign processing complete but jobs still pending', [
-                    'campaign_id' => $campaign->id,
-                    'pending_jobs' => $pendingJobs,
-                    'total_processed' => $totalProcessed,
-                    'total_recipients' => $totalRecipients,
-                ]);
+                // Mark campaign as processing
+                $campaign->status = 'processing';
+                $campaign->save();
             }
-        } else {
-            // Mark campaign as processing
-            $campaign->status = 'processing';
-            $campaign->save();
-        }
 
             $processingTime = microtime(true) - $startTime;
 
@@ -1064,66 +1145,9 @@ class CampaignService
             $this->logError('Campaign processing failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
-                'emails_sent' => $emailsSent,
-                'emails_failed' => $emailsFailed,
+                'processing_time' => microtime(true) - $startTime,
             ]);
             
-            // Check if any emails were sent before the error
-            $campaign->refresh();
-            
-            if ($campaign->total_sent > 0) {
-                // Some emails were sent, mark as completed with errors
-                $campaign->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                    'error_message' => 'Campaign completed with errors: ' . $e->getMessage()
-                ]);
-                
-                $this->logWarning('Campaign completed with errors after partial success', [
-                    'campaign_id' => $campaign->id,
-                    'campaign_name' => $campaign->name,
-                    'campaign_status' => 'completed',
-                    'total_sent' => $campaign->total_sent,
-                    'total_failed' => $campaign->total_failed,
-                    'total_recipients' => $campaign->recipient_count,
-                    'progress_percentage' => $campaign->recipient_count > 0 ? 
-                        round((($campaign->total_sent + $campaign->total_failed) / $campaign->recipient_count) * 100, 2) : 0,
-                    'error' => $e->getMessage(),
-                    'completion_reason' => 'partial_success_with_errors'
-                ]);
-                
-                // Send notification about completion with errors
-                $user = User::find($campaign->user_id);
-                if ($user) {
-                    $user->notify(new CampaignStatusNotification($campaign, 'completed_with_errors'));
-                }
-            } else {
-                // No emails were sent, mark as failed
-                $campaign->update([
-                    'status' => 'failed',
-                    'completed_at' => now(),
-                    'error_message' => $e->getMessage()
-                ]);
-                
-                $this->logError('Campaign failed - no emails sent', [
-                    'campaign_id' => $campaign->id,
-                    'campaign_name' => $campaign->name,
-                    'campaign_status' => 'failed',
-                    'total_sent' => $campaign->total_sent,
-                    'total_failed' => $campaign->total_failed,
-                    'total_recipients' => $campaign->recipient_count,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                    'failure_reason' => 'no_emails_sent_before_error'
-                ]);
-                
-                // Send notification about failure
-                $user = User::find($campaign->user_id);
-                if ($user) {
-                    $user->notify(new CampaignStatusNotification($campaign, 'failed'));
-                }
-            }
-
             throw $e;
         }
     }
