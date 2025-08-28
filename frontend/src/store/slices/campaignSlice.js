@@ -42,6 +42,25 @@ export const createCampaign = createAsyncThunk(
   'campaigns/createCampaign',
   async (campaignData, { rejectWithValue }) => {
     try {
+      console.log('=== REDUX SLICE DEBUG ===');
+      console.log('campaignData type:', typeof campaignData);
+      console.log('campaignData instanceof FormData:', campaignData instanceof FormData);
+      
+      if (campaignData instanceof FormData) {
+        console.log('FormData entries in slice:');
+        for (let [key, value] of campaignData.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes)`);
+          } else {
+            console.log(`  ${key}: ${value}`);
+          }
+        }
+      } else {
+        console.error('ERROR: campaignData is not FormData in slice!', campaignData);
+      }
+
+      console.log(campaignData);
+      
       const response = await api.post('/campaigns', campaignData);
       return response.data;
     } catch (error) {

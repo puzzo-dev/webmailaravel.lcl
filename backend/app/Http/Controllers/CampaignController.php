@@ -207,15 +207,28 @@ class CampaignController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Debug request data first
+        \Log::info('Campaign store request debug:', [
+            'has_files' => $request->hasFile('attachments'),
+            'files_count' => $request->hasFile('attachments') ? count($request->file('attachments')) : 0,
+            'recipient_file' => $request->hasFile('recipient_file'),
+            'all_files' => $request->allFiles(),
+            'all_input' => $request->all(),
+            'content_type' => $request->header('Content-Type'),
+            'request_method' => $request->method(),
+            'is_multipart' => str_contains($request->header('Content-Type', ''), 'multipart/form-data'),
+            'raw_input' => $request->getContent()
+        ]);
+
         return $this->validateAndExecute(
             $request,
             [
                 'name' => 'required|string|max:255',
                 'subject' => 'nullable|string|max:255',
                 'content' => 'nullable|string',
-                'recipient_file' => 'required|file|mimes:txt,csv,xls,xlsx|max:10240',
+                'recipient_file' => 'nullable|file|mimetypes:text/plain,text/csv,application/csv,text/x-csv,application/x-csv,text/comma-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet|max:10240',
                 'attachments' => 'nullable|array',
-                'attachments.*' => 'file|max:' . config('constants.file_upload.max_size_kb', 10240) . '|mimes:' . implode(',', config('constants.file_upload.allowed_extensions.documents', [])),
+                'attachments.*' => 'file|max:10240|mimetypes:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/jpeg,image/jpg,image/png,image/gif,application/zip,application/x-zip-compressed',
                 'enable_content_switching' => 'nullable|string',
                 'content_variations' => 'nullable|string',
                 'template_variables' => 'nullable|string',
@@ -227,6 +240,18 @@ class CampaignController extends Controller
                 'recipient_field_mapping.*' => 'string',
             ],
             function () use ($request) {
+                // Debug request data
+                \Log::info('Campaign store request data:', [
+                    'has_files' => $request->hasFile('attachments'),
+                    'files_count' => $request->hasFile('attachments') ? count($request->file('attachments')) : 0,
+                    'recipient_file' => $request->hasFile('recipient_file'),
+                    'all_files' => $request->allFiles(),
+                    'all_input' => array_keys($request->all()),
+                    'content_type' => $request->header('Content-Type'),
+                    'request_method' => $request->method(),
+                    'is_multipart' => str_contains($request->header('Content-Type', ''), 'multipart/form-data')
+                ]);
+                
                 $data = $request->input('validated_data');
                 $data['user_id'] = Auth::id();
 

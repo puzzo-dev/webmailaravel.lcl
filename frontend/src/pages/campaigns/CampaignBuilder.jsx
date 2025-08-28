@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { createCampaign, fetchSenders, fetchDomains, fetchContents } from '../../store/slices/campaignSlice';
+import { api } from '../../utils/api';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   HiUpload,
   HiEye,
@@ -79,12 +81,12 @@ const CampaignBuilder = () => {
     enable_unsubscribe_link: true,
     enable_template_variables: false,
     template_variables: '',
-    recipient_file: null,
   });
 
   const [previewMode, setPreviewMode] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedAttachments, setSelectedAttachments] = useState([]);
   const [enableContentSwitching, setEnableContentSwitching] = useState(false);
   const [contentVariations, setContentVariations] = useState([
     { subject: '', content: '' }
@@ -108,11 +110,8 @@ const CampaignBuilder = () => {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
+      console.log('Recipient file uploaded:', file.name, file.size, 'bytes, type:', file.type);
       setSelectedFile(file);
-      setFormData(prev => ({
-        ...prev,
-        recipient_file: file,
-      }));
     }
   };
 
@@ -192,53 +191,122 @@ const CampaignBuilder = () => {
     return true;
   };
 
+  const buildCampaignFormData = () => {
+    const campaignData = new FormData();
+    
+    // Add basic form data
+    campaignData.append('name', formData.name.trim());
+    campaignData.append('sender_id', formData.sender_id);
+    campaignData.append('type', formData.type);
+    campaignData.append('schedule_type', formData.schedule_type);
+    
+    if (formData.schedule_type === 'scheduled' && formData.scheduled_at) {
+      campaignData.append('scheduled_at', formData.scheduled_at);
+    }
+    
+    // Add recipient file
+    if (selectedFile && selectedFile instanceof File) {
+      campaignData.append('recipient_file', selectedFile);
+      console.log('✓ Added recipient file:', selectedFile.name, selectedFile.type, selectedFile.size, 'bytes');
+    }
+    
+    // Add attachments
+    if (selectedAttachments?.length > 0) {
+      selectedAttachments.forEach((file, index) => {
+        campaignData.append(`attachments[${index}]`, file);
+      });
+    }
+    
+    // Add content variations if enabled
+    if (enableContentSwitching) {
+      campaignData.append('content_variations', JSON.stringify(contentVariations));
+    }
+
+    return campaignData;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
-
+    
     try {
-      const campaignData = new FormData();
-
-      // Add basic form fields
-      campaignData.append('name', formData.name.trim());
-      campaignData.append('subject', formData.subject.trim());
-      campaignData.append('content', formData.email_content);
-      campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
-      campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
-      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
-      campaignData.append('enable_template_variables', formData.enable_template_variables ? '1' : '0');
-      campaignData.append('enable_content_switching', enableContentSwitching ? '1' : '0');
-
-      // Add recipient file - important: append the File object directly
-      if (selectedFile) {
-        campaignData.append('recipient_file', selectedFile);
+      const campaignData = buildCampaignFormData();
+      
+      // Log FormData for debugging
+      console.log('=== CAMPAIGN SUBMISSION ===');
+      for (let [key, value] of campaignData.entries()) {
+        if (value instanceof File) {
+          console.log(`${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+        } else {
+          console.log(`${key}: ${value}`);
+        }
       }
-
-      if (formData.template_variables) {
-        campaignData.append('template_variables', formData.template_variables);
-      }
-
-      // Add content variations if enabled
-      if (enableContentSwitching) {
-        campaignData.append('content_variations', JSON.stringify(contentVariations));
-      }
-
-
-
-      const result = await dispatch(createCampaign(campaignData)).unwrap();
-      toast.success('Campaign created successfully');
-      navigate(`/campaigns/${result.data?.id || result.id}`);
+      
+      // Submit campaign
+      const response = await api.post('/campaigns', campaignData);
+      console.log('✅ Campaign created successfully:', response);
+      
+      toast.success('Campaign created successfully!');
+      navigate('/campaigns');
+      
     } catch (error) {
-      console.error('Campaign creation error:', error);
-      toast.error(error || 'Failed to create campaign');
+      console.error('❌ Campaign creation failed:', error);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errors || 
+                          error.message || 
+                          'Failed to create campaign';
+      
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const buildDraftFormData = () => {
+    const campaignData = new FormData();
+
+    // Add basic form fields for draft
+    campaignData.append('name', formData.name.trim());
+    campaignData.append('status', 'DRAFT');
+    campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
+    campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
+    campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
+    campaignData.append('enable_template_variables', formData.enable_template_variables ? '1' : '0');
+    campaignData.append('enable_content_switching', enableContentSwitching ? '1' : '0');
+
+    if (formData.template_variables) {
+      campaignData.append('template_variables', formData.template_variables);
+    }
+
+    // Add recipient file if selected
+    if (selectedFile && selectedFile instanceof File) {
+      campaignData.append('recipient_file', selectedFile);
+    }
+    
+    // Add attachments if selected
+    if (selectedAttachments?.length > 0) {
+      selectedAttachments.forEach((file, index) => {
+        if (file instanceof File) {
+          campaignData.append('attachments[]', file);
+        }
+      });
+    }
+
+    // Add content data
+    if (enableContentSwitching) {
+      campaignData.append('content_variations', JSON.stringify(contentVariations));
+    } else {
+      campaignData.append('subject', formData.subject.trim());
+      campaignData.append('content', formData.email_content);
+    }
+
+    return campaignData;
   };
 
   const handleSaveDraft = async () => {
@@ -250,42 +318,14 @@ const CampaignBuilder = () => {
     setIsSubmitting(true);
 
     try {
-      const campaignData = new FormData();
-
-      // Add basic form fields for draft
-      campaignData.append('name', formData.name.trim());
-      campaignData.append('status', 'DRAFT');
-      campaignData.append('enable_open_tracking', formData.enable_open_tracking ? '1' : '0');
-      campaignData.append('enable_click_tracking', formData.enable_click_tracking ? '1' : '0');
-      campaignData.append('enable_unsubscribe_link', formData.enable_unsubscribe_link ? '1' : '0');
-      campaignData.append('enable_template_variables', formData.enable_template_variables ? '1' : '0');
-      campaignData.append('enable_content_switching', enableContentSwitching ? '1' : '0');
-
-      if (formData.template_variables) {
-        campaignData.append('template_variables', formData.template_variables);
-      }
-
-      // Add file if selected
-      if (selectedFile) {
-        campaignData.append('recipient_file', selectedFile);
-      }
-
-      // Add content data
-      if (enableContentSwitching) {
-        campaignData.append('content_variations', JSON.stringify(contentVariations));
-      } else {
-        campaignData.append('subject', formData.subject.trim());
-        campaignData.append('content', formData.email_content);
-      }
-
-
-
+      const campaignData = buildDraftFormData();
       const result = await dispatch(createCampaign(campaignData)).unwrap();
+      
       toast.success('Draft saved successfully');
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Draft save error:', error);
-      toast.error(error || 'Failed to save draft');
+      toast.error(getErrorMessage(error) || 'Failed to save draft');
     } finally {
       setIsSubmitting(false);
     }
@@ -301,6 +341,31 @@ const CampaignBuilder = () => {
       ...prev,
       recipient_file: null,
     }));
+  };
+
+  const handleAttachmentUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      console.log('Attachments uploaded:', files, files.map(f => f instanceof File));
+      console.log('File details:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
+      
+      // Only update selectedAttachments state - don't store File objects in formData
+      setSelectedAttachments(prev => {
+        const newAttachments = [...prev, ...files];
+        console.log('Updated selectedAttachments:', newAttachments, newAttachments.map(f => f instanceof File));
+        return newAttachments;
+      });
+      
+      // Don't store File objects in formData as they can't be serialized properly
+      // We'll use selectedAttachments for the actual File objects
+    }
+    // Clear the input value to allow re-selecting the same file
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index) => {
+    setSelectedAttachments(prev => prev.filter((_, i) => i !== index));
+    // No need to update formData.attachments since we're not storing File objects there
   };
 
   return (
@@ -573,6 +638,58 @@ const CampaignBuilder = () => {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* File Attachments */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">File Attachments</h3>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <div className="text-center">
+                <HiUpload className="mx-auto h-8 w-8 text-gray-400" />
+                <div className="mt-2">
+                  <label htmlFor="attachment-upload" className="btn btn-secondary cursor-pointer">
+                    <HiUpload className="h-4 w-4 mr-2" />
+                    Add Attachments
+                  </label>
+                  <input
+                    id="attachment-upload"
+                    name="attachments"
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+                    onChange={handleAttachmentUpload}
+                    className="hidden"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Supported formats: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, JPG, PNG, GIF, ZIP
+                </p>
+              </div>
+            </div>
+            
+            {selectedAttachments.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <h4 className="text-xs font-medium text-gray-700">Selected Files:</h4>
+                {selectedAttachments.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <div className="flex items-center space-x-2">
+                      <HiUpload className="h-4 w-4 text-gray-400" />
+                      <div>
+                        <p className="text-xs font-medium text-gray-900">{file.name}</p>
+                        <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <HiTrash className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tracking Options */}

@@ -35,16 +35,8 @@ export const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: {
-        ignoredActions: ['persist/PERSIST'],
-        // Ignore specific action types that might cause performance issues
-        ignoredActionPaths: ['payload.timestamp', 'meta.timestamp', 'meta.arg'],
-        ignoredPaths: ['some.path.to.ignore'],
-      },
-      immutableCheck: {
-        // Increase the warning threshold for immutable checks
-        warnAfter: 128,
-      },
+      serializableCheck: false,
+      immutableCheck: false,
     }),
   devTools: import.meta.env.MODE !== 'production',
 });

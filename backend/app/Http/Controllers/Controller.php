@@ -35,7 +35,9 @@ abstract class Controller
      */
     protected function validateAndExecute(Request $request, array $rules, callable $callback, string $operation = 'operation'): JsonResponse
     {
-        $validator = Validator::make($request->all(), $rules);
+        // Merge request data with files for proper validation
+        $requestData = array_merge($request->all(), $request->allFiles());
+        $validator = Validator::make($requestData, $rules);
         
         if ($validator->fails()) {
             return $this->validationErrorResponse($validator->errors());

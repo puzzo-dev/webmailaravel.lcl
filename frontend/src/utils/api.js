@@ -5,27 +5,79 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Configure axios defaults for JWT authentication
 axios.defaults.baseURL = API_BASE_URL;
-axios.defaults.headers.common['Content-Type'] = 'application/json';
+// DO NOT set global Content-Type - let each request set its own
 axios.defaults.withCredentials = true; // Enable sending cookies with requests
 
-// Create a separate axios instance for FormData requests
+// Add interceptor to main axios instance to debug
+axios.interceptors.request.use(
+  (config) => {
+    console.log('=== MAIN AXIOS REQUEST INTERCEPTOR ===');
+    console.log('config.data instanceof FormData:', config.data instanceof FormData);
+    console.log('config.headers:', config.headers);
+    
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Ensure FormData requests don't get Content-Type set
+    if (config.data instanceof FormData) {
+      console.log('WARNING: FormData detected in main axios - should use formDataAxios instead');
+      delete config.headers['Content-Type'];
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Create axios instance for FormData uploads
 const formDataAxios = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
-  timeout: 300000, // 5 minutes for large file uploads
-  maxContentLength: 50 * 1024 * 1024, // 50MB
-  maxBodyLength: 50 * 1024 * 1024, // 50MB
-  // Don't set Content-Type - let axios set it automatically for FormData
+  timeout: 30000,
 });
 
-// Add request interceptor to copy auth headers
-formDataAxios.interceptors.request.use((config) => {
-  // Copy auth headers from main axios instance
-  if (axios.defaults.headers.common['Authorization']) {
-    config.headers.Authorization = axios.defaults.headers.common['Authorization'];
+// Add auth token to FormData requests
+formDataAxios.interceptors.request.use(
+  (config) => {
+    console.log('=== FORMDATA AXIOS REQUEST INTERCEPTOR ===');
+    console.log('config.data instanceof FormData:', config.data instanceof FormData);
+    console.log('config.headers:', config.headers);
+    console.log('config.data:', config.data);
+    
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Ensure Content-Type is not set for FormData
+    if (config.data instanceof FormData) {
+      console.log('Removing Content-Type header for FormData');
+      delete config.headers['Content-Type'];
+    }
+    
+    console.log('Final config.headers:', config.headers);
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor to debug what's actually sent
+formDataAxios.interceptors.response.use(
+  (response) => {
+    console.log('=== FORMDATA AXIOS RESPONSE INTERCEPTOR ===');
+    console.log('response.config.headers:', response.config.headers);
+    console.log('response.config.data instanceof FormData:', response.config.data instanceof FormData);
+    return response;
+  },
+  (error) => {
+    console.log('=== FORMDATA AXIOS ERROR INTERCEPTOR ===');
+    console.log('error.config.headers:', error.config?.headers);
+    console.log('error.config.data instanceof FormData:', error.config?.data instanceof FormData);
+    console.log('error.response?.headers:', error.response?.headers);
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 // Simple API methods
 export const api = {
@@ -45,8 +97,23 @@ export const api = {
   // POST request
   post: async (endpoint, data = {}, config = {}) => {
     try {
+      console.log('=== API POST DEBUG ===');
+      console.log('data type:', typeof data);
+      console.log('data instanceof FormData:', data instanceof FormData);
+      console.log('data:', data);
+      
       // Handle FormData - use separate axios instance
       if (data instanceof FormData) {
+        console.log('Using formDataAxios for FormData');
+        console.log('FormData entries:');
+        for (let [key, value] of data.entries()) {
+          if (value instanceof File) {
+            console.log(`  ${key}: File(${value.name}, ${value.size} bytes)`);
+          } else {
+            console.log(`  ${key}: ${value}`);
+          }
+        }
+        
         // Ensure no Content-Type is set in config for FormData
         const formDataConfig = { ...config };
         delete formDataConfig.headers?.['Content-Type'];
@@ -54,7 +121,16 @@ export const api = {
         const response = await formDataAxios.post(endpoint, data, formDataConfig);
         return response;
       } else {
-        const response = await axios.post(endpoint, data, config);
+        console.log('Using regular axios for non-FormData');
+        // Explicitly set Content-Type for JSON requests
+        const jsonConfig = {
+          ...config,
+          headers: {
+            'Content-Type': 'application/json',
+            ...config.headers
+          }
+        };
+        const response = await axios.post(endpoint, data, jsonConfig);
         return response;
       }
     } catch (error) {
@@ -68,6 +144,7 @@ export const api = {
     try {
       // Handle FormData - use separate axios instance
       if (data instanceof FormData) {
+        console.log('Using formDataAxios for PUT FormData');
         // Ensure no Content-Type is set in config for FormData
         const formDataConfig = { ...config };
         delete formDataConfig.headers?.['Content-Type'];
@@ -75,7 +152,16 @@ export const api = {
         const response = await formDataAxios.put(endpoint, data, formDataConfig);
         return response;
       } else {
-        const response = await axios.put(endpoint, data, config);
+        console.log('Using regular axios for PUT non-FormData');
+        // Explicitly set Content-Type for JSON requests
+        const jsonConfig = {
+          ...config,
+          headers: {
+            'Content-Type': 'application/json',
+            ...config.headers
+          }
+        };
+        const response = await axios.put(endpoint, data, jsonConfig);
         return response;
       }
     } catch (error) {

@@ -9,7 +9,7 @@ import {
   HiExclamation,
   HiInformationCircle
 } from 'react-icons/hi';
-import { api } from '../../utils/api';
+import { api } from '../../services/api';
 
 const AdminScheduler = () => {
   const [schedulerInfo, setSchedulerInfo] = useState(null);
@@ -59,7 +59,7 @@ const AdminScheduler = () => {
       
     } catch (error) {
       console.error('Failed to run scheduler:', error);
-      toast.error('Failed to run scheduler', { id: 'scheduler' });
+      toast.error('Failed to run scheduler');
     } finally {
       setRunningCommand(null);
     }
@@ -77,7 +77,7 @@ const AdminScheduler = () => {
       
     } catch (error) {
       console.error(`Failed to run ${command}:`, error);
-      toast.error(`Failed to run ${command}`, { id: command });
+      toast.error(`Failed to run ${command}`);
     } finally {
       setRunningCommand(null);
     }
@@ -94,7 +94,7 @@ const AdminScheduler = () => {
       
     } catch (error) {
       console.error('Scheduler test failed:', error);
-      toast.error('Scheduler test failed', { id: 'test' });
+      toast.error('Scheduler test failed');
     }
   };
 

@@ -48,6 +48,9 @@ export const api = {
     try {
       // Handle FormData - use separate axios instance
       if (data instanceof FormData) {
+        console.log('Detected FormData, using formDataAxios');
+        console.log('FormData entries:', [...data.entries()]);
+        
         // Ensure no Content-Type is set in config for FormData
         const formDataConfig = { ...config };
         delete formDataConfig.headers?.['Content-Type'];
@@ -55,6 +58,7 @@ export const api = {
         const response = await formDataAxios.post(endpoint, data, formDataConfig);
         return response;
       } else {
+        console.log('Using regular axios for non-FormData');
         const response = await axios.post(endpoint, data, config);
         return response;
       }
@@ -1156,3 +1160,48 @@ export const adminService = {
     },
 };
 
+// User Activity Service
+export const userActivityService = {
+    async getActivities(params = {}) {
+        const response = await api.get('/user/activities', params);
+        return response.data;
+    },
+
+    async logActivity(activityData) {
+        const response = await api.post('/user/activities', activityData);
+        return response.data;
+    },
+
+    async getActivityStats() {
+        const response = await api.get('/user/activities/stats');
+        return response.data;
+    }
+};
+
+// Queue Service
+export const queueService = {
+    async getQueueStatus() {
+        const response = await api.get('/queue/status');
+        return response.data;
+    },
+
+    async getFailedJobs() {
+        const response = await api.get('/queue/failed');
+        return response.data;
+    },
+
+    async retryJob(jobId) {
+        const response = await api.post(`/queue/retry/${jobId}`);
+        return response.data;
+    },
+
+    async deleteJob(jobId) {
+        const response = await api.delete(`/queue/jobs/${jobId}`);
+        return response.data;
+    },
+
+    async clearQueue() {
+        const response = await api.post('/queue/clear');
+        return response.data;
+    }
+};
