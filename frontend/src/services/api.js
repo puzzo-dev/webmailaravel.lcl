@@ -275,6 +275,32 @@ export const userService = {
     }
 };
 
+// User Activity service methods
+export const userActivityService = {
+    async getActivities(params = {}) {
+        const response = await api.get('/user/activities', params);
+        return response.data;
+    },
+
+    async getActivity(id) {
+        const response = await api.get(`/user/activities/${id}`);
+        return response.data;
+    }
+};
+
+// Queue service methods (user-specific, different from admin queue methods)
+export const queueService = {
+    async getCampaignFailedJobs(campaignId, params = {}) {
+        const response = await api.get(`/campaigns/${campaignId}/failed-jobs`, params);
+        return response.data;
+    },
+
+    async retryFailedJob(jobId) {
+        const response = await api.post(`/queue/failed/${jobId}/retry`);
+        return response.data;
+    }
+};
+
 // Domain service methods
 export const domainService = {
     async getDomains() {
