@@ -1,7 +1,4 @@
 import { api } from '../utils/api';
-import axios from 'axios';
-
-// Cache-busting update: 2025-08-09T15:15:54Z - Fixed PowerMTA and Notifications methods
 
 // Auth service methods
 export const authService = {
@@ -39,10 +36,7 @@ export const authService = {
         const response = await api.get('/user/me', {}, config);
             return response.data;
         } catch (error) {
-            // Don't log 401 errors during auth initialization - this is expected when not logged in
-            if (!isAuthInit || error.response?.status !== 401) {
-                console.error('getProfile error:', error);
-            }
+            console.error('getProfile error:', error);
             throw error;
         }
     },
@@ -55,58 +49,13 @@ export const authService = {
     getCurrentUser() {
         // User data is managed by Redux, not local storage
         return null;
-    },
-
-    async forgotPassword(email) {
-        try {
-            const response = await api.post('/auth/forgot-password', { email });
-            return response.data;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    async resetPassword(resetData) {
-        try {
-            const response = await api.post('/auth/reset-password', resetData);
-            return response.data;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    async sendEmailVerification() {
-        try {
-            const response = await api.post('/auth/send-verification');
-            return response.data;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    async verifyEmail(verificationData) {
-        try {
-            const response = await api.post('/auth/verify-email', verificationData);
-            return response.data;
-        } catch (error) {
-            throw error;
-        }
-    },
-
-    async resendEmailVerification() {
-        try {
-            const response = await api.post('/auth/resend-verification');
-            return response.data;
-        } catch (error) {
-            throw error;
-        }
     }
 };
 
 // Campaign service methods
 export const campaignService = {
-    async getCampaigns(params = {}) {
-        const response = await api.get('/campaigns', { params });
+    async getCampaigns() {
+        const response = await api.get('/campaigns');
         return response.data;
     },
 
@@ -482,24 +431,6 @@ export const analyticsService = {
     }
 };
 
-// Queue service methods
-export const queueService = {
-    async getCampaignFailedJobs(campaignId, params = {}) {
-        const response = await api.get(`/admin/queue/campaigns/${campaignId}/failed`, { params });
-        return response.data;
-    },
-
-    async retryFailedJob(jobId) {
-        const response = await api.post(`/admin/queue/failed/${jobId}/retry`);
-        return response.data;
-    },
-
-    async deleteFailedJob(jobId) {
-        const response = await api.delete(`/admin/queue/failed/${jobId}`);
-        return response.data;
-    }
-};
-
 // Suppression service methods (Admin only)
 export const suppressionService = {
     async getList(params = {}) {
@@ -620,69 +551,64 @@ export const securityService = {
 export const billingService = {
     async getSubscriptions(params = {}) {
         const response = await api.get('/billing/subscriptions', params);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async createSubscription(subscriptionData) {
         const response = await api.post('/billing/subscriptions', subscriptionData);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async cancelSubscription(id) {
         const response = await api.delete(`/billing/subscriptions/${id}`);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async createBTCPayInvoice(invoiceData) {
         const response = await api.post('/btcpay/invoice', invoiceData);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async getPaymentHistory(params = {}) {
         const response = await api.get('/billing/payment-history', params);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async getPaymentRates() {
-        try {
-            const response = await api.get('/billing/rates');
-            return response.data.data || response.data;
-        } catch (error) {
-            console.warn('Payment rates endpoint not available:', error.message);
-            return []; // Return empty array if endpoint fails
-        }
+        const response = await api.get('/billing/rates');
+        return response.data;
     },
 
     // Plan management
     async getPlans() {
-        const response = await api.get('/plans'); // Public endpoint, no /billing prefix
-        return response.data.data || response.data; // Handle both { data: [...] } and direct array responses
+        const response = await api.get('/billing/plans');
+        return response.data;
     },
 
     async createPlan(planData) {
         const response = await api.post('/admin/billing/plans', planData);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async updatePlan(planId, planData) {
         const response = await api.put(`/admin/billing/plans/${planId}`, planData);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async deletePlan(planId) {
         const response = await api.delete(`/admin/billing/plans/${planId}`);
-        return response.data.data || response.data;
+        return response.data;
     },
 
     // Admin billing management
     async getBillingStats() {
         const response = await api.get('/admin/billing/stats');
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async getAllSubscriptions(params = {}) {
         const response = await api.get('/admin/billing/subscriptions', { params });
-        return response.data.data || response.data;
+        return response.data;
     },
 
     async processManualPayment(subscriptionId, paymentData) {
@@ -770,48 +696,8 @@ export const adminService = {
         return response.data;
     },
 
-    async deleteCampaign(campaignId) {
-        const response = await api.delete(`/admin/campaigns/${campaignId}`);
-        return response.data;
-    },
-
-    async startCampaign(campaignId) {
-        const response = await api.post(`/admin/campaigns/${campaignId}/start`);
-        return response.data;
-    },
-
-    async pauseCampaign(campaignId) {
-        const response = await api.post(`/admin/campaigns/${campaignId}/pause`);
-        return response.data;
-    },
-
-    async stopCampaign(campaignId) {
-        const response = await api.post(`/admin/campaigns/${campaignId}/stop`);
-        return response.data;
-    },
-
     async getDomains(params = {}) {
         const response = await api.get('/admin/domains', { params });
-        return response.data;
-    },
-
-    async createDomain(domainData) {
-        const response = await api.post('/admin/domains', domainData);
-        return response.data;
-    },
-
-    async updateDomain(domainId, domainData) {
-        const response = await api.put(`/admin/domains/${domainId}`, domainData);
-        return response.data;
-    },
-
-    async deleteDomain(domainId) {
-        const response = await api.delete(`/admin/domains/${domainId}`);
-        return response.data;
-    },
-
-    async updateDomainStatus(domainId, status) {
-        const response = await api.patch(`/admin/domains/${domainId}/status`, { status });
         return response.data;
     },
 
@@ -979,102 +865,14 @@ export const adminService = {
         return response.data;
     },
 
-    // Scheduler and queue management
-    async runScheduler() {
-        const response = await api.post('/admin/run-scheduler');
+    // BTCPay configuration
+    async getBTCPayConfig() {
+        const response = await api.get('/admin/system-config/btcpay');
         return response.data;
     },
 
-    async processQueue() {
-        const response = await api.post('/admin/process-queue');
-        return response.data;
-    },
-
-    // Backup management methods
-    async getBackups(params = {}) {
-        const response = await api.get('/admin/backups', { params });
-        return response.data;
-    },
-
-    async getBackupStatistics() {
-        const response = await api.get('/admin/backups/statistics');
-        return response.data;
-    },
-
-    async createBackup(backupData = {}) {
-        const response = await api.post('/admin/backups', backupData);
-        return response.data;
-    },
-
-    async deleteBackup(backupId) {
-        const response = await api.delete(`/admin/backups/${backupId}`);
-        return response.data;
-    },
-
-    async downloadBackup(backupId) {
-        // Debug: Backup download initiated
-        try {
-            // Try using fetch API for better blob handling
-            const baseURL = axios.defaults.baseURL || '';
-            const url = `${baseURL}/admin/backups/${backupId}/download`;
-            
-            // Initiating backup download
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                credentials: 'include', // equivalent to withCredentials: true
-                headers: {
-                    'Accept': 'application/zip, application/octet-stream, */*',
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            // Check response status and content type
-            
-            if (!response.ok) {
-                // Try to get error message from response
-                const errorText = await response.text();
-                console.error('Server error response:', errorText);
-                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-            }
-            
-            // Check if response is actually a file or JSON error
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                const errorData = await response.json();
-                console.error('Server returned JSON instead of file:', errorData);
-                throw new Error(errorData.message || 'Server returned error instead of file');
-            }
-            
-            const blob = await response.blob();
-            
-            console.log('Fetch blob result:', {
-                blob,
-                type: typeof blob,
-                isBlob: blob instanceof Blob,
-                size: blob.size,
-                blobType: blob.type
-            });
-            
-            return blob;
-        } catch (error) {
-            console.error('Download error:', error);
-            throw error;
-        }
-    },
-
-    async restoreBackup(backupId) {
-        const response = await api.post(`/admin/backups/${backupId}/restore`);
-        return response.data;
-    },
-
-    async getBackupSettings() {
-        const response = await api.get('/admin/backups/settings');
-        return response.data;
-    },
-
-    async updateBackupSettings(settingsData) {
-        const response = await api.put('/admin/backups/settings', settingsData);
+    async updateBTCPayConfig(btcpayData) {
+        const response = await api.post('/admin/system-config/btcpay', btcpayData);
         return response.data;
     },
 
@@ -1097,6 +895,44 @@ export const adminService = {
 
     async updateTelegramConfig(telegramData) {
         const response = await api.post('/admin/system-config/telegram', telegramData);
+        return response.data;
+    },
+
+    // Environment variables
+    async getEnvVariables() {
+        const response = await api.get('/admin/system-settings/env-variables');
+        return response.data;
+    },
+
+    // Test SMTP
+    async testSystemSmtp(smtpData) {
+        const response = await api.post('/admin/system-settings/test-smtp', smtpData);
+        return response.data;
+    },
+
+    // Notification management
+    async getNotifications(params = {}) {
+        const response = await api.get('/admin/notifications', { params });
+        return response.data;
+    },
+
+    async createNotification(notificationData) {
+        const response = await api.post('/admin/notifications', notificationData);
+        return response.data;
+    },
+
+    async sendBulkNotification(notificationData) {
+        const response = await api.post('/admin/notifications/bulk', notificationData);
+        return response.data;
+    },
+
+    async deleteNotification(notificationId) {
+        const response = await api.delete(`/admin/notifications/${notificationId}`);
+        return response.data;
+    },
+
+    async markNotificationAsRead(notificationId) {
+        const response = await api.put(`/admin/notifications/${notificationId}/read`);
         return response.data;
     },
 
@@ -1138,108 +974,6 @@ export const adminService = {
         return response.data;
     },
 
-    async processLocalPowerMTALogs(date) {
-        const response = await api.post('/admin/powermta/process-local-logs', { date });
-        return response.data;
-    },
-
-    async getAvailablePowerMTALogFiles(date) {
-        const response = await api.get('/admin/powermta/available-log-files', { params: { date } });
-        return response.data;
-    },
-
-    // Notification management
-    async getNotifications(params = {}) {
-        const response = await api.get('/admin/notifications', { params });
-        return response.data;
-    },
-
-    async createNotification(notificationData) {
-        const response = await api.post('/admin/notifications', notificationData);
-        return response.data;
-    },
-
-    async sendBulkNotification(notificationData) {
-        const response = await api.post('/admin/notifications/bulk', notificationData);
-        return response.data;
-    },
-
-    async deleteNotification(notificationId) {
-        const response = await api.delete(`/admin/notifications/${notificationId}`);
-        return response.data;
-    },
-
-    async markNotificationAsRead(notificationId) {
-        const response = await api.put(`/admin/notifications/${notificationId}/read`);
-        return response.data;
-    }
-
-    // BTCPay configuration is now handled through SystemSettings
-
-};
-
-// Performance monitoring service methods (Admin only)
-export const performanceService = {
-    async getSystemMetrics() {
-        const response = await api.get('/performance/system');
-        return response.data;
-    },
-
-    async getOperationMetrics(operation, hours = 24) {
-        const response = await api.get(`/performance/operation/${operation}`, { hours });
-        return response.data;
-    },
-
-    async generateReport(hours = 24) {
-        const response = await api.get('/performance/report', { hours });
-        return response.data;
-    },
-
-    async recordMetric(metricData) {
-        const response = await api.post('/performance/metric', metricData);
-        return response.data;
-    }
-};
-
-// PowerMTA service methods
-export const powerMTAService = {
-    async getConfig() {
-        const response = await api.get('/admin/powermta/config');
-        return response.data;
-    },
-
-    async updateConfig(configData) {
-        const response = await api.put('/admin/powermta/config', configData);
-        return response.data;
-    },
-
-    // Test SMTP
-    async testSystemSmtp(smtpData) {
-        const response = await api.post('/admin/system-settings/test-smtp', smtpData);
-        return response.data;
-    }
-};
-
-// User Activity service methods
-export const userActivityService = {
-    async getActivities(params = {}) {
-        const response = await api.get('/user/activities', { params });
-        return response.data;
-    },
-
-    async getActivityStats(params = {}) {
-        const response = await api.get('/user/activities/stats', { params });
-        return response.data;
-    },
-
-    async logActivity(activityData) {
-        const response = await api.post('/user/activities', activityData);
-        return response.data;
-    }
-};
-
-// Additional admin service methods
-export const adminNotificationService = {
     // Backup Management
     async getBackups() {
         const response = await api.get('/admin/backups');
@@ -1261,10 +995,16 @@ export const adminNotificationService = {
         return response.data;
     },
 
-
+    async downloadBackup(backupId) {
+        const response = await api.get(`/admin/backups/${backupId}/download`, {
+            responseType: 'blob'
+        });
+        return response.data;
+    },
 
     async restoreBackup(backupId) {
         const response = await api.post(`/admin/backups/${backupId}/restore`);
         return response.data;
     },
 };
+

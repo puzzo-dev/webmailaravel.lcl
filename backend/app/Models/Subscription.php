@@ -12,33 +12,22 @@ class Subscription extends Model
     protected $fillable = [
         'user_id',
         'plan_id',
-        'plan_name',
         'status',
-        'starts_at',
-        'ends_at',
         'expiry',
         'payment_id',
-        'invoice',
         'payment_method',
         'payment_reference',
         'payment_amount',
         'payment_currency',
-        'payment_url',
         'paid_at',
         'notes',
-        'processed_by',
-        'confirmation_count',
-        'payment_data'
+        'processed_by'
     ];
 
     protected $casts = [
-        'starts_at' => 'datetime',
-        'ends_at' => 'datetime',
         'expiry' => 'datetime',
         'paid_at' => 'datetime',
-        'payment_amount' => 'decimal:2',
-        'payment_data' => 'array',
-        'confirmation_count' => 'integer'
+        'payment_amount' => 'decimal:2'
     ];
 
     // Relationships

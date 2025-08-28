@@ -1,27 +1,26 @@
 <?php
 
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\BackupController;
-use App\Http\Controllers\BillingController;
-use App\Http\Controllers\BounceCredentialController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CampaignController;
-use App\Http\Controllers\ContentController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\SenderController;
 use App\Http\Controllers\DomainController;
+use App\Http\Controllers\ContentController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\PowerMTAController;
-use App\Http\Controllers\PublicConfigController;
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\SecurityController;
-use App\Http\Controllers\SenderController;
-use App\Http\Controllers\SuppressionListController;
 use App\Http\Controllers\TrackingController;
-use App\Http\Controllers\UserActivityController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\SwaggerController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\SuppressionListController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SystemSettingsController;
+use App\Http\Controllers\PublicConfigController;
+use App\Http\Controllers\BounceCredentialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,31 +33,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// API Status and Health Check
-Route::get('/', function () {
-    return response()->json([
-        'message' => 'Email Campaign Management System API',
-        'version' => '1.0.0',
-        'status' => 'active',
-        'timestamp' => now()->toISOString(),
-        'endpoints' => [
-            'auth' => '/api/auth',
-            'campaigns' => '/api/campaigns',
-            'analytics' => '/api/analytics',
-            'documentation' => '/api/documentation'
-        ]
-    ]);
-});
-
-Route::get('/status', function () {
-    return response()->json([
-        'status' => 'healthy',
-        'timestamp' => now()->toISOString(),
-        'environment' => app()->environment(),
-        'version' => '1.0.0'
-    ]);
-});
-
 // Public routes - Webhooks are now processed via traits during operations
 // Route::post('/webhooks/telegram', [TelegramController::class, 'webhook']);
 
@@ -67,24 +41,20 @@ Route::get('/security/test', function () {
     return response()->json(['message' => 'Security routes working']);
 });
 
-// Security routes removed - now handled within authenticated middleware section
+// Security routes (temporarily outside auth middleware for testing)
+Route::prefix('security')->group(function () {
+    Route::get('/sessions', [SecurityController::class, 'getActiveSessions']);
+    Route::get('/devices', [SecurityController::class, 'getTrustedDevices']);
+});
 
 // Auth routes (public)
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
-    Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->name('verification.verify');
-    Route::post('/email/verification-notification', [AuthController::class, 'resendVerificationEmail'])->middleware(['auth:api'])->name('verification.send');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/refresh', [AuthController::class, 'refresh']);
-    
-    // Authenticated email verification routes
-    Route::middleware('auth:api')->group(function () {
-        Route::post('/send-verification', [AuthController::class, 'sendVerification']);
-        Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
-    });
 });
 
 // Public config routes (no authentication required)
@@ -98,75 +68,9 @@ Route::prefix('tracking')->group(function () {
 });
 
 // Public billing routes (no authentication required)
-Route::get('/plans', [BillingController::class, 'plans']);
-
-// API Documentation routes (public access)
-Route::get('/documentation', function () {
-    return response()->json([
-        'title' => 'Email Campaign Management API',
-        'version' => '1.0.0',
-        'description' => 'Comprehensive API for managing email campaigns, users, analytics, domains, senders, and more.',
-        'base_url' => request()->getSchemeAndHttpHost(),
-        'endpoints' => [
-            'Authentication' => [
-                'POST /api/auth/login' => 'User login',
-                'POST /api/auth/register' => 'User registration',
-                'POST /api/auth/logout' => 'User logout',
-                'POST /api/auth/refresh' => 'Refresh JWT token',
-                'POST /api/auth/forgot-password' => 'Request password reset',
-                'POST /api/auth/reset-password' => 'Reset password with token',
-            ],
-            'User Management' => [
-                'GET /api/user/profile' => 'Get user profile',
-                'PUT /api/user/profile' => 'Update user profile',
-                'PUT /api/user/password' => 'Change password',
-                'GET /api/user/settings' => 'Get user settings',
-            ],
-            'Campaigns' => [
-                'GET /api/campaigns' => 'List campaigns',
-                'POST /api/campaigns' => 'Create campaign',
-                'GET /api/campaigns/{id}' => 'Get campaign details',
-                'PUT /api/campaigns/{id}' => 'Update campaign',
-                'DELETE /api/campaigns/{id}' => 'Delete campaign',
-                'POST /api/campaigns/{id}/send' => 'Send campaign',
-            ],
-            'Analytics' => [
-                'GET /api/analytics/dashboard' => 'Get dashboard analytics',
-                'GET /api/analytics/campaigns/{id}' => 'Get campaign analytics',
-                'GET /api/analytics/performance' => 'Get performance metrics',
-            ],
-            'Domains' => [
-                'GET /api/domains' => 'List domains',
-                'POST /api/domains' => 'Add domain',
-                'GET /api/domains/{id}' => 'Get domain details',
-                'PUT /api/domains/{id}' => 'Update domain',
-                'DELETE /api/domains/{id}' => 'Delete domain',
-            ],
-            'Senders' => [
-                'GET /api/senders' => 'List senders',
-                'POST /api/senders' => 'Add sender',
-                'GET /api/senders/{id}' => 'Get sender details',
-                'PUT /api/senders/{id}' => 'Update sender',
-                'DELETE /api/senders/{id}' => 'Delete sender',
-            ],
-            'Billing' => [
-                'GET /api/plans' => 'Get available plans (public)',
-                'GET /api/billing/subscription' => 'Get user subscription',
-                'POST /api/billing/subscribe' => 'Subscribe to plan',
-                'GET /api/billing/history' => 'Get payment history',
-            ],
-            'Tracking' => [
-                'GET /api/tracking/open/{emailId}' => 'Track email open (public)',
-                'GET /api/tracking/click/{emailId}/{linkId}' => 'Track link click (public)',
-                'GET /api/tracking/unsubscribe/{emailId}' => 'Unsubscribe (public)',
-            ]
-        ],
-        'authentication' => [
-            'type' => 'Bearer Token (JWT)',
-            'header' => 'Authorization: Bearer {token}',
-            'note' => 'Most endpoints require authentication. Public endpoints are marked as (public).'
-        ]
-    ]);
+Route::prefix('billing')->group(function () {
+    Route::get('/plans', [BillingController::class, 'plans']);
+    Route::get('/rates', [BillingController::class, 'rates']);
 });
 
 // Protected routes (require JWT authentication)
@@ -176,7 +80,7 @@ Route::middleware(['auth:api'])->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Authentication working',
-            'user' => auth()->user(),
+            'user' => auth()->user()
         ]);
     });
 
@@ -188,7 +92,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/devices', [UserController::class, 'getDevices']);
         Route::get('/sessions', [UserController::class, 'getSessions']);
         Route::get('/me', [AuthController::class, 'me']);
-
+        
         // User settings routes
         Route::get('/settings', [UserController::class, 'getSettings']);
         Route::put('/settings/general', [UserController::class, 'updateGeneralSettings']);
@@ -200,19 +104,13 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/settings/telegram/test', [UserController::class, 'testTelegram']);
     });
 
-    // User Activity routes
-    Route::prefix('user/activities')->group(function () {
-        Route::get('/', [UserActivityController::class, 'index']);
-        Route::get('/stats', [UserActivityController::class, 'stats']);
-        Route::post('/', [UserActivityController::class, 'store']);
-    });
+
 
     // Campaign routes (require active subscription)
     Route::prefix('campaigns')->middleware(['subscription'])->group(function () {
         Route::get('/', [CampaignController::class, 'index']);
         Route::post('/', [CampaignController::class, 'store']);
         Route::get('/{campaign}', [CampaignController::class, 'show']);
-        Route::get('/{campaign}/attachments/{index}/download', [CampaignController::class, 'downloadAttachment']);
         Route::put('/{campaign}', [CampaignController::class, 'update']);
         Route::delete('/{campaign}', [CampaignController::class, 'destroy']);
         Route::post('/{campaign}/duplicate', [CampaignController::class, 'duplicateCampaign']);
@@ -228,7 +126,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/{campaign}/unsubscribe-list/{format}', [CampaignController::class, 'downloadUnsubscribeList']);
         Route::post('/upload-content', [CampaignController::class, 'uploadContent']);
         Route::post('/send-single', [CampaignController::class, 'sendSingle'])->middleware('training.check');
-
+        
         // Admin campaign management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
             Route::put('/{campaign}/admin-update', [CampaignController::class, 'updateCampaign']);
@@ -263,7 +161,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/{domain}/bounce-processing/test', [DomainController::class, 'testBounceConnection']);
         Route::get('/{domain}/bounce-processing/stats', [DomainController::class, 'getBounceStatistics']);
         Route::post('/{domain}/bounce-processing/process', [DomainController::class, 'processBounces']);
-
+        
         // Admin domain management routes (admin only)
         Route::middleware(['role:admin'])->group(function () {
             Route::put('/{domain}/admin-update', [DomainController::class, 'updateDomain']);
@@ -305,14 +203,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::put('/subscriptions/{subscription}', [BillingController::class, 'update']);
         Route::delete('/subscriptions/{subscription}', [BillingController::class, 'destroy']);
         Route::post('/subscriptions/{subscription}/renew', [BillingController::class, 'renew']);
-
+        
         // Payment & Invoice management
         Route::post('/invoice', [BillingController::class, 'createInvoice']);
         Route::get('/invoice/{invoice_id}/status', [BillingController::class, 'invoiceStatus']);
-        Route::get('/invoice/{invoice_id}/view', [BillingController::class, 'viewInvoice']);
-        Route::get('/invoice/{invoice_id}/download', [BillingController::class, 'downloadInvoice']);
         Route::get('/payment-history', [BillingController::class, 'paymentHistory']);
-
+        
         // Webhook for payment processing
         Route::post('/webhook', [BillingController::class, 'webhook']);
     });
@@ -340,25 +236,18 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::get('/campaigns', [CampaignController::class, 'index']);
         Route::put('/campaigns/{campaign}/status', [CampaignController::class, 'updateCampaign']);
-        Route::delete('/campaigns/{campaign}', [CampaignController::class, 'destroy']);
-        Route::post('/campaigns/{campaign}/start', [CampaignController::class, 'startCampaign']);
-        Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pauseCampaign']);
-        Route::post('/campaigns/{campaign}/resume', [CampaignController::class, 'resumeCampaign']);
-        Route::post('/campaigns/{campaign}/stop', [CampaignController::class, 'stopCampaign']);
         Route::get('/analytics', [AdminController::class, 'analytics']);
         Route::get('/system-status', [AdminController::class, 'systemStatus']);
-        Route::post('/system-config', [AdminController::class, 'updateSystemConfig']);
-        Route::get('/system-config', [AdminController::class, 'getSystemConfig']);
+        Route::post('/system-config', [SystemSettingsController::class, 'updateSystemConfig']);
+        Route::get('/system-config', [SystemSettingsController::class, 'index']);
 
-        // Granular config endpoints for Telegram, PowerMTA
-        Route::get('/system-config/telegram', [AdminController::class, 'getTelegramConfig']);
-        Route::post('/system-config/telegram', [AdminController::class, 'updateTelegramConfig']);
-        Route::get('/system-config/powermta', [AdminController::class, 'getPowerMTAConfig']);
-        Route::post('/system-config/powermta', [AdminController::class, 'updatePowerMTAConfig']);
-        
-        // Scheduler and queue management
-        Route::post('/run-scheduler', [AdminController::class, 'runScheduler']);
-        Route::post('/process-queue', [AdminController::class, 'processQueue']);
+        // Granular config endpoints for BTCPay, Telegram, PowerMTA
+        Route::get('/system-config/btcpay', [SystemSettingsController::class, 'getBTCPayConfig']);
+        Route::post('/system-config/btcpay', [SystemSettingsController::class, 'updateBTCPayConfig']);
+        Route::get('/system-config/telegram', [SystemSettingsController::class, 'getTelegramConfig']);
+        Route::post('/system-config/telegram', [SystemSettingsController::class, 'updateTelegramConfig']);
+        Route::get('/system-config/powermta', [SystemSettingsController::class, 'getPowerMTAConfig']);
+        Route::post('/system-config/powermta', [SystemSettingsController::class, 'updatePowerMTAConfig']);
 
         // Backup routes (admin only)
         Route::prefix('backups')->group(function () {
@@ -367,7 +256,7 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/statistics', [BackupController::class, 'getStatistics']);
             Route::get('/{backup}', [BackupController::class, 'show']);
             Route::delete('/{backup}', [BackupController::class, 'destroy']);
-            Route::get('/{backup}/download', [BackupController::class, 'download']);
+            Route::post('/{backup}/download', [BackupController::class, 'download']);
             Route::post('/{backup}/restore', [BackupController::class, 'restore']);
         });
 
@@ -383,10 +272,6 @@ Route::middleware(['auth:api'])->group(function () {
         // Admin domains management routes (admin only)
         Route::prefix('domains')->group(function () {
             Route::get('/', [DomainController::class, 'index']);
-            Route::post('/', [DomainController::class, 'store']);
-            Route::put('/{domain}', [DomainController::class, 'update']);
-            Route::delete('/{domain}', [DomainController::class, 'destroy']);
-            Route::patch('/{domain}/status', [DomainController::class, 'updateStatus']);
             Route::post('/{domain}/test', [DomainController::class, 'testDomainConnection']);
         });
 
@@ -417,14 +302,14 @@ Route::middleware(['auth:api'])->group(function () {
         });
 
         // Admin notifications management routes (admin only)
-        Route::prefix('notifications')->group(function () {
-            Route::get('/', [NotificationController::class, 'index']);
-            Route::post('/', [NotificationController::class, 'store']);
-            Route::post('/bulk', [NotificationController::class, 'sendBulk']);
-            Route::get('/{notification}', [NotificationController::class, 'show']);
-            Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
-            Route::delete('/{notification}', [NotificationController::class, 'destroy']);
-        });
+Route::prefix('notifications')->group(function () {
+Route::get('/', [NotificationController::class, 'index']);
+Route::post('/', [NotificationController::class, 'store']);
+Route::post('/bulk', [NotificationController::class, 'sendBulk']);
+Route::get('/{notification}', [NotificationController::class, 'show']);
+Route::put('/{notification}/read', [NotificationController::class, 'markAsRead']);
+Route::delete('/{notification}', [NotificationController::class, 'destroy']);
+});
 
         // Admin logs management routes (admin only)
         Route::prefix('logs')->group(function () {
@@ -441,7 +326,6 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/stats', [App\Http\Controllers\QueueController::class, 'getQueueStats']);
             Route::get('/pending', [App\Http\Controllers\QueueController::class, 'getPendingJobs']);
             Route::get('/failed', [App\Http\Controllers\QueueController::class, 'getFailedJobs']);
-            Route::get('/campaigns/{campaignId}/failed', [App\Http\Controllers\QueueController::class, 'getCampaignFailedJobs']);
             Route::post('/failed/{id}/retry', [App\Http\Controllers\QueueController::class, 'retryFailedJob']);
             Route::delete('/failed/{id}', [App\Http\Controllers\QueueController::class, 'deleteFailedJob']);
             Route::delete('/failed', [App\Http\Controllers\QueueController::class, 'clearAllFailedJobs']);
@@ -461,18 +345,17 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/diagnostic-files/{filename}/download', [PowerMTAController::class, 'downloadDiagnosticFile']);
             Route::post('/process-bounces', [PowerMTAController::class, 'processBounceFiles']);
         });
-
-        // Unified Training admin routes (admin only) - consolidated from PowerMTA and Training controllers
+        
+        // Automatic Training admin routes (admin only)
         Route::prefix('training')->group(function () {
-            Route::get('/status', [\App\Http\Controllers\TrainingController::class, 'getTrainingStatus']);
-            Route::get('/statistics', [\App\Http\Controllers\TrainingController::class, 'getTrainingStatistics']);
-            Route::post('/run', [\App\Http\Controllers\TrainingController::class, 'runTraining']);
-            Route::post('/run/users/{user}', [\App\Http\Controllers\TrainingController::class, 'runUserTraining']);
-            Route::post('/run/domains/{domain}', [\App\Http\Controllers\TrainingController::class, 'runDomainTraining']);
-
-            // Per-user training management (admin only)
+            Route::get('/status', [PowerMTAController::class, 'getTrainingStatus']);
+            Route::get('/statistics', [PowerMTAController::class, 'getTrainingStatistics']);
+            Route::post('/run', [PowerMTAController::class, 'runTraining']);
+            Route::post('/run/{domain}', [PowerMTAController::class, 'runDomainTraining']);
+            
+            // Per-user training activation (admin only)
             Route::get('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingSettings']);
-            Route::put('/users/{user}/settings', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
+            Route::put('/users/{user}/activation', [\App\Http\Controllers\TrainingController::class, 'updateAdminTrainingSettings']);
             Route::get('/users/{user}/stats', [\App\Http\Controllers\TrainingController::class, 'getAdminTrainingStats']);
         });
 
@@ -484,15 +367,6 @@ Route::middleware(['auth:api'])->group(function () {
             Route::put('/plans/{plan}', [BillingController::class, 'updatePlan']);
             Route::delete('/plans/{plan}', [BillingController::class, 'deletePlan']);
             Route::post('/subscriptions/{subscription}/manual-payment', [BillingController::class, 'processManualPayment']);
-        });
-
-        // Admin scheduler management routes (admin only)
-        Route::prefix('scheduler')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Admin\SchedulerController::class, 'index']);
-            Route::post('/run', [\App\Http\Controllers\Admin\SchedulerController::class, 'runScheduler']);
-            Route::post('/command', [\App\Http\Controllers\Admin\SchedulerController::class, 'runCommand']);
-            Route::get('/queue-status', [\App\Http\Controllers\Admin\SchedulerController::class, 'queueStatus']);
-            Route::post('/test', [\App\Http\Controllers\Admin\SchedulerController::class, 'testScheduler']);
         });
     });
 
@@ -514,7 +388,17 @@ Route::middleware(['auth:api'])->group(function () {
         Route::delete('/', [NotificationController::class, 'deleteAll']);
     });
 
-    // PowerMTA routes removed - use /admin/powermta endpoints (admin access required)
+    // PowerMTA routes
+    Route::prefix('powermta')->group(function () {
+        Route::get('/status', [PowerMTAController::class, 'getStatus']);
+        Route::get('/fbl/accounts', [PowerMTAController::class, 'getFBLAccounts']);
+        Route::get('/diagnostics/files', [PowerMTAController::class, 'getDiagnosticFiles']);
+        Route::post('/diagnostics/parse', [PowerMTAController::class, 'parseDiagnosticFile']);
+        Route::post('/reputation/analyze', [PowerMTAController::class, 'analyzeSenderReputation']);
+        Route::get('/reputation/summary', [PowerMTAController::class, 'getReputationSummary']);
+        Route::get('/config', [PowerMTAController::class, 'getConfiguration']);
+        Route::put('/config', [PowerMTAController::class, 'updateConfiguration']);
+    });
 
     // Legacy routes for backward compatibility - redirect to new billing endpoints
     Route::prefix('btcpay')->group(function () {
@@ -523,14 +407,22 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/rates', [BillingController::class, 'rates']);
         Route::get('/history', [BillingController::class, 'paymentHistory']);
     });
-
-    // Legacy subscription routes removed - use /billing/subscriptions endpoints instead
+    
+    // Legacy subscription routes for backward compatibility
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/', [BillingController::class, 'index']);
+        Route::post('/', [BillingController::class, 'store']);
+        Route::get('/{subscription}', [BillingController::class, 'show']);
+        Route::put('/{subscription}', [BillingController::class, 'update']);
+        Route::delete('/{subscription}', [BillingController::class, 'destroy']);
+        Route::post('/{subscription}/renew', [BillingController::class, 'renew']);
+    });
 
     // Analytics routes
     Route::prefix('analytics')->group(function () {
         // Dashboard route (accessible to all authenticated users)
         Route::get('/dashboard', [AnalyticsController::class, 'getDashboard']);
-
+        
         // Advanced analytics routes (require active subscription)
         Route::middleware(['subscription'])->group(function () {
             Route::get('/', [AnalyticsController::class, 'index']);
@@ -547,14 +439,6 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/campaign/{campaign}/senders', [AnalyticsController::class, 'getCampaignSenderPerformance']);
             Route::get('/export', [AnalyticsController::class, 'export']);
         });
-    });
-
-    // Performance monitoring routes (admin only)
-    Route::prefix('performance')->middleware(['role:admin'])->group(function () {
-        Route::get('/system', [PerformanceController::class, 'getSystemMetrics']);
-        Route::get('/operation/{operation}', [PerformanceController::class, 'getOperationMetrics']);
-        Route::get('/report', [PerformanceController::class, 'generateReport']);
-        Route::post('/metric', [PerformanceController::class, 'recordMetric']);
     });
 
     // Security routes
@@ -577,10 +461,10 @@ Route::middleware(['auth:api'])->group(function () {
     // Admin System Settings routes (admin only)
     Route::prefix('admin')->group(function () {
         Route::prefix('system-settings')->group(function () {
-            Route::get('/', [AdminController::class, 'getSystemSettings']);
-            Route::put('/', [AdminController::class, 'updateSystemSettings']);
-            Route::post('/test-smtp', [AdminController::class, 'testSmtp']);
-            Route::get('/env-variables', [AdminController::class, 'getEnvVariables']);
+            Route::get('/', [SystemSettingsController::class, 'index']);
+            Route::put('/', [SystemSettingsController::class, 'update']);
+            Route::post('/test-smtp', [SystemSettingsController::class, 'testSmtp']);
+            Route::get('/env-variables', [SystemSettingsController::class, 'getEnvVariables']);
         });
 
         // Admin Security Settings routes (admin only)
@@ -589,7 +473,4 @@ Route::middleware(['auth:api'])->group(function () {
             Route::put('/', [SecurityController::class, 'updateSecuritySettings']);
         });
     });
-});
-
-// API key functionality available through existing routes with dual authentication
-// Use 'Authorization: Bearer {api_key}' or 'X-API-Key: {api_key}' headers on any existing route
+}); 

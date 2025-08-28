@@ -32,7 +32,7 @@ import {
   testSenderConnection,
 } from '../../store/slices/senderSlice';
 import { domainService, senderService } from '../../services/api';
-import useSubscriptionError from '../../hooks/useSubscriptionError';
+import { useSubscriptionError } from '../../hooks/useSubscriptionError';
 
 const Domains = () => {
   const dispatch = useDispatch();
@@ -111,9 +111,7 @@ const Domains = () => {
   useEffect(() => {
     if (error) {
       if (!handleSubscriptionError({ response: { status: 403, data: { error: 'subscription_required', message: error } } })) {
-        // Ensure error is a string for toast display
-        const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-        toast.error(errorMessage);
+        toast.error(error);
       }
       dispatch(clearError());
     }
@@ -175,7 +173,7 @@ const Domains = () => {
       // Refresh SMTP config
       const res = await domainService.getDomainSmtpConfig(selectedDomain.id);
       setSmtpConfig(res.data || null);
-    } catch (_e) {
+    } catch (e) {
       toast.error('Failed to save SMTP config');
     }
   };
@@ -185,7 +183,7 @@ const Domains = () => {
       await domainService.deleteDomainSmtpConfig(selectedDomain.id);
       toast.success('SMTP config deleted!');
       setSmtpConfig(null);
-    } catch (_e) {
+    } catch (e) {
       toast.error('Failed to delete SMTP config');
     }
   };

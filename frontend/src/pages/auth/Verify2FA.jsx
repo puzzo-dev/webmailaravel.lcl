@@ -18,9 +18,7 @@ const Verify2FA = () => {
 
   useEffect(() => {
     if (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-      toast.error(errorMessage);
+      toast.error(error);
       dispatch(clearError());
     }
   }, [error, dispatch]);

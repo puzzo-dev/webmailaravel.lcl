@@ -24,7 +24,6 @@ import toast from 'react-hot-toast';
 const AdminDomains = () => {
   const { user } = useSelector((state) => state.auth);
   const [domains, setDomains] = useState([]);
-  const [users, setUsers] = useState([]);
   
   // Ensure domains is always an array
   const safeDomains = Array.isArray(domains) ? domains : [];
@@ -39,12 +38,7 @@ const AdminDomains = () => {
   });
   const [selectedDomains, setSelectedDomains] = useState([]);
   const [showDomainModal, setShowDomainModal] = useState(false);
-  const [showAddDomainModal, setShowAddDomainModal] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState(null);
-  const [domainForm, setDomainForm] = useState({
-    name: '',
-    user_id: '',
-  });
   const [testingConnection, setTestingConnection] = useState(false);
   const [pagination, setPagination] = useState({
     current_page: 1,
@@ -148,49 +142,6 @@ const AdminDomains = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const response = await adminService.getUsers();
-      const usersData = Array.isArray(response.data) 
-        ? response.data 
-        : Array.isArray(response) 
-        ? response 
-        : [];
-      setUsers(usersData);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      toast.error('Failed to load users');
-    }
-  };
-
-  const handleAddDomain = async () => {
-    setDomainForm({ name: '', user_id: '' });
-    setShowAddDomainModal(true);
-    // Load users when modal opens
-    await fetchUsers();
-  };
-
-  const handleSaveDomain = async () => {
-    try {
-      if (!domainForm.name.trim()) {
-        toast.error('Domain name is required');
-        return;
-      }
-      
-      setActionLoading(true);
-      await adminService.createDomain(domainForm);
-      toast.success('Domain added successfully');
-      setShowAddDomainModal(false);
-      setDomainForm({ name: '', user_id: '' });
-      await fetchDomains();
-    } catch (error) {
-      toast.error('Failed to add domain');
-      console.error('Error adding domain:', error);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const handleDeleteDomain = async (domainId, domainName) => {
     if (!confirm(`Are you sure you want to delete domain "${domainName}"?`)) return;
     
@@ -287,7 +238,7 @@ const AdminDomains = () => {
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={handleAddDomain}
+            onClick={() => {/* Add new domain */}}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Add Domain
@@ -303,7 +254,7 @@ const AdminDomains = () => {
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>{typeof error === 'string' ? error : error?.message || 'An error occurred'}</p>
+                <p>{error}</p>
               </div>
             </div>
           </div>
@@ -640,73 +591,6 @@ const AdminDomains = () => {
                   <label className="block text-sm font-medium text-gray-700">Created</label>
                   <p className="text-sm text-gray-900">{formatDate(selectedDomain.created_at)}</p>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Domain Modal */}
-      {showAddDomainModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Add New Domain</h3>
-                <button
-                  onClick={() => setShowAddDomainModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XCircleIcon className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="domain-name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Domain Name *
-                  </label>
-                  <input
-                    id="domain-name"
-                    type="text"
-                    value={domainForm.name}
-                    onChange={(e) => setDomainForm({ ...domainForm, name: e.target.value })}
-                    placeholder="example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="user-id" className="block text-sm font-medium text-gray-700 mb-1">
-                    Assign to User (Optional)
-                  </label>
-                  <select
-                    id="user-id"
-                    value={domainForm.user_id}
-                    onChange={(e) => setDomainForm({ ...domainForm, user_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select a user (optional)</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowAddDomainModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveDomain}
-                  disabled={actionLoading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {actionLoading ? 'Adding...' : 'Add Domain'}
-                </button>
               </div>
             </div>
           </div>

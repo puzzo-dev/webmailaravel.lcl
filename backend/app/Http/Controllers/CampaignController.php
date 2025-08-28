@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\Sender;
+use App\Models\User;
 use App\Services\CampaignService;
 use App\Services\UnifiedEmailSendingService;
 use App\Services\NotificationService;
@@ -13,6 +14,7 @@ use App\Traits\ValidationTrait;
 use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
@@ -99,17 +101,29 @@ class CampaignController extends Controller
             function () use ($request) {
                 $data = $request->input('validated_data');
                 
-                // Handle file attachments
+                // Handle file attachments using unified method
                 $attachmentPaths = [];
                 if ($request->hasFile('attachments')) {
                     foreach ($request->file('attachments') as $file) {
-                        $path = $file->store('attachments', 'local');
-                        $attachmentPaths[] = [
-                            'path' => $path,
-                            'name' => $file->getClientOriginalName(),
-                            'size' => $file->getSize(),
-                            'mime' => $file->getMimeType()
-                        ];
+                        $uploadResult = $this->uploadFile($file, 'attachments', [
+                            'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
+                            'max_size' => 10240, // 10MB
+                            'generate_unique_name' => true,
+                            'preserve_original_name' => false
+                        ]);
+                        
+                        if ($uploadResult['success']) {
+                            $attachmentPaths[] = [
+                                'path' => $uploadResult['path'],
+                                'original_name' => $file->getClientOriginalName(),
+                                'name' => $uploadResult['filename'],
+                                'size' => $uploadResult['size'],
+                                'mime_type' => $uploadResult['mime_type'],
+                                'checksum' => hash_file('md5', storage_path('app/' . $uploadResult['path']))
+                            ];
+                        } else {
+                            throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
+                        }
                     }
                 }
                 $data['attachments'] = $attachmentPaths;
@@ -133,38 +147,59 @@ class CampaignController extends Controller
     /**
      * Download campaign attachment
      */
-    public function downloadAttachment(Request $request, $campaignId, $attachmentIndex): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadAttachment(Request $request, $campaignId, $attachmentIndex)
     {
-        return $this->validateAndExecute(
-            $request,
-            [],
-            function () use ($campaignId, $attachmentIndex) {
-                $campaign = Campaign::findOrFail($campaignId);
-                
-                // Check authorization
-                $user = Auth::user();
-                if ($user->role !== 'admin' && $campaign->user_id !== $user->id) {
-                    throw new \Exception('Unauthorized access to campaign attachments');
-                }
-                
-                // Get attachments
-                $attachments = $campaign->attachments ? json_decode($campaign->attachments, true) : [];
-                
-                if (!isset($attachments[$attachmentIndex])) {
-                    throw new \Exception('Attachment not found');
-                }
-                
-                $attachment = $attachments[$attachmentIndex];
-                $filePath = storage_path('app/' . $attachment['path']);
-                
-                if (!file_exists($filePath)) {
-                    throw new \Exception('Attachment file not found on disk');
-                }
-                
-                return response()->download($filePath, $attachment['name']);
-            },
-            'download_attachment'
-        );
+        $campaign = Campaign::findOrFail($campaignId);
+        
+        // Check authorization
+        if (!$this->canAccessResource($campaign)) {
+            abort(403, 'Unauthorized access to campaign attachments');
+        }
+        
+        // Get attachments
+        $attachments = $campaign->attachments ?: [];
+        
+        if (!isset($attachments[$attachmentIndex])) {
+            abort(404, 'Attachment not found');
+        }
+        
+        $attachment = $attachments[$attachmentIndex];
+        $filePath = storage_path('app/' . $attachment['path']);
+        
+        if (!file_exists($filePath)) {
+            abort(404, 'Attachment file not found on disk');
+        }
+        
+        // Verify file integrity if checksum is available
+        if (isset($attachment['checksum'])) {
+            $currentChecksum = hash_file('md5', $filePath);
+            if ($currentChecksum !== $attachment['checksum']) {
+                Log::error('Attachment file corruption detected', [
+                    'campaign_id' => $campaignId,
+                    'attachment_index' => $attachmentIndex,
+                    'expected_checksum' => $attachment['checksum'],
+                    'actual_checksum' => $currentChecksum,
+                    'file_path' => $filePath
+                ]);
+                abort(422, 'Attachment file appears to be corrupted');
+            }
+        }
+        
+        // Use original_name if available, fallback to name
+        $downloadName = $attachment['original_name'] ?? $attachment['name'];
+        
+        // Get the file's MIME type
+        $mimeType = $attachment['mime_type'] ?? mime_content_type($filePath) ?? 'application/octet-stream';
+        
+        // Use streaming for large files to prevent memory issues
+        if (filesize($filePath) > (5 * 1024 * 1024)) { // 5MB threshold
+            return $this->streamFile($filePath, $downloadName);
+        }
+        
+        return response()->download($filePath, $downloadName, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'attachment; filename="' . $downloadName . '"',
+        ]);
     }
 
     /**
@@ -222,17 +257,29 @@ class CampaignController extends Controller
                     $data['content_variations'] = json_decode($data['content_variations'], true);
                 }
 
-                // Handle file attachments for full campaigns
+                // Handle file attachments for full campaigns using FileProcessingTrait
                 $attachmentPaths = [];
                 if ($request->hasFile('attachments')) {
                     foreach ($request->file('attachments') as $file) {
-                        $path = $file->store('attachments', 'local');
-                        $attachmentPaths[] = [
-                            'path' => $path,
-                            'name' => $file->getClientOriginalName(),
-                            'size' => $file->getSize(),
-                            'mime' => $file->getMimeType()
-                        ];
+                        $uploadResult = $this->uploadFile($file, 'attachments', [
+                            'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
+                            'max_size' => 10240, // 10MB
+                            'generate_unique_name' => true,
+                            'preserve_original_name' => false
+                        ]);
+                        
+                        if ($uploadResult['success']) {
+                            $attachmentPaths[] = [
+                                'path' => $uploadResult['path'],
+                                'original_name' => $file->getClientOriginalName(),
+                                'name' => $uploadResult['filename'],
+                                'size' => $uploadResult['size'],
+                                'mime_type' => $uploadResult['mime_type'],
+                                'checksum' => hash_file('md5', storage_path('app/' . $uploadResult['path']))
+                            ];
+                        } else {
+                            throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
+                        }
                     }
                 }
                 $data['attachments'] = $attachmentPaths;

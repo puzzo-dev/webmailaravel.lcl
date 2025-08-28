@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, useParams } from 'react-router-dom';
-import { createCampaign, updateCampaign, fetchCampaign, fetchSenders, fetchDomains, fetchContents } from '../../store/slices/campaignSlice';
-import { toast } from 'react-hot-toast';
-import { getErrorMessage } from '../../utils/errorHandler';
+import { useNavigate } from 'react-router-dom';
+import { createCampaign, fetchSenders, fetchDomains, fetchContents } from '../../store/slices/campaignSlice';
+import toast from 'react-hot-toast';
 import {
   HiUpload,
   HiEye,
@@ -38,19 +37,14 @@ const SafeSelect = ({ items = [], renderItem, placeholder = "Select..." }) => {
 const CampaignBuilder = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { id } = useParams();
-  const isEditMode = Boolean(id);
-  
   const sendersState = useSelector((state) => state.senders);
   const domainsState = useSelector((state) => state.domains);
   const contentsState = useSelector((state) => state.contents);
-  const campaignState = useSelector((state) => state.campaigns);
   const authState = useSelector((state) => state.auth);
   
   const { senders = [], isLoading: isSendersLoading } = sendersState || {};
   const { domains = [], isLoading: isDomainsLoading } = domainsState || {};
   const { contents = [], isLoading: isContentsLoading } = contentsState || {};
-  const { campaigns = [], currentCampaign = null, isLoading: isCampaignLoading } = campaignState || {};
   const { user, currentView } = authState || {};
 
   // Filter domains and senders based on current view
@@ -86,13 +80,11 @@ const CampaignBuilder = () => {
     enable_template_variables: false,
     template_variables: '',
     recipient_file: null,
-    attachments: [],
   });
 
   const [previewMode, setPreviewMode] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedAttachments, setSelectedAttachments] = useState([]);
   const [enableContentSwitching, setEnableContentSwitching] = useState(false);
   const [contentVariations, setContentVariations] = useState([
     { subject: '', content: '' }
@@ -103,29 +95,7 @@ const CampaignBuilder = () => {
     dispatch(fetchSenders());
     dispatch(fetchDomains());
     dispatch(fetchContents());
-    
-    // If editing, fetch the campaign data
-    if (isEditMode && id) {
-      dispatch(fetchCampaign(id));
-    }
-  }, [dispatch, isEditMode, id]);
-
-  // Populate form data when editing and campaign data is loaded
-  useEffect(() => {
-    if (isEditMode && currentCampaign && currentCampaign.id === parseInt(id)) {
-      setFormData({
-        name: currentCampaign.name || '',
-        subject: currentCampaign.subject || '',
-        email_content: currentCampaign.email_content || '',
-        enable_open_tracking: currentCampaign.enable_open_tracking ?? true,
-        enable_click_tracking: currentCampaign.enable_click_tracking ?? true,
-        enable_unsubscribe_link: currentCampaign.enable_unsubscribe_link ?? true,
-        enable_template_variables: currentCampaign.enable_template_variables ?? false,
-        template_variables: currentCampaign.template_variables || '',
-        recipient_file: null, // Don't pre-populate file uploads
-      });
-    }
-  }, [isEditMode, currentCampaign, id]);
+  }, [dispatch]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -144,25 +114,6 @@ const CampaignBuilder = () => {
         recipient_file: file,
       }));
     }
-  };
-
-  const handleAttachmentUpload = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      setSelectedAttachments(prev => [...prev, ...files]);
-      setFormData(prev => ({
-        ...prev,
-        attachments: [...prev.attachments, ...files],
-      }));
-    }
-  };
-
-  const removeAttachment = (index) => {
-    setSelectedAttachments(prev => prev.filter((_, i) => i !== index));
-    setFormData(prev => ({
-      ...prev,
-      attachments: prev.attachments.filter((_, i) => i !== index),
-    }));
   };
 
   const handleContentVariationChange = (idx, field, value) => {
@@ -268,11 +219,6 @@ const CampaignBuilder = () => {
         campaignData.append('recipient_file', selectedFile);
       }
 
-      // Add attachments
-      selectedAttachments.forEach((file, index) => {
-        campaignData.append(`attachments[${index}]`, file);
-      });
-
       if (formData.template_variables) {
         campaignData.append('template_variables', formData.template_variables);
       }
@@ -284,18 +230,12 @@ const CampaignBuilder = () => {
 
 
 
-      let result;
-      if (isEditMode) {
-        result = await dispatch(updateCampaign({ id, data: campaignData })).unwrap();
-        toast.success('Campaign updated successfully');
-      } else {
-        result = await dispatch(createCampaign(campaignData)).unwrap();
-        toast.success('Campaign created successfully');
-      }
+      const result = await dispatch(createCampaign(campaignData)).unwrap();
+      toast.success('Campaign created successfully');
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Campaign creation error:', error);
-      toast.error(getErrorMessage(error));
+      toast.error(error || 'Failed to create campaign');
     } finally {
       setIsSubmitting(false);
     }
@@ -340,18 +280,12 @@ const CampaignBuilder = () => {
 
 
 
-      let result;
-      if (isEditMode) {
-        result = await dispatch(updateCampaign({ id, data: campaignData })).unwrap();
-        toast.success('Draft updated successfully');
-      } else {
-        result = await dispatch(createCampaign(campaignData)).unwrap();
-        toast.success('Draft saved successfully');
-      }
+      const result = await dispatch(createCampaign(campaignData)).unwrap();
+      toast.success('Draft saved successfully');
       navigate(`/campaigns/${result.data?.id || result.id}`);
     } catch (error) {
       console.error('Draft save error:', error);
-      toast.error(getErrorMessage(error));
+      toast.error(error || 'Failed to save draft');
     } finally {
       setIsSubmitting(false);
     }
@@ -375,17 +309,15 @@ const CampaignBuilder = () => {
         feature="advanced campaign builder"
         customMessage="Upgrade to Pro to unlock the advanced campaign builder with custom templates, A/B testing, automation, and premium sending features."
       />
-      <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                {isEditMode ? 'Edit Campaign' : 'Create New Campaign'}
-              </h1>
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">Create New Campaign</h1>
               {isAdmin && (
-                <span className={`mt-2 sm:mt-0 sm:ml-2 px-2 py-1 text-xs font-medium rounded-full inline-block ${isAdminView
+                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${isAdminView
                     ? 'bg-blue-100 text-blue-800'
                     : 'bg-green-100 text-green-800'
                   }`}>
@@ -393,9 +325,9 @@ const CampaignBuilder = () => {
                 </span>
               )}
             </div>
-            <p className="text-gray-600 mt-1 text-sm sm:text-base">Build and configure your email campaign</p>
+            <p className="text-gray-600 mt-1">Build and configure your email campaign</p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+          <div className="flex items-center space-x-3">
             <button
               type="button"
               onClick={handleSaveDraft}
@@ -442,24 +374,24 @@ const CampaignBuilder = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-        <label className="flex items-start sm:items-center space-x-2">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <label className="flex items-center space-x-2">
           <input
             type="checkbox"
             checked={enableContentSwitching}
             onChange={e => setEnableContentSwitching(e.target.checked)}
-            className="form-checkbox mt-1 sm:mt-0"
+            className="form-checkbox"
           />
-          <span className="text-sm sm:text-base">Enable Content Switching (A/B test multiple email contents)</span>
+          <span>Enable Content Switching (A/B test multiple email contents)</span>
         </label>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Information</h3>
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="form-label">Campaign Name *</label>
@@ -553,7 +485,6 @@ const CampaignBuilder = () => {
                     <label className="form-label">Email Content *</label>
                     <QuillEditor
                       key={`variation-${idx}`}
-                      id={`variation-${idx}`}
                       value={variation.content}
                       onChange={data => handleContentVariationChange(idx, 'content', data.html)}
                       placeholder="Enter your email content here. You can use HTML tags for formatting."
@@ -615,6 +546,7 @@ const CampaignBuilder = () => {
                         <HiTrash className="h-4 w-4 mr-1" />
                         Remove
                       </button>
+
                     </div>
                   </div>
                 ) : (
@@ -640,60 +572,6 @@ const CampaignBuilder = () => {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* File Attachments */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">File Attachments</h3>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                <div className="text-center">
-                  <HiUpload className="mx-auto h-8 w-8 text-gray-400" />
-                  <div className="mt-4">
-                    <label htmlFor="attachment-upload" className="btn btn-secondary cursor-pointer">
-                      <HiUpload className="h-5 w-5 mr-2" />
-                      Add Attachments
-                    </label>
-                    <input
-                      id="attachment-upload"
-                      name="attachments"
-                      type="file"
-                      multiple
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
-                      onChange={handleAttachmentUpload}
-                      className="hidden"
-                    />
-                  </div>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Supported formats: PDF, DOC, XLS, PPT, Images, ZIP (Max 10MB each)
-                  </p>
-                </div>
-              </div>
-              
-              {selectedAttachments.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-gray-900">Selected Attachments:</h4>
-                  {selectedAttachments.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <HiUpload className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                          <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <HiTrash className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 

@@ -12,7 +12,8 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public $campaign;
+    public $campaignId;
+    public $campaignName;
     public $oldStatus;
     public $newStatus;
 
@@ -21,7 +22,8 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
      */
     public function __construct(Campaign $campaign, string $oldStatus, string $newStatus)
     {
-        $this->campaign = $campaign;
+        $this->campaignId = $campaign->id;
+        $this->campaignName = $campaign->name;
         $this->oldStatus = $oldStatus;
         $this->newStatus = $newStatus;
     }
@@ -54,10 +56,10 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Campaign Status Updated')
             ->greeting('Hello!')
-            ->line("The status of your campaign '{$this->campaign->name}' has been updated.")
+            ->line("The status of your campaign '{$this->campaignName}' has been updated.")
             ->line("Previous status: {$this->oldStatus}")
             ->line("New status: {$this->newStatus}")
-            ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
+            ->action('View Campaign', url('/campaigns/' . $this->campaignId))
             ->line('Thank you for using our email marketing platform!');
     }
 
@@ -126,22 +128,17 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
             'type' => 'info'
         ];
 
-        // Add specific context for certain statuses
+        // Add specific context for certain statuses (removed campaign model references)
         $additionalContext = '';
-        if ($this->newStatus === 'failed' && isset($this->campaign->error_message)) {
-            $additionalContext = " Error: {$this->campaign->error_message}";
-        } elseif ($this->newStatus === 'completed' && isset($this->campaign->total_sent)) {
-            $additionalContext = " Total emails sent: {$this->campaign->total_sent}";
-        }
         
         return [
-            'campaign_id' => $this->campaign->id,
-            'campaign_name' => $this->campaign->name,
+            'campaign_id' => $this->campaignId,
+            'campaign_name' => $this->campaignName,
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,
             'type' => 'campaign_status',
-            'action_url' => '/campaigns/' . $this->campaign->id,
-            'message' => "Campaign '{$this->campaign->name}' {$config['message']}{$additionalContext}",
+            'action_url' => '/campaigns/' . $this->campaignId,
+            'message' => "Campaign '{$this->campaignName}' {$config['message']}{$additionalContext}",
             'title' => $config['title'],
             'notification_type' => $config['type'],
             'timestamp' => now()->toISOString(),
@@ -153,17 +150,22 @@ class CampaignStatusUpdated extends Notification implements ShouldQueue
      */
     public function toTelegram(object $notifiable): array
     {
-        $config = $this->getStatusConfig($this->newStatus);
+        $statusConfig = [
+            'draft' => ['title' => 'Campaign Saved'],
+            'scheduled' => ['title' => 'Campaign Scheduled'],
+            'sending' => ['title' => 'Campaign Sending'],
+            'sent' => ['title' => 'Campaign Completed'],
+            'completed' => ['title' => 'Campaign Completed'],
+            'paused' => ['title' => 'Campaign Paused'],
+            'cancelled' => ['title' => 'Campaign Cancelled'],
+            'failed' => ['title' => 'Campaign Failed'],
+        ];
+        
+        $config = $statusConfig[$this->newStatus] ?? ['title' => 'Campaign Status Updated'];
         
         $message = "🔔 <b>{$config['title']}</b>\n\n";
-        $message .= "📧 Campaign: <b>{$this->campaign->name}</b>\n";
+        $message .= "📧 Campaign: <b>{$this->campaignName}</b>\n";
         $message .= "📊 Status: {$this->oldStatus} → {$this->newStatus}\n";
-        
-        if ($this->newStatus === 'failed' && !empty($this->campaign->error_message)) {
-            $message .= "❌ Error: {$this->campaign->error_message}\n";
-        } elseif ($this->newStatus === 'completed' && isset($this->campaign->total_sent)) {
-            $message .= "✅ Total sent: {$this->campaign->total_sent} emails\n";
-        }
         
         $message .= "\nView your campaign dashboard for more details.";
         

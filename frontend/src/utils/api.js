@@ -1,5 +1,4 @@
 import axios from 'axios';
-import logger from './logger';
 
 // API Base URL
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -13,6 +12,9 @@ axios.defaults.withCredentials = true; // Enable sending cookies with requests
 const formDataAxios = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  timeout: 300000, // 5 minutes for large file uploads
+  maxContentLength: 50 * 1024 * 1024, // 50MB
+  maxBodyLength: 50 * 1024 * 1024, // 50MB
   // Don't set Content-Type - let axios set it automatically for FormData
 });
 
@@ -32,26 +34,10 @@ export const api = {
     try {
       const queryString = new URLSearchParams(params).toString();
       const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-      
-      // Merge params into axios config properly
-      const axiosConfig = {
-        ...config,
-        params: Object.keys(params).length > 0 ? params : undefined
-      };
-      
-      // For blob responses, ensure proper handling of binary data
-      if (config.responseType === 'blob') {
-        axiosConfig.responseEncoding = 'binary';
-      }
-      
-      const response = await axios.get(endpoint, axiosConfig);
-      
+      const response = await axios.get(url, config);
       return response;
     } catch (error) {
-      // Don't log 401 errors during auth initialization
-      if (!(config._isAuthInit && error.response?.status === 401)) {
-        logger.apiError('GET', error);
-      }
+      console.error('API GET error:', error.response?.status, error.response?.data);
       throw error;
     }
   },
@@ -61,15 +47,18 @@ export const api = {
     try {
       // Handle FormData - use separate axios instance
       if (data instanceof FormData) {
-        const response = await formDataAxios.post(endpoint, data, config);
+        // Ensure no Content-Type is set in config for FormData
+        const formDataConfig = { ...config };
+        delete formDataConfig.headers?.['Content-Type'];
+        
+        const response = await formDataAxios.post(endpoint, data, formDataConfig);
         return response;
       } else {
         const response = await axios.post(endpoint, data, config);
         return response;
       }
     } catch (error) {
-      logger.apiError('POST', error);
-
+      console.error('API POST error:', error.response?.status, error.response?.data);
       throw error;
     }
   },
@@ -79,42 +68,40 @@ export const api = {
     try {
       // Handle FormData - use separate axios instance
       if (data instanceof FormData) {
-        const response = await formDataAxios.put(endpoint, data, config);
+        // Ensure no Content-Type is set in config for FormData
+        const formDataConfig = { ...config };
+        delete formDataConfig.headers?.['Content-Type'];
+        
+        const response = await formDataAxios.put(endpoint, data, formDataConfig);
         return response;
       } else {
         const response = await axios.put(endpoint, data, config);
         return response;
       }
     } catch (error) {
-      logger.apiError('PUT', error);
+      console.error('API PUT error:', error.response?.status, error.response?.data);
       throw error;
     }
   },
 
   // DELETE request
-  delete: async (endpoint, data = {}, config = {}) => {
+  delete: async (endpoint, data = {}) => {
     try {
-      const response = await axios.delete(endpoint, { data, ...config });
+      const response = await axios.delete(endpoint, { data });
       return response;
     } catch (error) {
-      logger.apiError('DELETE', error);
+      console.error('API DELETE error:', error.response?.status, error.response?.data);
       throw error;
     }
   },
 
   // PATCH request
-  patch: async (endpoint, data = {}, config = {}) => {
+  patch: async (endpoint, data = {}) => {
     try {
-      // Handle FormData - use separate axios instance
-      if (data instanceof FormData) {
-        const response = await formDataAxios.patch(endpoint, data, config);
-        return response;
-      } else {
-        const response = await axios.patch(endpoint, data, config);
-        return response;
-      }
+      const response = await axios.patch(endpoint, data);
+      return response;
     } catch (error) {
-      logger.apiError('PATCH', error);
+      console.error('API PATCH error:', error.response?.status, error.response?.data);
       throw error;
     }
   },

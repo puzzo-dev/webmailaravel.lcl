@@ -167,25 +167,21 @@ const AdminCampaigns = () => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { color: 'bg-gray-100 text-gray-800', icon: ClockIcon, label: 'Draft' },
-      scheduled: { color: 'bg-blue-100 text-blue-800', icon: CalendarIcon, label: 'Scheduled' },
-      running: { color: 'bg-green-100 text-green-800', icon: PlayIcon, label: 'Running' },
-      active: { color: 'bg-green-100 text-green-800', icon: PlayIcon, label: 'Active' },
-      processing: { color: 'bg-blue-100 text-blue-800', icon: PlayIcon, label: 'Processing' },
-      sending: { color: 'bg-yellow-100 text-yellow-800', icon: PlayIcon, label: 'Sending' },
-      completed: { color: 'bg-green-100 text-green-800', icon: CheckCircleIcon, label: 'Completed' },
-      paused: { color: 'bg-orange-100 text-orange-800', icon: PauseIcon, label: 'Paused' },
-      stopped: { color: 'bg-red-100 text-red-800', icon: XCircleIcon, label: 'Stopped' },
-      failed: { color: 'bg-red-100 text-red-800', icon: XCircleIcon, label: 'Failed' }
+      draft: { color: 'bg-gray-100 text-gray-800', icon: ClockIcon },
+      scheduled: { color: 'bg-blue-100 text-blue-800', icon: CalendarIcon },
+      sending: { color: 'bg-yellow-100 text-yellow-800', icon: PlayIcon },
+      completed: { color: 'bg-green-100 text-green-800', icon: CheckCircleIcon },
+      paused: { color: 'bg-orange-100 text-orange-800', icon: PauseIcon },
+      failed: { color: 'bg-red-100 text-red-800', icon: XCircleIcon }
     };
     
-    const config = statusConfig[status?.toLowerCase()] || statusConfig.draft;
+    const config = statusConfig[status] || statusConfig.draft;
     const Icon = config.icon;
     
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         <Icon className="w-3 h-3 mr-1" />
-        {config.label}
+        {status}
       </span>
     );
   };
@@ -249,7 +245,7 @@ const AdminCampaigns = () => {
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>{typeof error === 'string' ? error : error?.message || 'An error occurred'}</p>
+                <p>{error}</p>
               </div>
             </div>
           </div>

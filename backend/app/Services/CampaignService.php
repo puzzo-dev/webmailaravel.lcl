@@ -97,7 +97,7 @@ class CampaignService
                 'enable_click_tracking' => $data['enable_click_tracking'] ?? true,
                 'enable_unsubscribe_link' => $data['enable_unsubscribe_link'] ?? true,
                 'recipient_field_mapping' => $data['recipient_field_mapping'] ?? null,
-                'attachments' => !empty($data['attachments']) ? json_encode($data['attachments']) : null,
+                'attachments' => !empty($data['attachments']) ? $data['attachments'] : null,
                 'status' => 'DRAFT',
             ]);
 
@@ -764,7 +764,7 @@ class CampaignService
                 'name' => 'Single Email: ' . $data['subject'],
                 'type' => 'single',
                 'subject' => $data['subject'],
-                'status' => 'SENDING',
+                'status' => 'sending',
                 'sender_ids' => [$sender->id],
                 'single_sender_id' => $sender->id,
                 'single_recipient_email' => $data['to'],
@@ -1132,8 +1132,8 @@ class CampaignService
         $remainingRecipients = 0;
 
         try {
-            // Check if campaign is still active/running
-            if (! in_array($campaign->status, ['RUNNING', 'active'])) {
+            // Check if campaign is still active/running (case-insensitive)
+            if (! in_array(strtolower($campaign->status), ['running', 'active', 'sending', 'processing'])) {
                 $this->logInfo('Campaign is not in running state, skipping processing', [
                     'campaign_id' => $campaign->id,
                     'status' => $campaign->status,

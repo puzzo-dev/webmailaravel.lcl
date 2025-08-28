@@ -45,8 +45,8 @@ class ProcessCampaignJob implements ShouldQueue
                 'batch_size' => $this->batchSize,
             ]);
 
-            // Check if campaign is still running
-            if (!in_array(strtoupper($campaign->status), ['SENDING', 'ACTIVE', 'RUNNING', 'PROCESSING'])) {
+            // Check if campaign is still running (use lowercase for consistency)
+            if (!in_array(strtolower($campaign->status), ['sending', 'active', 'running', 'processing'])) {
                 Log::info('Campaign is not running, skipping processing', [
                     'campaign_id' => $this->campaignId,
                     'status' => $campaign->status

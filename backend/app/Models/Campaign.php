@@ -45,6 +45,7 @@ class Campaign extends Model
         'enable_click_tracking',
         'enable_unsubscribe_link',
         'recipient_field_mapping',
+        'attachments',
         'started_at',
         'completed_at',
     ];
@@ -59,6 +60,7 @@ class Campaign extends Model
         'enable_click_tracking' => 'boolean',
         'enable_unsubscribe_link' => 'boolean',
         'recipient_field_mapping' => 'array',
+        'attachments' => 'array',
         'total_sent' => 'integer',
         'total_failed' => 'integer',
         'recipient_count' => 'integer',

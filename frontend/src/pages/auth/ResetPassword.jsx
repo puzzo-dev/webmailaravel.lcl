@@ -3,8 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { resetPassword, clearError } from '../../store/slices/authSlice';
-import { toast } from 'react-hot-toast';
-import { getErrorMessage } from '../../utils/errorHandler';
+import toast from 'react-hot-toast';
 import { HiLockClosed, HiEye, HiEyeOff, HiArrowLeft } from 'react-icons/hi';
 
 const ResetPassword = () => {
@@ -30,8 +29,7 @@ const ResetPassword = () => {
 
   useEffect(() => {
     if (error) {
-      const errorMessage = getErrorMessage(error);
-      toast.error(errorMessage);
+      toast.error(error);
       dispatch(clearError());
     }
   }, [error, dispatch]);

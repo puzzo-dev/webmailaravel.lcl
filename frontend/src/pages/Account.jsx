@@ -33,7 +33,6 @@ import {
   HiSparkles,
   HiRefresh,
   HiClipboard,
-  HiExternalLink,
 } from 'react-icons/hi';
 import {
   updateProfile,
@@ -44,7 +43,6 @@ import {
   updateGeneralSettings,
   updateNotificationSettings,
   updateApiSettings,
-  updateSecuritySettings,
   generateApiKey,
   updateTelegramSettings,
   testTelegramConnection
@@ -111,18 +109,11 @@ const Account = () => {
     time_format: '12h',
   });
   const [notificationSettings, setNotificationSettings] = useState({
-    email_notifications_enabled: true,
-    telegram_notifications_enabled: false,
-    telegram_chat_id: '',
-    notification_preferences: {
-      campaign_completed: { email: true, telegram: false },
-      campaign_failed: { email: true, telegram: false },
-      campaign_started: { email: false, telegram: false },
-      new_login: { email: true, telegram: true },
-      security_alerts: { email: true, telegram: true },
-      subscription_expiry: { email: true, telegram: false },
-      high_bounce_rate: { email: true, telegram: false },
-    },
+    email_notifications: true,
+    campaign_completed: true,
+    campaign_failed: true,
+    new_login: true,
+    security_alerts: true,
   });
   const [securitySettings, setSecuritySettings] = useState({
     two_factor_auth: false,
@@ -303,23 +294,10 @@ const Account = () => {
   };
 
   const handleNotificationChange = (e) => {
-    const { name, checked, value, type } = e.target;
+    const { name, checked } = e.target;
     setNotificationSettings(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
-  const handleNotificationPreferenceChange = (notificationType, channel, enabled) => {
-    setNotificationSettings(prev => ({
-      ...prev,
-      notification_preferences: {
-        ...prev.notification_preferences,
-        [notificationType]: {
-          ...prev.notification_preferences[notificationType],
-          [channel]: enabled,
-        },
-      },
+      [name]: checked,
     }));
   };
 
@@ -516,7 +494,7 @@ const Account = () => {
             <HiExclamationCircle className="h-5 w-5 text-red-400" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{typeof error === 'string' ? error : error?.message || 'An error occurred'}</div>
+              <div className="mt-2 text-sm text-red-700">{error}</div>
             </div>
           </div>
         </div>
@@ -820,111 +798,74 @@ const Account = () => {
                 {/* Notification Settings */}
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Notification Settings</h3>
-                  <form onSubmit={handleNotificationSubmit} className="space-y-6">
-                    
-                    {/* Channel Settings */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-900 mb-3">Notification Channels</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <HiMail className="h-5 w-5 text-gray-400 mr-2" />
-                            <div>
-                              <span className="text-sm font-medium text-gray-900">Email Notifications</span>
-                              <p className="text-xs text-gray-500">Receive notifications via email</p>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            name="email_notifications_enabled"
-                            checked={notificationSettings.email_notifications_enabled}
-                            onChange={handleNotificationChange}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
+                  <form onSubmit={handleNotificationSubmit} className="space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">Email Notifications</h4>
+                          <p className="text-sm text-gray-500">Receive notifications via email</p>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <HiDeviceMobile className="h-5 w-5 text-gray-400 mr-2" />
-                            <div>
-                              <span className="text-sm font-medium text-gray-900">Telegram Notifications</span>
-                              <p className="text-xs text-gray-500">Receive notifications via Telegram</p>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            name="telegram_notifications_enabled"
-                            checked={notificationSettings.telegram_notifications_enabled}
-                            onChange={handleNotificationChange}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
+                        <input
+                          type="checkbox"
+                          name="email_notifications"
+                          checked={notificationSettings.email_notifications}
+                          onChange={handleNotificationChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">Campaign Completed</h4>
+                          <p className="text-sm text-gray-500">Notify when campaigns are completed</p>
                         </div>
-                        {notificationSettings.telegram_notifications_enabled && (
-                          <div className="mt-2 pl-7">
-                            <input
-                              type="text"
-                              name="telegram_chat_id"
-                              value={notificationSettings.telegram_chat_id}
-                              onChange={handleNotificationChange}
-                              placeholder="Enter your Telegram Chat ID"
-                              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Start a chat with our bot @YourBotName and send /start to get your Chat ID
-                            </p>
-                          </div>
-                        )}
+                        <input
+                          type="checkbox"
+                          name="campaign_completed"
+                          checked={notificationSettings.campaign_completed}
+                          onChange={handleNotificationChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">Campaign Failed</h4>
+                          <p className="text-sm text-gray-500">Notify when campaigns fail</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          name="campaign_failed"
+                          checked={notificationSettings.campaign_failed}
+                          onChange={handleNotificationChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">New Login</h4>
+                          <p className="text-sm text-gray-500">Notify on new device login</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          name="new_login"
+                          checked={notificationSettings.new_login}
+                          onChange={handleNotificationChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">Security Alerts</h4>
+                          <p className="text-sm text-gray-500">Notify on security events</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          name="security_alerts"
+                          checked={notificationSettings.security_alerts}
+                          onChange={handleNotificationChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
                       </div>
                     </div>
-
-                    {/* Notification Types */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900 mb-3">Notification Types</h4>
-                      <div className="space-y-4">
-                        {Object.entries({
-                          campaign_completed: { title: 'Campaign Completed', desc: 'When campaigns finish successfully' },
-                          campaign_failed: { title: 'Campaign Failed', desc: 'When campaigns encounter errors' },
-                          campaign_started: { title: 'Campaign Started', desc: 'When campaigns begin sending' },
-                          new_login: { title: 'New Login', desc: 'When someone logs into your account' },
-                          security_alerts: { title: 'Security Alerts', desc: 'Important security notifications' },
-                          subscription_expiry: { title: 'Subscription Expiry', desc: 'When your subscription is about to expire' },
-                          high_bounce_rate: { title: 'High Bounce Rate', desc: 'When bounce rates exceed thresholds' },
-                        }).map(([key, config]) => (
-                          <div key={key} className="border border-gray-200 rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div>
-                                <h5 className="text-sm font-medium text-gray-900">{config.title}</h5>
-                                <p className="text-xs text-gray-500">{config.desc}</p>
-                              </div>
-                            </div>
-                            <div className="flex space-x-6 mt-2">
-                              <label className="flex items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={notificationSettings.notification_preferences[key]?.email || false}
-                                  onChange={(e) => handleNotificationPreferenceChange(key, 'email', e.target.checked)}
-                                  disabled={!notificationSettings.email_notifications_enabled}
-                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
-                                />
-                                <HiMail className="h-4 w-4 text-gray-400 ml-2 mr-1" />
-                                <span className="text-sm text-gray-600">Email</span>
-                              </label>
-                              <label className="flex items-center">
-                                <input
-                                  type="checkbox"
-                                  checked={notificationSettings.notification_preferences[key]?.telegram || false}
-                                  onChange={(e) => handleNotificationPreferenceChange(key, 'telegram', e.target.checked)}
-                                  disabled={!notificationSettings.telegram_notifications_enabled}
-                                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
-                                />
-                                <HiDeviceMobile className="h-4 w-4 text-gray-400 ml-2 mr-1" />
-                                <span className="text-sm text-gray-600">Telegram</span>
-                              </label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
                     <div className="flex justify-end">
                       <button 
                         type="submit" 
@@ -943,205 +884,89 @@ const Account = () => {
                 </div>
 
                 {/* API Settings */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center">
-                      <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                        <HiKey className="h-5 w-5 text-blue-600" />
-                      </div>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">API Settings</h3>
+                  <form onSubmit={handleApiSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">API Settings</h3>
-                        <p className="text-sm text-gray-500">Manage your API keys and integration settings</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 space-y-6">
-                    {/* Current API Key Section */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-blue-900">Current API Key</h4>
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            apiSettings.api_key ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {apiSettings.api_key ? 'Active' : 'No Key'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3">
+                        <label className="form-label">API Key</label>
                         <div className="relative">
                           <input
                             type={showApiKey ? 'text' : 'password'}
-                            value={apiSettings.api_key || 'No API key generated'}
-                            className="w-full px-4 py-3 bg-white border border-blue-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            name="api_key"
+                            value={apiSettings.api_key}
+                            onChange={handleApiChange}
+                            className="input pr-10"
                             readOnly
-                            placeholder="Generate an API key to get started"
                           />
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-1">
-                            <button
-                              type="button"
-                              onClick={() => setShowApiKey(!showApiKey)}
-                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                              title={showApiKey ? 'Hide API key' : 'Show API key'}
-                            >
-                              {showApiKey ? (
-                                <HiEyeOff className="h-4 w-4" />
-                              ) : (
-                                <HiEye className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          >
+                            {showApiKey ? (
+                              <HiEyeOff className="h-5 w-5 text-gray-400" />
+                            ) : (
+                              <HiEye className="h-5 w-5 text-gray-400" />
+                            )}
+                          </button>
                         </div>
-                        
-                        <div className="flex flex-wrap gap-2">
+                        <div className="mt-2 flex space-x-2">
                           <button
                             type="button"
                             onClick={generateNewApiKey}
-                            disabled={isSubmitting}
-                            className="inline-flex items-center px-3 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="btn btn-secondary btn-sm"
                           >
-                            {isSubmitting ? (
-                              <div className="animate-spin h-4 w-4 mr-2 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                            ) : (
-                              <HiRefresh className="h-4 w-4 mr-2" />
-                            )}
-                            {apiSettings.api_key ? 'Regenerate Key' : 'Generate Key'}
+                            Generate New Key
                           </button>
-                          
-                          {apiSettings.api_key && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(apiSettings.api_key);
-                                  toast.success('API key copied to clipboard!');
-                                } catch (error) {
-                                  toast.error('Failed to copy API key');
-                                }
-                              }}
-                              className="inline-flex items-center px-3 py-2 border border-green-300 rounded-md text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
-                            >
-                              <HiClipboard className="h-4 w-4 mr-2" />
-                              Copy Key
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(apiSettings.api_key)}
+                            className="btn btn-secondary btn-sm"
+                          >
+                            Copy Key
+                          </button>
                         </div>
-                        
-                        {apiSettings.api_key && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-                            <div className="flex items-start">
-                              <HiExclamation className="h-5 w-5 text-amber-400 mt-0.5 mr-2 flex-shrink-0" />
-                              <div className="text-sm text-amber-700">
-                                <p className="font-medium">Keep your API key secure</p>
-                                <p className="mt-1">Store it safely and never share it publicly. Regenerating will invalidate the current key.</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                      </div>
+                      <div>
+                        <label className="form-label">Webhook URL</label>
+                        <input
+                          type="url"
+                          name="webhook_url"
+                          value={apiSettings.webhook_url}
+                          onChange={handleApiChange}
+                          className="input"
+                          placeholder="https://your-domain.com/webhook"
+                        />
+                      </div>
+                      <div>
+                        <label className="form-label">Rate Limit (requests per hour)</label>
+                        <input
+                          type="number"
+                          name="rate_limit"
+                          value={apiSettings.rate_limit}
+                          onChange={handleApiChange}
+                          className="input"
+                          min="100"
+                          max="10000"
+                        />
                       </div>
                     </div>
-                    
-                    {/* API Configuration */}
-                    <form onSubmit={handleApiSubmit} className="space-y-4">
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Webhook URL
-                              <span className="text-gray-400 font-normal ml-1">(Optional)</span>
-                            </label>
-                            <input
-                              type="url"
-                              name="webhook_url"
-                              value={apiSettings.webhook_url}
-                              onChange={handleApiChange}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                              placeholder="https://your-domain.com/webhook"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Receive real-time notifications about campaign events
-                            </p>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Rate Limit
-                              <span className="text-gray-400 font-normal ml-1">(requests per hour)</span>
-                            </label>
-                            <select
-                              name="rate_limit"
-                              value={apiSettings.rate_limit}
-                              onChange={handleApiChange}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                            >
-                              <option value="100">100 requests/hour (Basic)</option>
-                              <option value="500">500 requests/hour (Standard)</option>
-                              <option value="1000">1,000 requests/hour (Premium)</option>
-                              <option value="5000">5,000 requests/hour (Enterprise)</option>
-                              <option value="10000">10,000 requests/hour (Unlimited)</option>
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Higher limits may require subscription upgrade
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <h5 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                            <HiInformationCircle className="h-4 w-4 mr-2 text-blue-500" />
-                            API Usage Guidelines
-                          </h5>
-                          <ul className="text-xs text-gray-600 space-y-2">
-                            <li className="flex items-start">
-                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-                              Use HTTPS endpoints for secure communication
-                            </li>
-                            <li className="flex items-start">
-                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-                              Include your API key in the Authorization header
-                            </li>
-                            <li className="flex items-start">
-                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-                              Monitor your usage to avoid rate limits
-                            </li>
-                            <li className="flex items-start">
-                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
-                              Webhook URLs must return 200 status codes
-                            </li>
-                          </ul>
-                          
-                          <div className="mt-4 pt-3 border-t border-gray-200">
-                            <a 
-                              href="/api-docs" 
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
-                            >
-                              <HiExternalLink className="h-3 w-3 mr-1" />
-                              View API Documentation
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-end pt-4 border-t border-gray-200">
-                        <button 
-                          type="submit" 
-                          disabled={isSubmitting}
-                          className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {isSubmitting ? (
-                            <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
-                          ) : (
-                            <HiSave className="h-4 w-4 mr-2" />
-                          )}
-                          Save API Settings
-                        </button>
-                      </div>
-                    </form>
-                  </div>
+                    <div className="flex justify-end">
+                      <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="btn btn-primary flex items-center"
+                      >
+                        {isSubmitting ? (
+                          <div className="loading-spinner h-4 w-4 mr-2"></div>
+                        ) : (
+                          <HiGlobe className="h-5 w-5 mr-2" />
+                        )}
+                        Save API Settings
+                      </button>
+                    </div>
+                  </form>
                 </div>
 
                 {/* Telegram Settings */}

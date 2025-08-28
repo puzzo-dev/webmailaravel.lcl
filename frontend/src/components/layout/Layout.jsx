@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { logout } from '../../store/slices/authSlice';
@@ -8,7 +8,6 @@ import { HiCreditCard, HiX, HiStar, HiCheckCircle } from 'react-icons/hi';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import MobileMenu from './MobileMenu';
-import ViewGuard from '../routing/ViewGuard';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -39,9 +38,6 @@ const Layout = () => {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
-      {/* View Guard for automatic redirection */}
-      <ViewGuard />
-      
       {/* Sidebar */}
       <Sidebar 
         user={user} 
@@ -68,13 +64,7 @@ const Layout = () => {
         {/* Page content */}
         <main className="flex-1 relative overflow-y-auto py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 relative">
-            <Suspense fallback={
-              <div className="flex items-center justify-center min-h-[200px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-blue-600"></div>
-              </div>
-            }>
-              <Outlet />
-            </Suspense>
+            <Outlet />
           </div>
           
           {/* Subscription Overlay - positioned to cover only the main content area */}

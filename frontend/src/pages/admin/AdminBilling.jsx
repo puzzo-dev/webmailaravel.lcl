@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   HiCreditCard,
@@ -64,49 +64,23 @@ const AdminBilling = () => {
     is_active: true
   });
 
-  // Manual payment form state for processing pending subscriptions (top up)
-  const [manualPaymentForm, setManualPaymentForm] = useState({
-    payment_method: 'cash',
-    payment_reference: '',
-    amount_paid: 0,
-    currency: 'USD',
-    notes: ''
-  });
-
-  // Helper to generate a unique payment reference client-side
-  const generatePaymentReference = (subscriptionId) => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    const rand = Math.random().toString(16).slice(2, 10).toUpperCase();
-    return `TOPUP-${y}${m}${d}${hh}${mm}${ss}-${subscriptionId}-${rand}`;
-  };
-
   useEffect(() => {
     let isMounted = true;
     let timeoutId = null;
     
     const loadAdminBillingData = async () => {
-      // Only proceed if we have a user ID
-      if (!user?.id) return;
-      
-      // Prevent concurrent loading attempts
-      if (isLoading) return;
+      if (!user?.id || isLoading) return;
       
       try {
         // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
-          if (isMounted) {
+          if (isMounted && isLoading) {
             console.warn('AdminBilling: Loading timeout reached, forcing completion');
             dispatch(clearError());
           }
         }, 15000); // 15 second timeout
         
-        // Load admin billing data - always fetch fresh data
+        // Load admin billing data sequentially to avoid overwhelming the backend
         const results = await Promise.allSettled([
           dispatch(fetchPlans()),
           dispatch(fetchBillingStats()),
@@ -143,29 +117,14 @@ const AdminBilling = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, [dispatch, user?.id]); // Only depend on dispatch and user.id
+  }, [dispatch, user?.id, isLoading]); // Add isLoading as dependency
 
   useEffect(() => {
     if (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'An error occurred';
-      toast.error(errorMessage);
+      toast.error(error);
       dispatch(clearError());
     }
   }, [error, dispatch]);
-
-  // When opening the subscription modal for a pending subscription, prefill manual payment form
-  useEffect(() => {
-    if (showSubscriptionModal && selectedPlan?.status === 'pending') {
-      setManualPaymentForm({
-        payment_method: 'cash',
-        payment_reference: generatePaymentReference(selectedPlan.id),
-        amount_paid: selectedPlan?.plan?.price ?? 0,
-        currency: selectedPlan?.plan?.currency ?? 'USD',
-        notes: ''
-      });
-    }
-  }, [showSubscriptionModal, selectedPlan]);
 
   const handleCreatePlan = async () => {
     try {
@@ -187,9 +146,7 @@ const AdminBilling = () => {
         is_active: true
       });
     } catch (error) {
-      // Ensure error is a string for toast display
-        const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to create plan';
-        toast.error(errorMessage);
+      toast.error(error || 'Failed to create plan');
     }
   };
 
@@ -200,9 +157,7 @@ const AdminBilling = () => {
       setShowPlanModal(false);
       setSelectedPlan(null);
     } catch (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to update plan';
-      toast.error(errorMessage);
+      toast.error(error || 'Failed to update plan');
     }
   };
 
@@ -213,9 +168,7 @@ const AdminBilling = () => {
       await dispatch(deletePlan(planId)).unwrap();
       toast.success('Plan deleted successfully');
     } catch (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to delete plan';
-      toast.error(errorMessage);
+      toast.error(error || 'Failed to delete plan');
     }
   };
 
@@ -225,9 +178,7 @@ const AdminBilling = () => {
       toast.success('Manual payment processed successfully');
       setShowSubscriptionModal(false);
     } catch (error) {
-      // Ensure error is a string for toast display
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to process payment';
-      toast.error(errorMessage);
+      toast.error(error || 'Failed to process payment');
     }
   };
 
@@ -270,6 +221,14 @@ const AdminBilling = () => {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <>
       <PageSubscriptionOverlay 
@@ -277,12 +236,6 @@ const AdminBilling = () => {
         adminOnly={true}
         customMessage="Admin privileges required to access billing management features."
       />
-      
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-        </div>
-      ) : (
       <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -773,8 +726,6 @@ const AdminBilling = () => {
           </div>
         </div>
       )}
-      </div>
-      )}
 
       {/* Subscription Modal */}
       {showSubscriptionModal && selectedPlan && (
@@ -809,11 +760,7 @@ const AdminBilling = () => {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-                      <select
-                        value={manualPaymentForm.payment_method}
-                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, payment_method: e.target.value })}
-                        className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      >
+                      <select className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
                         <option value="cash">Cash</option>
                         <option value="bank_transfer">Bank Transfer</option>
                         <option value="check">Check</option>
@@ -826,34 +773,9 @@ const AdminBilling = () => {
                       <label className="block text-sm font-medium text-gray-700">Payment Reference</label>
                       <input
                         type="text"
-                        value={manualPaymentForm.payment_reference}
-                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, payment_reference: e.target.value })}
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                         placeholder="Transaction ID or reference"
                       />
-                      <p className="mt-1 text-xs text-gray-500">Auto-generated. You can modify if needed.</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Amount</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={manualPaymentForm.amount_paid}
-                          onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, amount_paid: Number(e.target.value) })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Currency</label>
-                        <input
-                          type="text"
-                          value={manualPaymentForm.currency}
-                          onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, currency: e.target.value })}
-                          className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                        />
-                      </div>
                     </div>
 
                     <div>
@@ -861,8 +783,6 @@ const AdminBilling = () => {
                       <textarea
                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                         rows="3"
-                        value={manualPaymentForm.notes}
-                        onChange={(e) => setManualPaymentForm({ ...manualPaymentForm, notes: e.target.value })}
                         placeholder="Additional notes about the payment"
                       />
                     </div>
@@ -879,7 +799,7 @@ const AdminBilling = () => {
                 </button>
                 {selectedPlan.status === 'pending' && (
                   <button
-                    onClick={() => handleManualPayment(selectedPlan.id, manualPaymentForm)}
+                    onClick={() => handleManualPayment(selectedPlan.id, {})}
                     className="btn btn-primary"
                   >
                     Process Payment
@@ -890,6 +810,7 @@ const AdminBilling = () => {
           </div>
         </div>
       )}
+      </div>
     </>
   );
 };

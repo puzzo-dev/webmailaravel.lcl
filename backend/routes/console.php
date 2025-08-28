@@ -2,10 +2,29 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
+use App\Jobs\ProcessBouncesJob;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Schedule bounce processing every 30 minutes
+Schedule::job(new ProcessBouncesJob())->everyThirtyMinutes()->name('process-bounces');
+
+// Schedule automatic training daily at 2 AM
+Schedule::command('training:run-automatic')->dailyAt('02:00')->name('automatic-training');
+
+// Schedule manual training daily at 3 AM (after automatic training)
+Schedule::command('training:run-manual')->dailyAt('03:00')->name('manual-training');
+
+// Schedule PowerMTA file processing every hour for bounce detection
+Schedule::call(function () {
+    $bounceService = app(\App\Services\BounceProcessingService::class);
+    $results = $bounceService->processPowerMTAFiles();
+    
+    \Illuminate\Support\Facades\Log::info('Scheduled PowerMTA processing completed', $results);
+})->hourly()->name('powermta-bounce-processing');
 
 // Manual command to process bounces for specific credential
 Artisan::command('bounces:process {credential_id?}', function ($credential_id = null) {

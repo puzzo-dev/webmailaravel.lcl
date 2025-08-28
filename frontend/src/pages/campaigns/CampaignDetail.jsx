@@ -675,33 +675,73 @@ const CampaignDetail = () => {
                       <strong>Note:</strong> These attachments were included with every email sent in this campaign.
                     </p>
                   </div>
-                  
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {attachments.map((attachment, index) => (
                       <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.original_name}>
-                              {attachment.original_name}
+                            <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.original_name || attachment.name}>
+                              {attachment.original_name || attachment.name}
                             </h4>
                             <p className="text-xs text-gray-500 mt-1">
                               Size: {(attachment.size / 1024).toFixed(1)} KB
                             </p>
                             <p className="text-xs text-gray-500">
-                              Type: {attachment.mime_type}
+                              Type: {attachment.mime_type || attachment.mime}
                             </p>
                           </div>
-                          <div className="ml-3 flex-shrink-0">
+                          <div className="ml-4 flex-shrink-0">
                             <button
                               onClick={() => {
+                                const token = localStorage.getItem('token');
                                 const downloadUrl = `/api/campaigns/${currentCampaign.id}/attachments/${index}/download`;
+                                
+                                // Create a temporary link with authorization header
                                 const link = document.createElement('a');
                                 link.href = downloadUrl;
-                                link.download = attachment.original_name;
-                                link.target = '_blank';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
+                                link.download = attachment.original_name || attachment.name;
+                                
+                                // Make authenticated request and handle binary data properly
+                                fetch(downloadUrl, {
+                                  method: 'GET',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                })
+                                .then(response => {
+                                  if (!response.ok) {
+                                    throw new Error(`HTTP error! status: ${response.status}`);
+                                  }
+                                  // Get filename from Content-Disposition header if available
+                                  const contentDisposition = response.headers.get('Content-Disposition');
+                                  let filename = attachment.original_name || attachment.name;
+                                  if (contentDisposition) {
+                                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                                    if (filenameMatch) {
+                                      filename = filenameMatch[1];
+                                    }
+                                  }
+                                  
+                                  return response.arrayBuffer().then(buffer => ({ buffer, filename }));
+                                })
+                                .then(({ buffer, filename }) => {
+                                  const blob = new Blob([buffer], { 
+                                    type: attachment.mime_type || 'application/octet-stream' 
+                                  });
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.style.display = 'none';
+                                  a.href = url;
+                                  a.download = filename;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                })
+                                .catch(error => {
+                                  console.error('Download failed:', error);
+                                  alert('Failed to download attachment');
+                                });
                               }}
                               className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                             >

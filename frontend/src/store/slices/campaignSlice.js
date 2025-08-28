@@ -42,16 +42,7 @@ export const createCampaign = createAsyncThunk(
   'campaigns/createCampaign',
   async (campaignData, { rejectWithValue }) => {
     try {
-
-
-      // Remove Content-Type header for FormData
-      const config = {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      };
-
-      const response = await api.post('/campaigns', campaignData, config);
+      const response = await api.post('/campaigns', campaignData);
       return response.data;
     } catch (error) {
       return rejectWithValue(serializeError(error));
@@ -63,12 +54,7 @@ export const updateCampaign = createAsyncThunk(
   'campaigns/updateCampaign',
   async ({ id, data }, { rejectWithValue }) => {
     try {
-      const config = {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      };
-      const response = await api.put(`/campaigns/${id}`, data, config);
+      const response = await api.put(`/campaigns/${id}`, data);
       return response.data;
     } catch (error) {
       return rejectWithValue(serializeError(error));

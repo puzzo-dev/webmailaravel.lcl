@@ -85,12 +85,7 @@ class Backup extends Model
      */
     public function fileExists(): bool
     {
-        if (!$this->path) {
-            return false;
-        }
-        
-        $fullPath = storage_path('app/' . $this->path);
-        return file_exists($fullPath) && is_readable($fullPath);
+        return Storage::disk('local')->exists($this->path);
     }
 
     /**
@@ -160,8 +155,7 @@ class Backup extends Model
     public function calculateSize(): int
     {
         if ($this->fileExists()) {
-            $fullPath = storage_path('app/' . $this->path);
-            return filesize($fullPath);
+            return Storage::disk('local')->size($this->path);
         }
         return 0;
     }
@@ -219,8 +213,7 @@ class Backup extends Model
     public function deleteBackup(): bool
     {
         if ($this->fileExists()) {
-            $fullPath = storage_path('app/' . $this->path);
-            unlink($fullPath);
+            Storage::disk('local')->delete($this->path);
         }
 
         return $this->delete();

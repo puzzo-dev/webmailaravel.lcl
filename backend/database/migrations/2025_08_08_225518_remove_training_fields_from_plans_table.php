@@ -12,8 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('plans', function (Blueprint $table) {
-            // Remove training fields - training is a global system setting, not per-plan
-            $table->dropColumn(['training_mode', 'allow_manual_training']);
+            //
         });
     }
 
@@ -23,9 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('plans', function (Blueprint $table) {
-            // Add them back if needed (but they shouldn't be here)
-            $table->enum('training_mode', ['automatic', 'manual'])->default('automatic');
-            $table->boolean('allow_manual_training')->default(true);
+            //
         });
     }
 };

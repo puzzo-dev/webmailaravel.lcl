@@ -1,9 +1,5 @@
 // Date formatting utilities
 export const formatDate = (dateString, options = {}) => {
-  if (!dateString) {
-    return 'Invalid date';
-  }
-  
   const defaultOptions = {
     month: 'short',
     day: 'numeric',
@@ -12,46 +8,20 @@ export const formatDate = (dateString, options = {}) => {
   };
   
   const mergedOptions = { ...defaultOptions, ...options };
-  
-  try {
-    const date = new Date(dateString);
-    // Check if the date is valid
-    if (isNaN(date.getTime())) {
-      return 'Invalid date';
-    }
-    return date.toLocaleDateString('en-US', mergedOptions);
-  } catch (error) {
-    // Silently fail for invalid dates in production
-    return 'Invalid date';
-  }
+  return new Date(dateString).toLocaleDateString('en-US', mergedOptions);
 };
 
 export const formatRelativeTime = (dateString) => {
-  if (!dateString) {
-    return 'Invalid date';
-  }
-  
-  try {
-    const now = new Date();
-    const date = new Date(dateString);
-    
-    // Check if the date is valid
-    if (isNaN(date.getTime())) {
-      return 'Invalid date';
-    }
-    
-    const diffInSeconds = Math.floor((now - date) / 1000);
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffInSeconds = Math.floor((now - date) / 1000);
 
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
-    
-    return formatDate(dateString, { month: 'short', day: 'numeric' });
-  } catch (error) {
-    // Return fallback for invalid dates
-    return 'Invalid date';
-  }
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  
+  return formatDate(dateString, { month: 'short', day: 'numeric' });
 };
 
 // Number formatting utilities
@@ -201,7 +171,7 @@ export const storage = {
       const item = localStorage.getItem(key);
       return item ? JSON.parse(item) : defaultValue;
     } catch (error) {
-      // localStorage access failed - return null
+      console.error('Error reading from localStorage:', error);
       return defaultValue;
     }
   },
@@ -210,7 +180,7 @@ export const storage = {
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      // localStorage write failed - silently fail
+      console.error('Error writing to localStorage:', error);
     }
   },
 
@@ -218,7 +188,7 @@ export const storage = {
     try {
       localStorage.removeItem(key);
     } catch (error) {
-      // localStorage remove failed - silently fail
+      console.error('Error removing from localStorage:', error);
     }
   },
 
@@ -226,7 +196,7 @@ export const storage = {
     try {
       localStorage.clear();
     } catch (error) {
-      // localStorage clear failed - silently fail
+      console.error('Error clearing localStorage:', error);
     }
   },
 };
@@ -259,7 +229,7 @@ export const copyToClipboard = async (text) => {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (error) {
-    // Clipboard copy failed - return false
+    console.error('Failed to copy to clipboard:', error);
     return false;
   }
 };

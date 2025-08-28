@@ -34,7 +34,7 @@ const Landing = () => {
     try {
       setLoadingPlans(true);
       const response = await billingService.getPlans();
-      setPlans(response || []);
+      setPlans(response.data || response);
     } catch (error) {
       console.error('Failed to load plans:', error);
       // Fall back to default plans if API fails

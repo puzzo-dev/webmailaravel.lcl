@@ -109,9 +109,9 @@ export const updatePassword = createAsyncThunk(
 
 export const generateApiKey = createAsyncThunk(
   'settings/generateApiKey',
-  async (name = 'Default API Key', { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const response = await api.post('/security/api-keys', { name });
+      const response = await api.post('/user/settings/api/generate-key');
       return response.data;
     } catch (error) {
       return rejectWithValue(handleApiError(error).message);

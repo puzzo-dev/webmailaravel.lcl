@@ -21,6 +21,7 @@ import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminBackups = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -92,7 +93,6 @@ const AdminBackups = () => {
       }
       
       await adminService.createBackup(backupData);
-      
       toast.success('Backup created successfully');
       setShowCreateModal(false);
       setNewBackupDescription('');
@@ -100,11 +100,8 @@ const AdminBackups = () => {
       await fetchBackups();
       await fetchStatistics();
     } catch (error) {
-      console.error('Failed to create backup - full error:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
-      toast.error(`Failed to create backup: ${errorMessage}`);
+      toast.error('Failed to create backup');
+      console.error('Failed to create backup:', error);
     } finally {
       setIsLoading(false);
     }
@@ -113,50 +110,31 @@ const AdminBackups = () => {
   const handleDownloadBackup = async (backupId) => {
     setIsLoading(true);
     try {
-      console.log('Starting download for backup ID:', backupId);
-      const result = await adminService.downloadBackup(backupId);
+      const response = await adminService.downloadBackup(backupId);
       
-      console.log('AdminService returned:', { 
-        result, 
-        type: typeof result, 
-        isBlob: result instanceof Blob, 
-        size: result?.size,
-        constructor: result?.constructor?.name 
-      });
-      
-      // Verify we received a blob
-      if (!(result instanceof Blob)) {
-        console.error('Not a blob, trying to handle different response types...');
-        throw new Error(`Expected Blob, got ${typeof result} (${result?.constructor?.name})`);
-      }
-      
-      const blob = result;
-      
-      // Verify the blob has content
-      if (blob.size === 0) {
-        throw new Error('Received empty file');
+      // Handle different response types
+      let blob;
+      if (response instanceof Blob) {
+        blob = response;
+      } else if (response.data instanceof Blob) {
+        blob = response.data;
+      } else {
+        blob = new Blob([response.data || response]);
       }
       
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `backup_${backupId}.zip`;
+      link.download = `backup_${backupId}.sqlite`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      toast.success(`Backup downloaded successfully (${(blob.size / 1024).toFixed(1)} KB)`);
+      toast.success('Backup downloaded successfully');
     } catch (error) {
-      console.error('Download error details:', {
-        error,
-        response: error.response,
-        data: error.response?.data,
-        status: error.response?.status
-      });
-      
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
-      toast.error(`Failed to download backup: ${errorMessage}`);
+      toast.error('Failed to download backup');
+      console.error('Failed to download backup:', error);
     } finally {
       setIsLoading(false);
     }
@@ -177,8 +155,7 @@ const AdminBackups = () => {
       await fetchBackups();
       await fetchStatistics();
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
-      toast.error(`Failed to restore backup: ${errorMessage}`);
+      toast.error('Failed to restore backup');
       console.error('Failed to restore backup:', error);
     } finally {
       setIsLoading(false);
@@ -196,8 +173,7 @@ const AdminBackups = () => {
       await fetchBackups();
       await fetchStatistics();
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
-      toast.error(`Failed to delete backup: ${errorMessage}`);
+      toast.error('Failed to delete backup');
       console.error('Failed to delete backup:', error);
     } finally {
       setIsLoading(false);
@@ -329,7 +305,7 @@ const AdminBackups = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Last Backup</p>
               <p className="text-2xl font-bold text-gray-900">
-                {statistics.last_backup?.created_at ? formatDate(statistics.last_backup.created_at) : 'Never'}
+                {statistics.last_backup ? formatDate(statistics.last_backup) : 'Never'}
               </p>
             </div>
           </div>
@@ -358,7 +334,7 @@ const AdminBackups = () => {
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Error</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>{typeof error === 'string' ? error : error?.message || 'An error occurred'}</p>
+                <p>{error}</p>
               </div>
             </div>
           </div>

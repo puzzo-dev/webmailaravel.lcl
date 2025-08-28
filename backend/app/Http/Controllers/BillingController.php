@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Models\Plan;
 use App\Models\User;
-use App\Models\SystemConfig;
-use App\Services\NotificationService;
 use App\Traits\BillingTrait;
 use App\Traits\ResponseTrait;
 use App\Traits\LoggingTrait;
@@ -14,17 +12,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http;
 
 class BillingController extends Controller
 {
-    // Alias the trait's processManualPayment to avoid name collision with the controller's public method
-    use BillingTrait { processManualPayment as protected traitProcessManualPayment; }
-    use ResponseTrait, LoggingTrait;
-
-    public function __construct(
-        private NotificationService $notificationService
-    ) {}
+    use BillingTrait, ResponseTrait, LoggingTrait;
 
     /**
      * Get user subscriptions
@@ -160,22 +151,7 @@ class BillingController extends Controller
             return $this->errorResponse('Unauthorized', 403);
         }
 
-        // Create BTCPay invoice using proper trait method
-        $plan = $subscription->plan;
-        $invoiceData = [
-            'amount' => $plan->price,
-            'currency' => $plan->currency ?? 'USD',
-            'orderId' => 'subscription_' . $subscription->id,
-            'itemDesc' => $plan->name . ' Subscription',
-            'notificationURL' => url('/api/btcpay/webhook'),
-            'redirectURL' => url('/billing/payment-status?status=success'),
-            'buyer' => [
-                'email' => $subscription->user->email,
-                'name' => $subscription->user->name,
-            ]
-        ];
-        
-        $result = $this->createBTCPayInvoice($invoiceData);
+        $result = $this->createBTCPaySubscriptionInvoice($subscription);
 
         if ($result['success']) {
             return $this->successResponse($result['data'], 'Invoice created successfully');
@@ -216,187 +192,18 @@ class BillingController extends Controller
     }
 
     /**
-     * Download invoice PDF
-     */
-    public function downloadInvoice(Request $request, $invoiceId)
-    {
-        try {
-            // Find subscription by invoice ID
-            $subscription = Subscription::where('invoice', $invoiceId)
-                ->with(['user', 'plan'])
-                ->first();
-            
-            if (!$subscription) {
-                return $this->errorResponse('Invoice not found', 404);
-            }
-
-            // Check authorization
-            if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return $this->errorResponse('Unauthorized', 403);
-            }
-
-            // For now, return the HTML content as PDF
-            // In production, you'd want to use a proper PDF library like TCPDF or Dompdf
-            $invoiceHtml = $this->generateInvoiceHTML($subscription);
-            
-            return response()->streamDownload(function() use ($invoiceHtml) {
-                echo $invoiceHtml;
-            }, "invoice-{$invoiceId}.html", [
-                'Content-Type' => 'text/html',
-                'Content-Disposition' => 'attachment; filename="invoice-' . $invoiceId . '.html"',
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Invoice download error: ' . $e->getMessage());
-            return $this->errorResponse('Failed to download invoice: ' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * View invoice details
-     */
-    public function viewInvoice(Request $request, $invoiceId): JsonResponse
-    {
-        try {
-            // Find subscription by invoice ID
-            $subscription = Subscription::where('invoice', $invoiceId)
-                ->with(['user', 'plan'])
-                ->first();
-            
-            if (!$subscription) {
-                return $this->errorResponse('Invoice not found', 404);
-            }
-
-            // Check authorization
-            if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-                return $this->errorResponse('Unauthorized', 403);
-            }
-
-            $invoiceData = [
-                'id' => $invoiceId,
-                'subscription_id' => $subscription->id,
-                'user' => [
-                    'name' => $subscription->user->name ?? 'N/A',
-                    'email' => $subscription->user->email ?? 'N/A',
-                ],
-                'plan' => [
-                    'name' => $subscription->plan->name ?? 'N/A',
-                    'price' => $subscription->plan->price ?? 0,
-                    'currency' => $subscription->plan->currency ?? 'USD',
-                    'duration_days' => $subscription->plan->duration_days ?? 0,
-                ],
-                'amount' => $subscription->payment_amount ?? 0,
-                'currency' => $subscription->payment_currency ?? 'USD',
-                'status' => $subscription->status ?? 'unknown',
-                'payment_method' => $subscription->payment_method ?? 'BTCPay',
-                'payment_reference' => $subscription->payment_reference,
-                'created_at' => $subscription->created_at?->format('Y-m-d H:i:s'),
-                'paid_at' => $subscription->paid_at?->format('Y-m-d H:i:s'),
-                'expiry' => $subscription->expiry?->format('Y-m-d H:i:s'),
-            ];
-
-            return $this->successResponse($invoiceData, 'Invoice details retrieved successfully');
-
-        } catch (\Exception $e) {
-            \Log::error('Invoice view error: ' . $e->getMessage());
-            return $this->errorResponse('Failed to retrieve invoice: ' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Generate invoice HTML content
-     */
-    private function generateInvoiceHTML(Subscription $subscription): string
-    {
-        $html = "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Invoice - {$subscription->invoice}</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .header { text-align: center; margin-bottom: 40px; }
-                .invoice-details { margin-bottom: 30px; }
-                .table { width: 100%; border-collapse: collapse; }
-                .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-                .total { font-weight: bold; font-size: 18px; }
-            </style>
-        </head>
-        <body>
-            <div class='header'>
-                <h1>INVOICE</h1>
-                <p>Invoice ID: {$subscription->invoice}</p>
-                <p>Date: {$subscription->created_at->format('F j, Y')}</p>
-            </div>
-            
-            <div class='invoice-details'>
-                <h3>Bill To:</h3>
-                <p>{$subscription->user->name}<br>
-                {$subscription->user->email}</p>
-                
-                <h3>Service Details:</h3>
-                <table class='table'>
-                    <tr>
-                        <th>Description</th>
-                        <th>Period</th>
-                        <th>Amount</th>
-                    </tr>
-                    <tr>
-                        <td>{$subscription->plan->name} Subscription</td>
-                        <td>{$subscription->plan->duration_days} days</td>
-                        <td>\${$subscription->payment_amount} {$subscription->payment_currency}</td>
-                    </tr>
-                    <tr class='total'>
-                        <td colspan='2'>Total</td>
-                        <td>\${$subscription->payment_amount} {$subscription->payment_currency}</td>
-                    </tr>
-                </table>
-                
-                <p><strong>Payment Status:</strong> " . ucfirst($subscription->status) . "</p>
-                " . ($subscription->paid_at ? "<p><strong>Paid Date:</strong> {$subscription->paid_at->format('F j, Y')}</p>" : "") . "
-                <p><strong>Payment Method:</strong> " . ucfirst($subscription->payment_method ?: 'BTCPay') . "</p>
-            </div>
-        </body>
-        </html>";
-
-        return $html;
-    }
-
-    /**
      * Handle BTCPay webhook
      */
     public function webhook(Request $request): JsonResponse
     {
-        $this->logInfo('BTCPay webhook received', [
-            'headers' => $request->headers->all(),
-            'payload_size' => strlen($request->getContent())
-        ]);
-
         $payload = $request->all();
+        $signature = $request->header('BTCPay-Sig') ?? $request->header('X-BTCPay-Signature') ?? '';
         
-        // BTCPay Server sends signature in different header formats
-        $signature = $request->header('BTCPay-Sig') ?? 
-                    $request->header('X-BTCPay-Signature') ?? 
-                    $request->header('X-BTCPay-Sig') ?? '';
-        
-        if (empty($signature)) {
-            $this->logWarning('BTCPay webhook received without signature');
-            return $this->errorResponse('Missing webhook signature', 400);
-        }
-
         $result = $this->processBTCPayWebhook($payload, $signature);
 
         if ($result['success']) {
-            $this->logInfo('BTCPay webhook processed successfully', [
-                'result' => $result
-            ]);
-            return $this->successResponse($result, 'Webhook processed successfully');
+            return $this->successResponse(null, 'Webhook processed successfully');
         }
-
-        $this->logError('BTCPay webhook processing failed', [
-            'error' => $result['error'] ?? 'Unknown error',
-            'payload' => $payload
-        ]);
 
         return $this->errorResponse($result['error'] ?? 'Failed to process webhook', 400);
     }
@@ -727,39 +534,23 @@ class BillingController extends Controller
      */
     public function processManualPayment(Request $request, Subscription $subscription): JsonResponse
     {
-        $validated = $request->validate([
+        $request->validate([
             'payment_method' => 'required|string',
-            // Make reference optional; we will auto-generate if missing
-            'payment_reference' => 'nullable|string',
+            'payment_reference' => 'required|string',
             'amount_paid' => 'required|numeric|min:0',
             'currency' => 'sometimes|string|size:3',
             'notes' => 'nullable|string',
         ]);
 
         try {
-            // Auto-generate a unique payment reference if not provided
-            if (empty($validated['payment_reference'])) {
-                // Example format: TOPUP-YYYYMMDDHHMMSS-<subscriptionId>-<random>
-                $validated['payment_reference'] = sprintf(
-                    'TOPUP-%s-%d-%s',
-                    now()->format('YmdHis'),
-                    $subscription->id,
-                    substr(bin2hex(random_bytes(4)), 0, 8)
-                );
-            }
+            $result = $this->processManualPayment($subscription, $request->all());
 
-            $result = $this->traitProcessManualPayment($subscription, $validated);
-
-            if (!empty($result['success'])) {
+            if ($result['success']) {
                 return $this->successResponse($subscription->fresh(['user', 'plan']), 'Manual payment processed successfully');
             }
 
             return $this->errorResponse($result['error'] ?? 'Failed to process manual payment', 400);
         } catch (\Exception $e) {
-            Log::error('Manual payment processing error', [
-                'subscription_id' => $subscription->id,
-                'error' => $e->getMessage(),
-            ]);
             return $this->errorResponse('Failed to process manual payment', 500);
         }
     }
@@ -778,176 +569,4 @@ class BillingController extends Controller
 
         return round(($activeSubscriptions / $totalUsers) * 100, 1);
     }
-
-    /**
-     * Create BTCPay subscription
-     */
-    private function createBTCPaySubscription(User $user, Plan $plan): array
-    {
-        try {
-            // Create subscription record
-            $subscription = Subscription::create([
-                'user_id' => $user->id,
-                'plan_id' => $plan->id,
-                'plan_name' => $plan->name,
-                'status' => 'pending',
-                'starts_at' => now(),
-                'ends_at' => now()->addDays($plan->duration_days),
-                'expiry' => now()->addDays($plan->duration_days),
-            ]);
-
-            // Create BTCPay invoice using proper trait method
-            $invoiceData = [
-                'amount' => $plan->price,
-                'currency' => $plan->currency ?? 'USD',
-                'orderId' => 'subscription_' . $subscription->id,
-                'itemDesc' => $plan->name . ' Subscription for ' . $user->name,
-                'metadata' => [
-                    'subscriptionId' => $subscription->id,
-                    'userId' => $user->id,
-                    'planId' => $plan->id,
-                    'itemCode' => 'subscription',
-                    'itemDesc' => $plan->name . ' Subscription'
-                ],
-                'checkout' => [
-                    'redirectURL' => url('/billing/payment-status?subscription=' . $subscription->id . '&status=success'),
-                    'closeURL' => url('/billing/payment-status?subscription=' . $subscription->id . '&status=cancelled'),
-                ],
-                'notificationURL' => url('/api/billing/webhook'),
-                'buyer' => [
-                    'email' => $user->email,
-                    'name' => $user->name,
-                ]
-            ];
-            
-            $invoiceResult = $this->createBTCPayInvoice($invoiceData);
-
-            if ($invoiceResult['success']) {
-                // Update subscription with payment details
-                $subscription->update([
-                    'invoice' => $invoiceResult['data']['id'] ?? null,
-                    'payment_id' => $invoiceResult['data']['id'] ?? null,
-                    'payment_url' => $invoiceResult['data']['checkoutLink'] ?? null,
-                ]);
-
-                return [
-                    'success' => true,
-                    'subscription_id' => $subscription->id,
-                    'checkout_url' => $invoiceResult['data']['checkoutLink'] ?? null,
-                    'invoice_id' => $invoiceResult['data']['id'] ?? null,
-                ];
-            }
-
-            // If BTCPay invoice creation fails, subscription still created but marked as pending
-            return [
-                'success' => true,
-                'subscription_id' => $subscription->id,
-                'warning' => 'Subscription created but payment invoice generation failed',
-            ];
-
-        } catch (\Exception $e) {
-            \Log::error('createBTCPaySubscription failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => 'Failed to create subscription: ' . $e->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * Make GET request
-     */
-    protected function get(string $url, array $headers = [], int $timeout = 30): array
-    {
-        try {
-            $response = Http::withHeaders($headers)
-                ->timeout($timeout)
-                ->get($url);
-
-            if ($response->successful()) {
-                return [
-                    'success' => true,
-                    'data' => $response->json()
-                ];
-            }
-
-            return [
-                'success' => false,
-                'error' => 'HTTP ' . $response->status() . ': ' . $response->body()
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Make POST request
-     */
-    protected function post(string $url, array $data = [], array $headers = [], int $timeout = 30): array
-    {
-        try {
-            $response = Http::withHeaders($headers)
-                ->timeout($timeout)
-                ->post($url, $data);
-
-            if ($response->successful()) {
-                return [
-                    'success' => true,
-                    'data' => $response->json()
-                ];
-            }
-
-            return [
-                'success' => false,
-                'error' => 'HTTP ' . $response->status() . ': ' . $response->body()
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Get payment history for a user
-     */
-    private function getPaymentHistory($user)
-    {
-        try {
-            // Get all subscriptions for the user with payment details
-            $subscriptions = Subscription::where('user_id', $user->id)
-                ->with(['plan'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-
-            $paymentHistory = [];
-            
-            foreach ($subscriptions as $subscription) {
-                if ($subscription->paid_at) {
-                    $paymentHistory[] = [
-                        'id' => $subscription->id,
-                        'date' => $subscription->paid_at,
-                        'amount' => $subscription->payment_amount,
-                        'currency' => $subscription->payment_currency,
-                        'status' => $subscription->status,
-                        'method' => $subscription->payment_method ?: 'BTCPay',
-                        'invoice' => $subscription->invoice,
-                        'plan_name' => $subscription->plan->name ?? 'Unknown Plan',
-                        'payment_reference' => $subscription->payment_reference,
-                    ];
-                }
-            }
-
-            return $paymentHistory;
-            
-        } catch (\Exception $e) {
-            \Log::error('Error getting payment history: ' . $e->getMessage());
-            return [];
-        }
-    }
-
 }

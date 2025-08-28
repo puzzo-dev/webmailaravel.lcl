@@ -1,15 +1,66 @@
-import React from 'react';
-import { useDashboard } from '../hooks';
+import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { analyticsService } from '../services/api';
+import toast from 'react-hot-toast';
 import QuickActions from '../components/QuickActions';
 import UserDashboard from '../components/UserDashboard';
 
 const Dashboard = () => {
-  const {
-    dashboardData,
-    loading,
-    user,
-    refreshDashboard
-  } = useDashboard();
+  const { user } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      // If user is admin, redirect to admin dashboard
+      if (user.role === 'admin') {
+        navigate('/admin', { replace: true });
+        return;
+      }
+      fetchDashboardData();
+    }
+  }, [user, navigate]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      // Use the dedicated dashboard endpoint that provides role-appropriate data
+      const response = await analyticsService.getDashboard();
+      
+      // Ensure we have the expected data structure
+      if (response.success && response.data) {
+        setDashboardData(response.data);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Dashboard data error:', error);
+      
+      if (error.response?.status === 401) {
+        toast.error('Session expired. Please log in again.');
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied');
+      } else {
+        toast.error('Failed to load dashboard data. Please try again.');
+      }
+      
+      // Set empty data structure to prevent component errors
+      setDashboardData({
+        campaigns: {},
+        users: {},
+        performance: {},
+        deliverability: {},
+        revenue: {},
+        reputation: {},
+        bounce_processing: {},
+        suppression: {}
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -37,7 +88,7 @@ const Dashboard = () => {
       <QuickActions user={user} />
       
       {/* User Dashboard with Live Data */}
-      <UserDashboard data={dashboardData} onRefresh={refreshDashboard} />
+      <UserDashboard data={dashboardData} onRefresh={fetchDashboardData} />
     </div>
   );
 };
