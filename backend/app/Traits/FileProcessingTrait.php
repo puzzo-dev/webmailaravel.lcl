@@ -2,26 +2,30 @@
 
 namespace App\Traits;
 
+use App\Constants\FileConstants;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Http\Response;
+use Illuminate\Http\StreamedResponse;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 trait FileProcessingTrait
 {
+    use LoggingTrait;
+
     /**
      * Upload file with standardized processing
      */
     protected function uploadFile(UploadedFile $file, string $directory, array $options = []): array
     {
         $options = array_merge([
-            'disk' => 'local',
-            'visibility' => 'private',
-            'max_size' => 10240, // 10MB default
-            'allowed_extensions' => ['txt', 'csv', 'xlsx', 'xls'],
-            'generate_unique_name' => true,
-            'preserve_original_name' => false
+            'disk' => FileConstants::DEFAULT_DISK,
+            'visibility' => FileConstants::DEFAULT_VISIBILITY,
+            'max_size' => FileConstants::MAX_FILE_SIZE_KB,
+            'allowed_extensions' => FileConstants::ALLOWED_EXTENSIONS,
+            'generate_unique_name' => FileConstants::GENERATE_UNIQUE_NAME,
+            'preserve_original_name' => FileConstants::PRESERVE_ORIGINAL_NAME
         ], $options);
 
         try {
@@ -37,7 +41,13 @@ trait FileProcessingTrait
             // Process file based on type
             $processedData = $this->processFileByType($file, $path, $options);
 
-            $this->logFileUpload($file, $path, $processedData);
+            $this->logInfo('File uploaded successfully', [
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'size' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'processed_data' => $processedData
+            ]);
 
             return [
                 'success' => true,
@@ -49,7 +59,10 @@ trait FileProcessingTrait
             ];
 
         } catch (\Exception $e) {
-            $this->logFileUploadError($file, $e->getMessage());
+            $this->logError('File upload failed', [
+                'original_name' => $file->getClientOriginalName(),
+                'error' => $e->getMessage()
+            ]);
             
             return [
                 'success' => false,
@@ -59,21 +72,49 @@ trait FileProcessingTrait
     }
 
     /**
-     * Validate uploaded file
+     * Validate uploaded file using ValidationTrait
      */
     protected function validateFile(UploadedFile $file, array $options): void
     {
-        if (!$file->isValid()) {
-            throw new \Exception('Invalid file upload');
+        // Convert extensions to MIME types for validation
+        $allowedMimes = [];
+        foreach ($options['allowed_extensions'] as $ext) {
+            switch ($ext) {
+                case 'csv':
+                    $allowedMimes = array_merge($allowedMimes, ['text/csv', 'application/csv']);
+                    break;
+                case 'txt':
+                    $allowedMimes[] = 'text/plain';
+                    break;
+                case 'xlsx':
+                    $allowedMimes[] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                    break;
+                case 'xls':
+                    $allowedMimes[] = 'application/vnd.ms-excel';
+                    break;
+            }
         }
 
-        if ($file->getSize() > ($options['max_size'] * 1024)) {
-            throw new \Exception('File size exceeds maximum allowed size');
-        }
+        // Use ValidationTrait method if available
+        if (method_exists($this, 'validateFileUpload')) {
+            $result = $this->validateFileUpload($file, $allowedMimes, $options['max_size']);
+            if (!$result['is_valid']) {
+                throw new \Exception('File validation failed: ' . implode(', ', array_values($result['errors'])[0] ?? []));
+            }
+        } else {
+            // Fallback validation
+            if (!$file->isValid()) {
+                throw new \Exception('Invalid file upload');
+            }
 
-        $extension = strtolower($file->getClientOriginalExtension());
-        if (!in_array($extension, $options['allowed_extensions'])) {
-            throw new \Exception('File type not allowed');
+            if ($file->getSize() > ($options['max_size'] * 1024)) {
+                throw new \Exception('File size exceeds maximum allowed size');
+            }
+
+            $extension = strtolower($file->getClientOriginalExtension());
+            if (!in_array($extension, $options['allowed_extensions'])) {
+                throw new \Exception('File type not allowed');
+            }
         }
     }
 
@@ -159,7 +200,7 @@ trait FileProcessingTrait
                 'processed' => true,
                 'rows' => count($data),
                 'headers' => $headers,
-                'sample_data' => array_slice($data, 0, 5)
+                'sample_data' => array_slice($data, 0, FileConstants::CSV_SAMPLE_ROWS)
             ];
             
         } catch (\Exception $e) {
@@ -210,7 +251,7 @@ trait FileProcessingTrait
                 'type' => 'text',
                 'processed' => true,
                 'lines' => count($lines),
-                'sample_data' => array_slice($lines, 0, 10)
+                'sample_data' => array_slice($lines, 0, FileConstants::TEXT_SAMPLE_LINES)
             ];
             
         } catch (\Exception $e) {
@@ -232,14 +273,17 @@ trait FileProcessingTrait
             
             if ($storage->exists($path)) {
                 $storage->delete($path);
-                $this->logFileDeletion($path);
+                $this->logInfo('File deleted', ['path' => $path]);
                 return true;
             }
             
             return false;
             
         } catch (\Exception $e) {
-            $this->logFileDeletionError($path, $e->getMessage());
+            $this->logError('File deletion failed', [
+                'path' => $path,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
@@ -282,14 +326,21 @@ trait FileProcessingTrait
             
             if ($storage->exists($fromPath)) {
                 $storage->move($fromPath, $toPath);
-                $this->logFileMove($fromPath, $toPath);
+                $this->logInfo('File moved', [
+                    'from' => $fromPath,
+                    'to' => $toPath
+                ]);
                 return true;
             }
             
             return false;
             
         } catch (\Exception $e) {
-            $this->logFileMoveError($fromPath, $toPath, $e->getMessage());
+            $this->logError('File move failed', [
+                'from' => $fromPath,
+                'to' => $toPath,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
@@ -304,107 +355,26 @@ trait FileProcessingTrait
             
             if ($storage->exists($fromPath)) {
                 $storage->copy($fromPath, $toPath);
-                $this->logFileCopy($fromPath, $toPath);
+                $this->logInfo('File copied', [
+                    'from' => $fromPath,
+                    'to' => $toPath
+                ]);
                 return true;
             }
             
             return false;
             
         } catch (\Exception $e) {
-            $this->logFileCopyError($fromPath, $toPath, $e->getMessage());
+            $this->logError('File copy failed', [
+                'from' => $fromPath,
+                'to' => $toPath,
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
 
-    /**
-     * Log file upload
-     */
-    protected function logFileUpload(UploadedFile $file, string $path, array $processedData): void
-    {
-        Log::info('File uploaded successfully', [
-            'original_name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'size' => $file->getSize(),
-            'mime_type' => $file->getMimeType(),
-            'processed_data' => $processedData
-        ]);
-    }
 
-    /**
-     * Log file upload error
-     */
-    protected function logFileUploadError(UploadedFile $file, string $error): void
-    {
-        Log::error('File upload failed', [
-            'original_name' => $file->getClientOriginalName(),
-            'error' => $error
-        ]);
-    }
-
-    /**
-     * Log file deletion
-     */
-    protected function logFileDeletion(string $path): void
-    {
-        Log::info('File deleted', ['path' => $path]);
-    }
-
-    /**
-     * Log file deletion error
-     */
-    protected function logFileDeletionError(string $path, string $error): void
-    {
-        Log::error('File deletion failed', [
-            'path' => $path,
-            'error' => $error
-        ]);
-    }
-
-    /**
-     * Log file move
-     */
-    protected function logFileMove(string $fromPath, string $toPath): void
-    {
-        Log::info('File moved', [
-            'from' => $fromPath,
-            'to' => $toPath
-        ]);
-    }
-
-    /**
-     * Log file move error
-     */
-    protected function logFileMoveError(string $fromPath, string $toPath, string $error): void
-    {
-        Log::error('File move failed', [
-            'from' => $fromPath,
-            'to' => $toPath,
-            'error' => $error
-        ]);
-    }
-
-    /**
-     * Log file copy
-     */
-    protected function logFileCopy(string $fromPath, string $toPath): void
-    {
-        Log::info('File copied', [
-            'from' => $fromPath,
-            'to' => $toPath
-        ]);
-    }
-
-    /**
-     * Log file copy error
-     */
-    protected function logFileCopyError(string $fromPath, string $toPath, string $error): void
-    {
-        Log::error('File copy failed', [
-            'from' => $fromPath,
-            'to' => $toPath,
-            'error' => $error
-        ]);
-    }
 
     protected function downloadFile(string $filePath, string $fileName = null, array $headers = []): Response
     {
