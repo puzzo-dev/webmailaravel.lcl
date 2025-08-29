@@ -163,7 +163,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update General Settings
       .addCase(updateGeneralSettings.pending, (state) => {
         state.isLoading = true;
@@ -179,7 +179,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Notification Settings
       .addCase(updateNotificationSettings.pending, (state) => {
         state.isLoading = true;
@@ -195,7 +195,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Security Settings
       .addCase(updateSecuritySettings.pending, (state) => {
         state.isLoading = true;
@@ -211,7 +211,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update API Settings
       .addCase(updateApiSettings.pending, (state) => {
         state.isLoading = true;
@@ -227,7 +227,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Telegram Settings
       .addCase(updateTelegramSettings.pending, (state) => {
         state.isLoading = true;
@@ -243,7 +243,7 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Profile
       .addCase(updateProfile.pending, (state) => {
         state.isLoading = true;
@@ -259,20 +259,20 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update Password
       .addCase(updatePassword.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(updatePassword.fulfilled, (state, action) => {
+      .addCase(updatePassword.fulfilled, (state) => {
         state.isLoading = false;
       })
       .addCase(updatePassword.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Generate API Key
       .addCase(generateApiKey.pending, (state) => {
         state.isLoading = true;
@@ -288,13 +288,13 @@ const settingsSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Test Telegram Connection
       .addCase(testTelegramConnection.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(testTelegramConnection.fulfilled, (state, action) => {
+      .addCase(testTelegramConnection.fulfilled, (state) => {
         state.isLoading = false;
       })
       .addCase(testTelegramConnection.rejected, (state, action) => {

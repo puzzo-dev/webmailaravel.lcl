@@ -45,7 +45,7 @@ const ResetPassword = () => {
 
       setIsSubmitted(true);
       toast.success('Password reset successfully!');
-    } catch (_error) {
+    } catch {
       // Error is handled by useEffect above
     }
   };

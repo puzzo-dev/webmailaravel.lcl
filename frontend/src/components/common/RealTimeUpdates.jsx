@@ -10,11 +10,97 @@ const RealTimeUpdates = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const addNotification = useCallback((notification) => {
+    const newNotification = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...notification,
+      timestamp: notification.timestamp || new Date().toISOString(),
+      read: false,
+    };
+
+    setNotifications(prev => [newNotification, ...prev.slice(0, 9)]); // Keep last 10
+    setUnreadCount(prev => prev + 1);
+  }, []);
+
+  const handleCampaignStatusUpdate = useCallback((data) => {
+    // Update campaign status in Redux store
+    dispatch({
+      type: 'campaigns/updateCampaignStatus',
+      payload: {
+        campaignId: data.campaign_id,
+        status: data.status,
+      },
+    });
+
+    // Add notification
+    addNotification({
+      type: 'info',
+      title: 'Campaign Update',
+      message: `Campaign #${data.campaign_id} is now ${data.status}`,
+    });
+  }, [dispatch, addNotification]);
+
+  const handleNotification = useCallback((data) => {
+    addNotification({
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      timestamp: data.timestamp,
+    });
+  }, [addNotification]);
+
+  const handleAnalyticsUpdate = useCallback((data) => {
+    // Update analytics in Redux store
+    dispatch({
+      type: 'analytics/updateRealTimeData',
+      payload: data,
+    });
+  }, [dispatch]);
+
+  const handleWebSocketMessage = useCallback((message) => {
+    switch (message.type) {
+      case 'campaign_status':
+        handleCampaignStatusUpdate(message.data);
+        break;
+      case 'notification':
+        handleNotification(message.data);
+        break;
+      case 'analytics_update':
+        handleAnalyticsUpdate(message.data);
+        break;
+      default:
+        break;
+    }
+  }, [handleCampaignStatusUpdate, handleNotification, handleAnalyticsUpdate]);
+
+  const markAsRead = useCallback((notificationId) => {
+    setNotifications(prev =>
+      prev.map(notification =>
+        notification.id === notificationId
+          ? { ...notification, read: true }
+          : notification
+      )
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev =>
+      prev.map(notification => ({ ...notification, read: true }))
+    );
+    setUnreadCount(0);
+  }, []);
+
+  const removeNotification = useCallback((notificationId) => {
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  }, []);
+
   // Real Pusher WebSocket connection
   useEffect(() => {
     let pusher = null;
     let channel = null;
-    
+
     const connectPusher = async () => {
       try {
         // Only connect if we have required environment variables
@@ -24,7 +110,7 @@ const RealTimeUpdates = () => {
 
         // Dynamically import Pusher to reduce bundle size
         const Pusher = (await import('pusher-js')).default;
-        
+
         // Initialize Pusher connection
         pusher = new Pusher(import.meta.env.VITE_PUSHER_KEY, {
           cluster: import.meta.env.VITE_PUSHER_CLUSTER || 'us2',
@@ -35,16 +121,16 @@ const RealTimeUpdates = () => {
 
         // Subscribe to user-specific private channel
         channel = pusher.subscribe(`private-user.${user.id}`);
-        
+
         // Connection state handlers
         pusher.connection.bind('connected', () => {
           setIsConnected(true);
         });
-        
+
         pusher.connection.bind('disconnected', () => {
           setIsConnected(false);
         });
-        
+
         pusher.connection.bind('error', (error) => {
           console.error('Real-time connection error:', error);
           setIsConnected(false);
@@ -85,7 +171,7 @@ const RealTimeUpdates = () => {
             data: data
           });
         });
-        
+
       } catch (error) {
         console.error('Real-time connection failed:', error);
         setIsConnected(false);
@@ -107,93 +193,7 @@ const RealTimeUpdates = () => {
         pusher.disconnect();
       }
     };
-  }, [user?.id]);
-
-  const handleWebSocketMessage = useCallback((message) => {
-    switch (message.type) {
-      case 'campaign_status':
-        handleCampaignStatusUpdate(message.data);
-        break;
-      case 'notification':
-        handleNotification(message.data);
-        break;
-      case 'analytics_update':
-        handleAnalyticsUpdate(message.data);
-        break;
-      default:
-        break;
-    }
-  }, []);
-
-  const handleCampaignStatusUpdate = useCallback((data) => {
-    // Update campaign status in Redux store
-    dispatch({
-      type: 'campaigns/updateCampaignStatus',
-      payload: {
-        campaignId: data.campaign_id,
-        status: data.status,
-      },
-    });
-    
-    // Add notification
-    addNotification({
-      type: 'info',
-      title: 'Campaign Update',
-      message: `Campaign #${data.campaign_id} is now ${data.status}`,
-    });
-  }, [dispatch]);
-
-  const handleNotification = useCallback((data) => {
-    addNotification({
-      type: data.type,
-      title: data.title,
-      message: data.message,
-      timestamp: data.timestamp,
-    });
-  }, []);
-
-  const handleAnalyticsUpdate = useCallback((data) => {
-    // Update analytics in Redux store
-    dispatch({
-      type: 'analytics/updateRealTimeData',
-      payload: data,
-    });
-  }, [dispatch]);
-
-  const addNotification = useCallback((notification) => {
-    const newNotification = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...notification,
-      timestamp: notification.timestamp || new Date().toISOString(),
-      read: false,
-    };
-    
-    setNotifications(prev => [newNotification, ...prev.slice(0, 9)]); // Keep last 10
-    setUnreadCount(prev => prev + 1);
-  }, []);
-
-  const markAsRead = useCallback((notificationId) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  }, []);
-
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    setUnreadCount(0);
-  }, []);
-
-  const removeNotification = useCallback((notificationId) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  }, []);
+  }, [user?.id, handleWebSocketMessage]);
 
   const getNotificationIcon = (type) => {
     switch (type) {
@@ -229,9 +229,8 @@ const RealTimeUpdates = () => {
     <div className="relative">
       {/* Connection Status Indicator */}
       <div className="absolute -top-2 -right-2">
-        <div className={`w-3 h-3 rounded-full ${
-          isConnected ? 'bg-green-500' : 'bg-red-500'
-        }`} />
+        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'
+          }`} />
       </div>
 
       {/* Notification Bell */}
@@ -281,9 +280,8 @@ const RealTimeUpdates = () => {
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 transition-colors ${
-                      notification.read ? 'bg-white' : 'bg-blue-50'
-                    }`}
+                    className={`p-4 transition-colors ${notification.read ? 'bg-white' : 'bg-blue-50'
+                      }`}
                   >
                     <div className="flex items-start space-x-3">
                       {getNotificationIcon(notification.type)}

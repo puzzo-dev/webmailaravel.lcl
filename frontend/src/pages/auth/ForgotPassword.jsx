@@ -29,7 +29,7 @@ const ForgotPassword = () => {
       await dispatch(forgotPassword({ email: data.email })).unwrap();
       setIsSubmitted(true);
       toast.success('Password reset email sent successfully!');
-    } catch (_error) {
+    } catch {
       // Error is handled by useEffect above
     }
   };

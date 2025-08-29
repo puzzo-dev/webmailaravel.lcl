@@ -45,13 +45,6 @@ const AdminCampaigns = () => {
     total: 0,
   });
 
-  // Check if user has admin access
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      fetchCampaigns();
-    }
-  }, [user, pagination.current_page, filters, fetchCampaigns]);
-
   const fetchCampaigns = useCallback(async () => {
     try {
       setLoading(true);
@@ -64,11 +57,21 @@ const AdminCampaigns = () => {
 
       const response = await adminService.getCampaigns(params);
       setCampaigns(response.data || []);
-      setPagination({
+
+      // Only update pagination if it's actually different to prevent infinite loops
+      const newPagination = {
         current_page: response.pagination?.current_page || 1,
         last_page: response.pagination?.last_page || 1,
         per_page: response.pagination?.per_page || 20,
         total: response.pagination?.total || 0,
+      };
+
+      setPagination(prev => {
+        // Only update if the pagination has actually changed
+        if (JSON.stringify(prev) !== JSON.stringify(newPagination)) {
+          return newPagination;
+        }
+        return prev;
       });
     } catch (error) {
       setError('Failed to load campaigns');
@@ -78,6 +81,13 @@ const AdminCampaigns = () => {
       setLoading(false);
     }
   }, [pagination.current_page, pagination.per_page, filters]);
+
+  // Check if user has admin access and fetch campaigns when dependencies change
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchCampaigns();
+    }
+  }, [user, pagination.current_page, filters, fetchCampaigns]);
 
   const handleStatusChange = async (campaignId, status) => {
     try {

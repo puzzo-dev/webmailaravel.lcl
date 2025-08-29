@@ -7,12 +7,6 @@ const Unsubscribe = () => {
   const [unsubscribeStatus, setUnsubscribeStatus] = useState('processing'); // processing, success, error, already_unsubscribed
   const [email, setEmail] = useState('');
 
-  useEffect(() => {
-    if (token) {
-      processUnsubscribe();
-    }
-  }, [token, processUnsubscribe]);
-
   const processUnsubscribe = useCallback(async () => {
     try {
       const response = await fetch(`/api/unsubscribe/${token}`, {
@@ -40,6 +34,12 @@ const Unsubscribe = () => {
       console.error('Unsubscribe error:', error);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      processUnsubscribe();
+    }
+  }, [token, processUnsubscribe]);
 
   const handleResubscribe = async () => {
     if (!token) return;

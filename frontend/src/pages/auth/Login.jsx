@@ -52,9 +52,8 @@ const Login = () => {
         password: data.password,
         remember: rememberMe,
       })).unwrap();
-
       toast.success('Login successful!');
-    } catch (_error) {
+    } catch {
       // Error is handled by useEffect above
     }
   };

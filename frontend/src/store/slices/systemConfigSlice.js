@@ -5,11 +5,11 @@ import { api } from '../../utils/api';
 // Async thunk to fetch public system configuration
 export const fetchSystemConfig = createAsyncThunk(
   'systemConfig/fetchSystemConfig',
-  async (_, { rejectWithValue }) => {
+  async () => {
     try {
       // Try public config endpoint first (works for all users)
       const response = await api.get('/config');
-      
+
       // Check if response has the expected structure
       if (response.data && response.data.success && response.data.data) {
         return response.data.data;
@@ -20,7 +20,7 @@ export const fetchSystemConfig = createAsyncThunk(
       // Fallback to defaults if public config fails
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch system configuration';
       console.warn('Failed to fetch system config, using defaults:', errorMessage);
-      
+
       return {
         app: {
           name: 'WebMail Laravel',
@@ -107,7 +107,7 @@ const systemConfigSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload;
       })
-      
+
       // Update System Config
       .addCase(updateSystemConfig.pending, (state) => {
         state.isLoading = true;
@@ -147,7 +147,7 @@ export const selectLastFetched = (state) => state.systemConfig.lastFetched;
 export const selectNeedsRefresh = (state) => {
   const lastFetched = selectLastFetched(state);
   if (!lastFetched) return true;
-  
+
   const fiveMinutes = 5 * 60 * 1000;
   return Date.now() - lastFetched > fiveMinutes;
 };

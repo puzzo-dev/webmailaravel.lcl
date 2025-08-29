@@ -15,7 +15,7 @@ export const initializeAuth = createAsyncThunk(
       } else {
         return rejectWithValue('No user found');
       }
-    } catch (_error) {
+    } catch {
       // If API call fails (no cookie, expired token, etc.), user is not authenticated
       return rejectWithValue('Not authenticated');
     }
@@ -167,7 +167,7 @@ export const updateProfile = createAsyncThunk(
 );
 
 // Check if we might be authenticated on app start (to prevent flash of unauthenticated content)
-const hasStoredAuth = () => {
+const _hasStoredAuth = () => {
   try {
     // Check if we have any indication of being logged in
     return document.cookie.includes('laravel_session') ||
@@ -229,7 +229,7 @@ const authSlice = createSlice({
         // Admin users start in user view by default
         state.currentView = 'user';
       })
-      .addCase(initializeAuth.rejected, (state, action) => {
+      .addCase(initializeAuth.rejected, (state) => {
         state.isLoading = false;
         state.user = null;
         state.isAuthenticated = false;

@@ -16,7 +16,7 @@ export const fetchSystemMetrics = createAsyncThunk(
 
 export const fetchOperationMetrics = createAsyncThunk(
   'performance/fetchOperationMetrics',
-  async ({ operation, hours = 24 }, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
       const response = await adminService.getSystemMetrics(); // Note: operation metrics not available in current backend
       return response.data;
@@ -28,7 +28,7 @@ export const fetchOperationMetrics = createAsyncThunk(
 
 export const generatePerformanceReport = createAsyncThunk(
   'performance/generateReport',
-  async (hours = 24, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
       const response = await adminService.getSystemMetrics(); // Note: report generation not available in current backend
       return response.data;
@@ -68,7 +68,7 @@ export const trackFrontendPerformance = createAsyncThunk(
           ...performanceData.metadata
         }
       };
-      
+
       // Local frontend metric tracking - no backend call needed
       return { success: true, metrics };
     } catch (error) {
@@ -87,13 +87,13 @@ const initialState = {
     database_query: null,
     system: null
   },
-  
+
   // Operation-specific metrics
   operationMetrics: {},
-  
+
   // Performance report
   report: null,
-  
+
   // Frontend performance tracking
   frontendMetrics: {
     pageLoadTimes: [],
@@ -101,7 +101,7 @@ const initialState = {
     apiResponseTimes: [],
     errorRates: {}
   },
-  
+
   // UI state
   loading: {
     systemMetrics: false,
@@ -110,7 +110,7 @@ const initialState = {
     recording: false,
     frontendTracking: false
   },
-  
+
   error: null,
   success: null,
   lastUpdated: null
@@ -141,11 +141,12 @@ const performanceSlice = createSlice({
         case 'apiResponse':
           state.frontendMetrics.apiResponseTimes.push(data);
           break;
-        case 'error':
+        case 'error': {
           const errorKey = data.component || 'general';
-          state.frontendMetrics.errorRates[errorKey] = 
+          state.frontendMetrics.errorRates[errorKey] =
             (state.frontendMetrics.errorRates[errorKey] || 0) + 1;
           break;
+        }
       }
     },
     clearFrontendMetrics(state) {
@@ -174,7 +175,7 @@ const performanceSlice = createSlice({
         state.loading.systemMetrics = false;
         state.error = action.payload;
       })
-      
+
       // Fetch operation metrics
       .addCase(fetchOperationMetrics.pending, (state) => {
         state.loading.operationMetrics = true;
@@ -191,7 +192,7 @@ const performanceSlice = createSlice({
         state.loading.operationMetrics = false;
         state.error = action.payload;
       })
-      
+
       // Generate performance report
       .addCase(generatePerformanceReport.pending, (state) => {
         state.loading.report = true;
@@ -207,13 +208,13 @@ const performanceSlice = createSlice({
         state.loading.report = false;
         state.error = action.payload;
       })
-      
+
       // Record performance metric
       .addCase(recordPerformanceMetric.pending, (state) => {
         state.loading.recording = true;
         state.error = null;
       })
-      .addCase(recordPerformanceMetric.fulfilled, (state, action) => {
+      .addCase(recordPerformanceMetric.fulfilled, (state) => {
         state.loading.recording = false;
         state.success = 'Performance metric recorded successfully';
       })
@@ -221,13 +222,13 @@ const performanceSlice = createSlice({
         state.loading.recording = false;
         state.error = action.payload;
       })
-      
+
       // Track frontend performance
       .addCase(trackFrontendPerformance.pending, (state) => {
         state.loading.frontendTracking = true;
         state.error = null;
       })
-      .addCase(trackFrontendPerformance.fulfilled, (state, action) => {
+      .addCase(trackFrontendPerformance.fulfilled, (state) => {
         state.loading.frontendTracking = false;
         state.success = 'Frontend performance tracked successfully';
       })
@@ -238,12 +239,12 @@ const performanceSlice = createSlice({
   }
 });
 
-export const { 
-  clearError, 
-  clearSuccess, 
-  clearReport, 
-  recordFrontendMetric, 
-  clearFrontendMetrics 
+export const {
+  clearError,
+  clearSuccess,
+  clearReport,
+  recordFrontendMetric,
+  clearFrontendMetrics
 } = performanceSlice.actions;
 
 export default performanceSlice.reducer;

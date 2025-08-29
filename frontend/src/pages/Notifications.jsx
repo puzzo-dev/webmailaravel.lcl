@@ -36,7 +36,7 @@ const Notifications = () => {
     try {
       await dispatch(markNotificationAsRead(notificationId)).unwrap();
       toast.success('Notification marked as read');
-    } catch (_error) {
+    } catch {
       toast.error('Failed to mark notification as read');
     }
   };
@@ -45,7 +45,7 @@ const Notifications = () => {
     try {
       await dispatch(deleteNotification(notificationId)).unwrap();
       toast.success('Notification deleted');
-    } catch (_error) {
+    } catch {
       toast.error('Failed to delete notification');
     }
   };
@@ -54,7 +54,7 @@ const Notifications = () => {
     try {
       await dispatch(markAllNotificationsAsRead()).unwrap();
       toast.success('All notifications marked as read');
-    } catch (_error) {
+    } catch {
       toast.error('Failed to mark all notifications as read');
     }
   };
@@ -64,7 +64,7 @@ const Notifications = () => {
       try {
         await dispatch(deleteAllNotifications()).unwrap();
         toast.success('All notifications deleted');
-      } catch (_error) {
+      } catch {
         toast.error('Failed to delete all notifications');
       }
     }
@@ -75,7 +75,7 @@ const Notifications = () => {
       setRefreshing(true);
       await dispatch(fetchNotifications());
       toast.success('Notifications refreshed');
-    } catch (_error) {
+    } catch {
       toast.error('Failed to refresh notifications');
     } finally {
       setRefreshing(false);
@@ -274,10 +274,10 @@ const Notifications = () => {
               <div className="flex items-center justify-between pb-4 border-b">
                 <div className="flex items-center space-x-3">
                   <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedNotification.type === 'security' || selectedNotification.type === 'login'
-                      ? 'bg-red-100 text-red-600'
-                      : selectedNotification.type === 'campaign'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-600'
+                    ? 'bg-red-100 text-red-600'
+                    : selectedNotification.type === 'campaign'
+                      ? 'bg-blue-100 text-blue-600'
+                      : 'bg-gray-100 text-gray-600'
                     }`}>
                     {getNotificationIcon(selectedNotification.type || selectedNotification.notification_type)}
                   </div>

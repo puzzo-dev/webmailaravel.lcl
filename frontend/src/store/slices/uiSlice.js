@@ -95,7 +95,7 @@ const uiSlice = createSlice({
     },
     setLoadingState: (state, action) => {
       const { key, isLoading } = action.payload;
-      if (state.loadingStates.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(state.loadingStates, key)) {
         state.loadingStates[key] = isLoading;
       }
     },

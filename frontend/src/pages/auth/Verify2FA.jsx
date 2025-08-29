@@ -20,7 +20,7 @@ const Verify2FA = () => {
     try {
       await dispatch(verify2FA({ code: data.code })).unwrap();
       toast.success('2FA verification successful!');
-    } catch (_error) {
+    } catch {
       // Error is handled by Redux error state
     }
   };

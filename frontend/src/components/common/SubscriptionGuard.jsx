@@ -10,27 +10,27 @@ import { useSubscription } from '../../hooks';
  * @param {boolean} props.immediate - Whether to show overlay immediately on mount (defaults to false)
  * @param {string} props.fallbackMessage - Custom message to show when subscription is required
  */
-const SubscriptionGuard = ({ 
-  children, 
+const SubscriptionGuard = ({
+  children,
   feature = 'this feature',
   adminOnly = false,
   immediate = false,
   fallbackMessage
 }) => {
-  const { 
-    hasActiveSubscription, 
-    hasRequiredRole, 
-    showSubscriptionModal 
+  const {
+    hasActiveSubscription,
+    hasRequiredRole,
+    showSubscriptionModal
   } = useSubscription();
 
   useEffect(() => {
     if (immediate && (!hasActiveSubscription() || !hasRequiredRole(adminOnly))) {
-      const message = fallbackMessage || 
-        (adminOnly 
+      const message = fallbackMessage ||
+        (adminOnly
           ? 'Admin access required for this feature'
           : `Active subscription required to access ${feature}`
         );
-      
+
       showSubscriptionModal(message, feature);
     }
   }, [immediate, feature, adminOnly, fallbackMessage, hasActiveSubscription, hasRequiredRole, showSubscriptionModal]);
@@ -47,35 +47,6 @@ const SubscriptionGuard = ({
 
   // For immediate guards, render nothing (overlay will be shown)
   return null;
-};
-
-/**
- * Higher-order component version of SubscriptionGuard
- * @param {React.Component} WrappedComponent - Component to wrap
- * @param {Object} guardOptions - Options for the subscription guard
- */
-export const withSubscriptionGuard = (WrappedComponent, guardOptions = {}) => {
-  return function SubscriptionGuardedComponent(props) {
-    return (
-      <SubscriptionGuard {...guardOptions} immediate>
-        <WrappedComponent {...props} />
-      </SubscriptionGuard>
-    );
-  };
-};
-
-/**
- * Custom hook for handling subscription checks in components
- * @deprecated Use useSubscription hook instead
- */
-export const useSubscriptionCheck = (feature = 'this feature') => {
-  const { hasActiveSubscription, requireSubscription, isAdmin } = useSubscription();
-  
-  return {
-    hasActiveSubscription,
-    requireSubscription: (customMessage) => requireSubscription(feature, customMessage),
-    isAdmin
-  };
 };
 
 export default SubscriptionGuard;

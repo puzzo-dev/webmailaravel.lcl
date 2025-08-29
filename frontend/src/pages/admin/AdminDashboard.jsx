@@ -53,11 +53,6 @@ const AdminDashboard = () => {
   const { user } = useSelector((state) => state.auth);
   const [selectedPeriod, setSelectedPeriod] = useState('7d');
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState({
-    stats: {},
-    recent_users: [],
-    recent_campaigns: [],
-  });
   const [systemStatus, setSystemStatus] = useState({});
   const [recentActivities, setRecentActivities] = useState([]);
   const [analyticsData, setAnalyticsData] = useState({
@@ -133,7 +128,6 @@ const AdminDashboard = () => {
         analyticsService.getDashboardData()
       ]);
 
-      setDashboardData(dashboardResponse.data);
       // Use the structured analytics data from backend
       const analyticsData = analyticsResponse.data || {};
       setAnalyticsData({

@@ -818,6 +818,29 @@ export const billingService = {
     async createManualPayment(paymentData) {
         const response = await api.post('/billing/manual-payment', paymentData);
         return response.data;
+    },
+
+    // Invoice operations
+    async getInvoiceStatus(invoiceId) {
+        const response = await api.get(`/billing/invoice/${invoiceId}/status`);
+        return response.data;
+    },
+
+    async getInvoice(invoiceId) {
+        const response = await api.get(`/billing/invoice/${invoiceId}`);
+        return response.data;
+    },
+
+    async downloadInvoice(invoiceId) {
+        const response = await api.get(`/billing/invoice/${invoiceId}/download`, {
+            responseType: 'blob' // Important for file downloads
+        });
+        return response;
+    },
+
+    async viewInvoice(invoiceId) {
+        const response = await api.get(`/billing/invoice/${invoiceId}/view`);
+        return response.data;
     }
 };
 

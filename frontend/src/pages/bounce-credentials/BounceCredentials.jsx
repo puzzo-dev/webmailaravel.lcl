@@ -71,7 +71,7 @@ const BounceCredentials = () => {
             await bounceCredentialService.deleteBounceCredential(id);
             toast.success('Bounce credential deleted successfully');
             loadData();
-        } catch (_err) {
+        } catch {
             toast.error('Failed to delete bounce credential');
         }
     };
@@ -81,7 +81,7 @@ const BounceCredentials = () => {
             await bounceCredentialService.setAsDefault(id);
             toast.success('Credential set as default successfully');
             loadData();
-        } catch (_err) {
+        } catch {
             toast.error('Failed to set credential as default');
         }
     };
@@ -102,7 +102,7 @@ const BounceCredentials = () => {
             setShowForm(false);
             setEditingCredential(null);
             loadData();
-        } catch (_err) {
+        } catch {
             toast.error('Failed to save bounce credential');
         }
     };

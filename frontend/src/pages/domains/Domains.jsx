@@ -17,11 +17,11 @@ import {
   HiPaperAirplane,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { 
-  fetchDomains, 
-  createDomain, 
-  updateDomain, 
-  deleteDomain, 
+import {
+  fetchDomains,
+  createDomain,
+  updateDomain,
+  deleteDomain,
   clearError,
 } from '../../store/slices/domainsSlice';
 import {
@@ -31,7 +31,7 @@ import {
   deleteSender,
   testSenderConnection,
 } from '../../store/slices/senderSlice';
-import { domainService, senderService } from '../../services/api';
+import { domainService } from '../../services/api';
 import useSubscriptionError from '../../hooks/useSubscriptionError';
 
 const Domains = () => {
@@ -39,7 +39,7 @@ const Domains = () => {
   const { domains = [], isLoading, error } = useSelector((state) => state.domains || {});
   const { senders = [], isLoading: isSendersLoading } = useSelector((state) => state.senders || {});
   const { user, currentView } = useSelector((state) => state.auth || {});
-  
+
   // State declarations
   const [selectedDomain, setSelectedDomain] = useState(null);
   const [activeTab, setActiveTab] = useState('smtp');
@@ -57,25 +57,25 @@ const Domains = () => {
   const [testSender, setTestSender] = useState(null);
   const [testEmail, setTestEmail] = useState('');
   const [isTestingSender, setIsTestingSender] = useState(false);
-  
+
   // Ensure senders is always an array
   const safeSenders = Array.isArray(senders) ? senders : [];
-  
 
-  
+
+
   const { handleSubscriptionError } = useSubscriptionError();
-  
+
   // Use ref to track previous selected domain ID to prevent infinite loops
   const prevSelectedDomainId = useRef(null);
 
   // Filter domains based on current view
   const isAdminView = currentView === 'admin';
   const isAdmin = user?.role === 'admin';
-  
+
   // In user view, only show domains that belong to the current user
   // In admin view, show all domains
-  const filteredDomains = isAdmin && isAdminView 
-    ? domains 
+  const filteredDomains = isAdmin && isAdminView
+    ? domains
     : domains.filter(domain => domain.user_id === user?.id);
 
   useEffect(() => {
@@ -173,7 +173,7 @@ const Domains = () => {
       // Refresh SMTP config
       const res = await domainService.getDomainSmtpConfig(selectedDomain.id);
       setSmtpConfig(res.data || null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to save SMTP config');
     }
   };
@@ -183,7 +183,7 @@ const Domains = () => {
       await domainService.deleteDomainSmtpConfig(selectedDomain.id);
       toast.success('SMTP config deleted!');
       setSmtpConfig(null);
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete SMTP config');
     }
   };
@@ -192,10 +192,10 @@ const Domains = () => {
   const handleAddSender = async () => {
     try {
       const email = `${senderForm.username}@${selectedDomain.name}`;
-      await dispatch(createSender({ 
-        name: senderForm.name, 
-        email: email, 
-        domain_id: selectedDomain.id 
+      await dispatch(createSender({
+        name: senderForm.name,
+        email: email,
+        domain_id: selectedDomain.id
       })).unwrap();
       toast.success('Sender added!');
       setShowSenderModal(false);
@@ -209,11 +209,11 @@ const Domains = () => {
   const handleEditSender = async () => {
     try {
       const email = `${senderForm.username}@${selectedDomain.name}`;
-      await dispatch(updateSender({ 
-        id: editingSender.id, 
+      await dispatch(updateSender({
+        id: editingSender.id,
         data: {
-          name: senderForm.name, 
-          email: email 
+          name: senderForm.name,
+          email: email
         }
       })).unwrap();
       toast.success('Sender updated!');
@@ -244,19 +244,19 @@ const Domains = () => {
       toast.error('Please select a sender to test.');
       return;
     }
-    
+
     if (!testEmail || !testEmail.includes('@')) {
       toast.error('Please enter a valid test email address.');
       return;
     }
-    
+
     setIsTestingSender(true);
     try {
-      const result = await dispatch(testSenderConnection({ 
-        id: testSender.id, 
-        test_email: testEmail 
+      await dispatch(testSenderConnection({
+        id: testSender.id,
+        test_email: testEmail
       })).unwrap();
-      
+
       toast.success(`Test email sent successfully to ${testEmail}! Check your inbox for the test email.`);
       setShowTestModal(false);
       setTestSender(null);
@@ -282,7 +282,7 @@ const Domains = () => {
               <h2 className="text-xl font-semibold text-gray-900">Domains</h2>
             </div>
             <button
-              className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors" 
+              className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
               onClick={() => { setShowDomainModal(true); setEditingDomain(null); }}
             >
               <HiPlus className="w-4 h-4 mr-1" />
@@ -291,11 +291,10 @@ const Domains = () => {
           </div>
           {isAdmin && (
             <div className="flex items-center justify-between">
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                isAdminView 
-                  ? 'bg-blue-100 text-blue-800' 
+              <span className={`px-2 py-1 text-xs font-medium rounded-full ${isAdminView
+                  ? 'bg-blue-100 text-blue-800'
                   : 'bg-green-100 text-green-800'
-              }`}>
+                }`}>
                 {isAdminView ? 'Admin View' : 'User View'}
               </span>
               <div className="text-sm text-gray-500">
@@ -321,14 +320,14 @@ const Domains = () => {
             <div className="p-6 text-center text-gray-500">
               <HiGlobe className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="text-sm font-medium text-gray-900 mb-1">
-                {isAdmin && isAdminView 
-                  ? 'No domains configured in the system' 
+                {isAdmin && isAdminView
+                  ? 'No domains configured in the system'
                   : 'No domains configured yet'
                 }
               </p>
               <p className="text-xs text-gray-400">
-                {isAdmin && isAdminView 
-                  ? 'Add domains to the system for users to manage' 
+                {isAdmin && isAdminView
+                  ? 'Add domains to the system for users to manage'
                   : 'Add your first domain to get started'
                 }
               </p>
@@ -338,23 +337,20 @@ const Domains = () => {
               {filteredDomains.map(domain => (
                 <div
                   key={domain.id}
-                  className={`group relative mb-2 rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-md ${
-                    selectedDomain?.id === domain.id
+                  className={`group relative mb-2 rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-md ${selectedDomain?.id === domain.id
                       ? 'border-blue-500 bg-blue-50 shadow-sm'
                       : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
+                    }`}
                   onClick={() => setSelectedDomain(domain)}
                 >
                   <div className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center min-w-0 flex-1">
-                        <HiGlobe className={`w-5 h-5 mr-3 flex-shrink-0 ${
-                          selectedDomain?.id === domain.id ? 'text-blue-600' : 'text-gray-400'
-                        }`} />
+                        <HiGlobe className={`w-5 h-5 mr-3 flex-shrink-0 ${selectedDomain?.id === domain.id ? 'text-blue-600' : 'text-gray-400'
+                          }`} />
                         <div className="min-w-0 flex-1">
-                          <p className={`text-sm font-medium truncate ${
-                            selectedDomain?.id === domain.id ? 'text-blue-900' : 'text-gray-900'
-                          }`}>
+                          <p className={`text-sm font-medium truncate ${selectedDomain?.id === domain.id ? 'text-blue-900' : 'text-gray-900'
+                            }`}>
                             {domain.name}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
@@ -429,22 +425,20 @@ const Domains = () => {
               <div className="px-6">
                 <nav className="flex space-x-8">
                   <button
-                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      activeTab === 'smtp'
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'smtp'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                      }`}
                     onClick={() => setActiveTab('smtp')}
                   >
                     <HiServer className="w-4 h-4 inline mr-2" />
                     SMTP Configuration
                   </button>
                   <button
-                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      activeTab === 'senders'
+                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'senders'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                      }`}
                     onClick={() => setActiveTab('senders')}
                   >
                     <HiAtSymbol className="w-4 h-4 inline mr-2" />
@@ -638,11 +632,10 @@ const Domains = () => {
                                     <HiTrash className="w-4 h-4" />
                                   </button>
                                   <button
-                                    className={`p-2 rounded-md transition-colors ${
-                                      smtpConfig 
-                                        ? 'text-gray-400 hover:text-blue-600 hover:bg-blue-50' 
+                                    className={`p-2 rounded-md transition-colors ${smtpConfig
+                                        ? 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
                                         : 'text-gray-300 cursor-not-allowed'
-                                    }`}
+                                      }`}
                                     onClick={() => {
                                       if (smtpConfig) {
                                         setTestSender(sender);
@@ -871,16 +864,16 @@ const Domains = () => {
               <h3 className="text-lg font-medium text-gray-900">Test Sender</h3>
               <button
                 className="text-gray-400 hover:text-gray-600 transition-colors"
-                onClick={() => { 
-                  setShowTestModal(false); 
-                  setTestSender(null); 
+                onClick={() => {
+                  setShowTestModal(false);
+                  setTestSender(null);
                   setTestEmail('');
                 }}
               >
                 <HiX className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="mb-6">
               <div className="flex items-center mb-4">
                 <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
@@ -892,7 +885,7 @@ const Domains = () => {
                   <p className="text-xs text-gray-400">Domain: {selectedDomain?.name}</p>
                 </div>
               </div>
-              
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Test Email Address
@@ -908,7 +901,7 @@ const Domains = () => {
                   Enter the email address where you want to receive the test email
                 </p>
               </div>
-              
+
               {!smtpConfig && (
                 <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                   <div className="flex items-start">
@@ -923,13 +916,13 @@ const Domains = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                onClick={() => { 
-                  setShowTestModal(false); 
-                  setTestSender(null); 
+                onClick={() => {
+                  setShowTestModal(false);
+                  setTestSender(null);
                   setTestEmail('');
                 }}
                 disabled={isTestingSender}
@@ -937,11 +930,10 @@ const Domains = () => {
                 Cancel
               </button>
               <button
-                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
-                  isTestingSender || !testEmail || !testEmail.includes('@') || !smtpConfig
+                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${isTestingSender || !testEmail || !testEmail.includes('@') || !smtpConfig
                     ? 'bg-gray-400 text-white cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
+                  }`}
                 onClick={handleTestSender}
                 disabled={isTestingSender || !testEmail || !testEmail.includes('@') || !smtpConfig}
               >

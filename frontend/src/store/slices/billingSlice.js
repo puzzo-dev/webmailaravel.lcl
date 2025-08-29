@@ -140,7 +140,9 @@ export const fetchBillingStats = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await billingService.getBillingStats();
-      return response;
+      console.log('fetchBillingStats response:', response);
+      // Handle both nested and flat response structures
+      return response.data || response;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch billing stats');
     }
@@ -152,7 +154,9 @@ export const fetchAllSubscriptions = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await billingService.getAllSubscriptions(params);
-      return response;
+      console.log('fetchAllSubscriptions response:', response);
+      // Handle both nested and flat response structures
+      return response.data || response;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch all subscriptions');
     }
@@ -219,16 +223,19 @@ const billingSlice = createSlice({
       })
       .addCase(fetchSubscriptions.fulfilled, (state, action) => {
         state.loading.subscriptions = false;
-        // Handle nested data structure: action.payload.data
-        const subscriptions = action.payload.data || action.payload || [];
+        // Handle nested data structure: action.payload.data.data (double nested)
+        const subscriptionData = action.payload?.data?.data || action.payload?.data || action.payload || [];
+        const subscriptions = Array.isArray(subscriptionData) ? subscriptionData : [];
         state.subscriptions = subscriptions;
-        state.pagination = action.payload.pagination || state.pagination;
-        
+        state.pagination = action.payload?.data?.pagination || action.payload?.pagination || state.pagination;
+
         // Set current subscription (active subscription)
         const activeSubscription = subscriptions.find(sub => sub.status === 'active');
         if (activeSubscription) {
           state.currentSubscription = activeSubscription;
         }
+        console.log('Subscriptions loaded:', state.subscriptions);
+        console.log('Current subscription:', state.currentSubscription);
         state.isLoading = Object.values(state.loading).some(loading => loading);
       })
       .addCase(fetchSubscriptions.rejected, (state, action) => {
@@ -293,8 +300,10 @@ const billingSlice = createSlice({
       })
       .addCase(fetchPaymentHistory.fulfilled, (state, action) => {
         state.isLoading = false;
-        // Handle nested data structure: action.payload.data
-        state.paymentHistory = action.payload.data || action.payload || [];
+        // Handle nested data structure: action.payload.data.data (double nested)
+        const paymentData = action.payload?.data?.data || action.payload?.data || action.payload || [];
+        state.paymentHistory = Array.isArray(paymentData) ? paymentData : [];
+        console.log('Payment history loaded:', state.paymentHistory);
       })
       .addCase(fetchPaymentHistory.rejected, (state, action) => {
         state.isLoading = false;

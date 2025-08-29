@@ -179,7 +179,8 @@ const Senders = () => {
     setShowTestModal(true);
   };
 
-  const renderSenderForm = ({ SmartInput, SmartSelect, formData, handleInputChange, isSaving }) => (
+  // eslint-disable-next-line no-unused-vars
+  const renderSenderForm = ({ SmartInput, formData, handleInputChange }) => (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SmartInput
@@ -277,8 +278,8 @@ const Senders = () => {
               <h1 className="text-2xl font-bold text-gray-900">Sender Management</h1>
               {isAdmin && (
                 <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${isAdminView
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-green-100 text-green-800'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-green-100 text-green-800'
                   }`}>
                   {isAdminView ? 'Admin View' : 'User View'}
                 </span>
@@ -324,8 +325,8 @@ const Senders = () => {
                       </div>
                     </div>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sender.status === 'active'
-                        ? 'bg-success-100 text-success-800'
-                        : 'bg-gray-100 text-gray-800'
+                      ? 'bg-success-100 text-success-800'
+                      : 'bg-gray-100 text-gray-800'
                       }`}>
                       {sender.status}
                     </span>
