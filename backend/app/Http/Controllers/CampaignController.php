@@ -14,6 +14,7 @@ use App\Traits\ValidationTrait;
 use App\Traits\FileProcessingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -93,18 +94,64 @@ class CampaignController extends Controller
                 'subject' => 'required|string|max:255',
                 'content' => 'required|string',
                 'attachments' => 'nullable|array',
-                'attachments.*' => 'file|max:' . config('constants.file_upload.max_size_kb', 10240) . '|mimes:' . implode(',', config('constants.file_upload.allowed_extensions.documents', [])),
-                'enable_open_tracking' => 'boolean',
-                'enable_click_tracking' => 'boolean',
-                'enable_unsubscribe_link' => 'boolean',
+                'attachments.*' => 'file|max:' . config('constants.file_upload.max_size_kb', 10240) . '|mimes:' . implode(',', array_merge(
+                    config('constants.file_upload.allowed_extensions.documents', []),
+                    config('constants.file_upload.allowed_extensions.images', []),
+                    config('constants.file_upload.allowed_extensions.archives', [])
+                )),
+                'enable_open_tracking' => 'nullable|string',
+                'enable_click_tracking' => 'nullable|string',
+                'enable_unsubscribe_link' => 'nullable|string',
             ],
             function () use ($request) {
                 $data = $request->input('validated_data');
                 
+                // Convert string boolean values to actual booleans for FormData compatibility
+                $booleanFields = [
+                    'enable_open_tracking',
+                    'enable_click_tracking',
+                    'enable_unsubscribe_link'
+                ];
+
+                foreach ($booleanFields as $field) {
+                    if (isset($data[$field])) {
+                        $data[$field] = in_array($data[$field], ['1', 'true', true], true);
+                    }
+                }
+                
                 // Handle file attachments using unified method
                 $attachmentPaths = [];
+                
+                // Debug attachment handling
+                \Log::debug('Single send attachment debugging', [
+                    'has_file_attachments' => $request->hasFile('attachments'),
+                    'all_files' => $request->allFiles(),
+                    'attachments_input' => $request->input('attachments'),
+                    'attachments_file' => $request->file('attachments')
+                ]);
+                
                 if ($request->hasFile('attachments')) {
-                    foreach ($request->file('attachments') as $file) {
+                    $attachmentFiles = $request->file('attachments');
+                    
+                    \Log::debug('Processing attachments', [
+                        'attachment_files_type' => gettype($attachmentFiles),
+                        'attachment_files_count' => is_array($attachmentFiles) ? count($attachmentFiles) : 'not_array',
+                        'attachment_files_structure' => is_array($attachmentFiles) ? array_keys($attachmentFiles) : 'not_array'
+                    ]);
+                    
+                    foreach ($attachmentFiles as $index => $file) {
+                        \Log::debug('Processing attachment file', [
+                            'index' => $index,
+                            'file_is_null' => is_null($file),
+                            'file_type' => gettype($file),
+                            'file_class' => is_object($file) ? get_class($file) : 'not_object'
+                        ]);
+                        
+                        if ($file === null) {
+                            \Log::warning('Skipping null file in attachments array', ['index' => $index]);
+                            continue;
+                        }
+                        
                         $uploadResult = $this->uploadFile($file, 'attachments', [
                             'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
                             'max_size' => 10240, // 10MB
@@ -113,13 +160,16 @@ class CampaignController extends Controller
                         ]);
                         
                         if ($uploadResult['success']) {
+                            // Get the full file path using the storage disk
+                            $fullPath = Storage::disk('local')->path($uploadResult['path']);
+                            
                             $attachmentPaths[] = [
                                 'path' => $uploadResult['path'],
                                 'original_name' => $file->getClientOriginalName(),
                                 'name' => $uploadResult['filename'],
                                 'size' => $uploadResult['size'],
-                                'mime_type' => $uploadResult['mime_type'],
-                                'checksum' => hash_file('md5', storage_path('app/' . $uploadResult['path']))
+                                'mime' => $uploadResult['mime_type'], // Change mime_type to mime for CampaignEmail
+                                'checksum' => file_exists($fullPath) ? hash_file('md5', $fullPath) : null
                             ];
                         } else {
                             throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
@@ -164,7 +214,7 @@ class CampaignController extends Controller
         }
         
         $attachment = $attachments[$attachmentIndex];
-        $filePath = storage_path('app/' . $attachment['path']);
+        $filePath = Storage::disk('local')->path($attachment['path']);
         
         if (!file_exists($filePath)) {
             abort(404, 'Attachment file not found on disk');
@@ -226,9 +276,9 @@ class CampaignController extends Controller
                 'name' => 'required|string|max:255',
                 'subject' => 'nullable|string|max:255',
                 'content' => 'nullable|string',
-                'recipient_file' => 'nullable|file|mimetypes:text/plain,text/csv,application/csv,text/x-csv,application/x-csv,text/comma-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet|max:10240',
+                'recipient_file' => 'nullable|file|mimes:txt,csv,xlsx,xls|max:10240',
                 'attachments' => 'nullable|array',
-                'attachments.*' => 'file|max:10240|mimetypes:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/jpeg,image/jpg,image/png,image/gif,application/zip,application/x-zip-compressed',
+                'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,jpeg,jpg,png,gif,zip',
                 'enable_content_switching' => 'nullable|string',
                 'content_variations' => 'nullable|string',
                 'template_variables' => 'nullable|string',
@@ -294,13 +344,16 @@ class CampaignController extends Controller
                         ]);
                         
                         if ($uploadResult['success']) {
+                            // Get the full file path using the storage disk
+                            $fullPath = Storage::disk('local')->path($uploadResult['path']);
+                            
                             $attachmentPaths[] = [
                                 'path' => $uploadResult['path'],
                                 'original_name' => $file->getClientOriginalName(),
                                 'name' => $uploadResult['filename'],
                                 'size' => $uploadResult['size'],
                                 'mime_type' => $uploadResult['mime_type'],
-                                'checksum' => hash_file('md5', storage_path('app/' . $uploadResult['path']))
+                                'checksum' => file_exists($fullPath) ? hash_file('md5', $fullPath) : null
                             ];
                         } else {
                             throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);

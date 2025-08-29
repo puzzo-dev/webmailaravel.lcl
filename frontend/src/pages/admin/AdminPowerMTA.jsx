@@ -48,19 +48,19 @@ const AdminPowerMTA = () => {
   const loadPowerMTAData = async () => {
     try {
       setLoading(true);
-      
+
       // Debug logging
       console.log('adminService object:', adminService);
       console.log('adminService keys:', Object.keys(adminService));
       console.log('getPowerMTAStatus exists:', typeof adminService.getPowerMTAStatus);
-      
+
       const [statusResponse, fblResponse, diagnosticResponse, reputationResponse] = await Promise.all([
         adminService.getPowerMTAStatus(),
         adminService.getPowerMTAFBLAccounts(),
         adminService.getPowerMTADiagnosticFiles(),
         adminService.getPowerMTAReputationSummary()
       ]);
-      
+
       setPowerMTAStatus(statusResponse.data);
       setFblAccounts(fblResponse.data.accounts || []);
       setDiagnosticFiles(diagnosticResponse.data.files || []);
@@ -88,10 +88,10 @@ const AdminPowerMTA = () => {
 
   const handleAnalyzeReputation = async () => {
     if (!selectedDomain) return;
-    
+
     try {
       setLoading(true);
-      const response = await adminService.analyzePowerMTAReputation(selectedDomain);
+      await adminService.analyzePowerMTAReputation(selectedDomain);
       toast.success('Reputation analysis completed');
       // Update reputation summary with new data
       await loadPowerMTAData();
@@ -154,7 +154,7 @@ const AdminPowerMTA = () => {
   const handleProcessLocalLogs = async () => {
     try {
       setLoading(true);
-      const response = await adminService.processLocalPowerMTALogs(selectedDate);
+      await adminService.processLocalPowerMTALogs(selectedDate);
       toast.success('Local PowerMTA logs processed successfully');
       // Refresh available log files
       await loadAvailableLogFiles();
@@ -360,11 +360,10 @@ const AdminPowerMTA = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <Icon className="h-5 w-5 mr-2" />
                   {tab.name}
@@ -466,11 +465,10 @@ const AdminPowerMTA = () => {
                             {account.email}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              account.status === 'active'
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${account.status === 'active'
                                 ? 'bg-success-100 text-success-800'
                                 : 'bg-gray-100 text-gray-800'
-                            }`}>
+                              }`}>
                               {account.status}
                             </span>
                           </td>
@@ -560,11 +558,10 @@ const AdminPowerMTA = () => {
                             {formatNumber(file.records)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              file.status === 'processed'
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${file.status === 'processed'
                                 ? 'bg-success-100 text-success-800'
                                 : 'bg-warning-100 text-warning-800'
-                            }`}>
+                              }`}>
                               {file.status}
                             </span>
                           </td>
@@ -667,9 +664,8 @@ const AdminPowerMTA = () => {
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className="text-sm font-medium text-gray-900">{domain.reputation}%</span>
-                        <span className={`inline-flex items-center ${
-                          domain.trend === 'up' ? 'text-success-600' : 'text-danger-600'
-                        }`}>
+                        <span className={`inline-flex items-center ${domain.trend === 'up' ? 'text-success-600' : 'text-danger-600'
+                          }`}>
                           {domain.trend === 'up' ? (
                             <HiTrendingUp className="h-4 w-4" />
                           ) : (
@@ -810,12 +806,11 @@ const AdminPowerMTA = () => {
                       {availableLogFiles.map((file, index) => (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              file.type === 'accounting' ? 'bg-blue-100 text-blue-800' :
-                              file.type === 'diagnostic' ? 'bg-red-100 text-red-800' :
-                              file.type === 'fbl' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${file.type === 'accounting' ? 'bg-blue-100 text-blue-800' :
+                                file.type === 'diagnostic' ? 'bg-red-100 text-red-800' :
+                                  file.type === 'fbl' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-gray-100 text-gray-800'
+                              }`}>
                               {file.type}
                             </span>
                           </td>
@@ -829,9 +824,8 @@ const AdminPowerMTA = () => {
                             {formatDate(file.modified)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              file.readable ? 'bg-success-100 text-success-800' : 'bg-red-100 text-red-800'
-                            }`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${file.readable ? 'bg-success-100 text-success-800' : 'bg-red-100 text-red-800'
+                              }`}>
                               {file.readable ? 'Readable' : 'Unreadable'}
                             </span>
                           </td>

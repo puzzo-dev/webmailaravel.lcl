@@ -299,4 +299,181 @@ class TrackingController extends Controller
             return 'Other';
         }
     }
+
+    /**
+     * Frontend-friendly unsubscribe endpoint
+     */
+    public function unsubscribeFromFrontend(Request $request, string $token): JsonResponse
+    {
+        try {
+            // Decode the token to get email and campaign info
+            $data = $this->decodeUnsubscribeToken($token);
+            
+            if (!$data) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired unsubscribe link'
+                ], 400);
+            }
+
+            $email = $data['email'];
+            $campaignId = $data['campaign_id'];
+
+            // Get real client IP for unsubscribe tracking
+            $realIP = $this->getRealClientIP($request);
+            
+            $metadata = [
+                'ip_address' => $realIP,
+                'user_agent' => $request->userAgent(),
+                'unsubscribed_at' => now()->toISOString(),
+                'method' => 'frontend'
+            ];
+
+            // Check if already unsubscribed
+            $existingSuppression = \App\Models\SuppressionList::where('email', $email)
+                ->where('reason', 'unsubscribe')
+                ->first();
+
+            if ($existingSuppression) {
+                return response()->json([
+                    'success' => true,
+                    'already_unsubscribed' => true,
+                    'email' => $email,
+                    'message' => 'Email is already unsubscribed'
+                ]);
+            }
+
+            // Process unsubscribe through suppression list trait
+            $result = $this->handleUnsubscribe(null, $email, $metadata);
+
+            // Append to per-campaign unsubscribe file (for user info only)
+            $unsubscribeService = app(\App\Services\UnsubscribeExportService::class);
+            $unsubscribeService->appendToUnsubscribeList($campaignId, $email, $metadata);
+
+            if ($result['success']) {
+                Log::info('User unsubscribed via frontend', [
+                    'email' => $email,
+                    'campaign_id' => $campaignId,
+                    'ip' => $realIP,
+                    'token' => $token
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'email' => $email,
+                    'message' => 'Successfully unsubscribed from mailing list'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process unsubscribe request'
+            ], 500);
+
+        } catch (\Exception $e) {
+            Log::error('Frontend unsubscribe failed', [
+                'token' => $token,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process unsubscribe request'
+            ], 500);
+        }
+    }
+
+    /**
+     * Frontend-friendly resubscribe endpoint
+     */
+    public function resubscribeFromFrontend(Request $request, string $token): JsonResponse
+    {
+        try {
+            // Decode the token to get email info
+            $data = $this->decodeUnsubscribeToken($token);
+            
+            if (!$data) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired resubscribe link'
+                ], 400);
+            }
+
+            $email = $data['email'];
+
+            // Remove from suppression list
+            $removed = \App\Models\SuppressionList::where('email', $email)
+                ->where('reason', 'unsubscribe')
+                ->delete();
+
+            if ($removed > 0) {
+                Log::info('User resubscribed via frontend', [
+                    'email' => $email,
+                    'token' => $token
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'email' => $email,
+                    'message' => 'Successfully resubscribed to mailing list'
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'email' => $email,
+                'message' => 'Email was not unsubscribed'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Frontend resubscribe failed', [
+                'token' => $token,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process resubscribe request'
+            ], 500);
+        }
+    }
+
+    /**
+     * Decode unsubscribe token
+     */
+    private function decodeUnsubscribeToken(string $token): ?array
+    {
+        try {
+            // The token should contain email and campaign_id encoded
+            // For now, we'll reverse engineer from the Campaign model method
+            // This is a simplified approach - in production you might want to use JWT or signed URLs
+            
+            // Try to find a campaign that would generate this token
+            $campaigns = \App\Models\Campaign::where('enable_unsubscribe_link', true)->get();
+            
+            foreach ($campaigns as $campaign) {
+                // Try different emails to see if we can match the token
+                // This is not efficient but works for our current token generation method
+                $emailTrackings = \App\Models\EmailTracking::where('campaign_id', $campaign->id)->get();
+                
+                foreach ($emailTrackings as $tracking) {
+                    $expectedToken = hash('sha256', $tracking->recipient_email . $campaign->id . config('app.key'));
+                    if ($expectedToken === $token) {
+                        return [
+                            'email' => $tracking->recipient_email,
+                            'campaign_id' => $campaign->id
+                        ];
+                    }
+                }
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Failed to decode unsubscribe token', [
+                'token' => $token,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
 } 

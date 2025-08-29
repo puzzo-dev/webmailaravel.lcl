@@ -1,0 +1,18 @@
+# Campaign Status Monitor - Run every 10 minutes
+# Add this to your crontab to automatically monitor and fix campaign statuses
+# Run: crontab -e
+# Add this line:
+
+*/10 * * * * cd /home/users/codepad/www/webmailaravel.lcl/backend && php artisan campaign:monitor-status --fix >> /var/log/campaign-monitor.log 2>&1
+
+# This will:
+# - Run every 10 minutes
+# - Automatically fix any issues found (--fix flag)
+# - Log output to /var/log/campaign-monitor.log
+# - Include error output in the log (2>&1)
+
+# For testing/manual runs without auto-fix:
+# php artisan campaign:monitor-status
+
+# For manual runs with auto-fix:
+# php artisan campaign:monitor-status --fix

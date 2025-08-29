@@ -23,12 +23,12 @@ import {
 } from 'react-icons/hi';
 import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatDate, formatFileSize } from '../../utils/helpers';
+import { formatDate } from '../../utils/helpers';
 
 const AdminLogsAndQueues = () => {
   const { user } = useSelector((state) => state.auth);
   const [activeTab, setActiveTab] = useState('logs');
-  
+
   // Logs state
   const [selectedFile, setSelectedFile] = useState('laravel.log');
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,7 +100,7 @@ const AdminLogsAndQueues = () => {
         level: logLevel !== 'all' ? logLevel : undefined,
         search: searchTerm || undefined,
       });
-      
+
       setLogs(response.data.logs || []);
       setLogPagination({
         current_page: response.data.current_page || 1,
@@ -118,7 +118,7 @@ const AdminLogsAndQueues = () => {
 
   const handleClearLogs = async () => {
     if (!confirm('Are you sure you want to clear all logs? This action cannot be undone.')) return;
-    
+
     try {
       setLoading(true);
       await adminService.clearLogs(selectedFile);
@@ -218,7 +218,7 @@ const AdminLogsAndQueues = () => {
 
   const handleDeleteFailedJob = async (jobId) => {
     if (!confirm('Are you sure you want to delete this failed job?')) return;
-    
+
     try {
       await adminService.deleteFailedJob(jobId);
       toast.success('Failed job deleted successfully');
@@ -231,7 +231,7 @@ const AdminLogsAndQueues = () => {
 
   const handleClearAllFailedJobs = async () => {
     if (!confirm('Are you sure you want to clear all failed jobs? This action cannot be undone.')) return;
-    
+
     try {
       const response = await adminService.clearAllFailedJobs();
       toast.success(`Cleared ${response.data.deleted_count} failed jobs`);
@@ -244,7 +244,7 @@ const AdminLogsAndQueues = () => {
 
   const handleDeletePendingJob = async (jobId) => {
     if (!confirm('Are you sure you want to delete this pending job?')) return;
-    
+
     try {
       await adminService.deletePendingJob(jobId);
       toast.success('Pending job deleted successfully');
@@ -257,7 +257,7 @@ const AdminLogsAndQueues = () => {
 
   const handleClearAllPendingJobs = async () => {
     if (!confirm('Are you sure you want to clear all pending jobs? This action cannot be undone.')) return;
-    
+
     try {
       const response = await adminService.clearAllPendingJobs();
       toast.success(`Cleared ${response.data.deleted_count} pending jobs`);
@@ -282,8 +282,8 @@ const AdminLogsAndQueues = () => {
   // Helper functions
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (log.context && Array.isArray(log.context) && log.context.length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
+      (log.context && Array.isArray(log.context) && log.context.length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesLevel = logLevel === 'all' || log.level === logLevel || log.channel === logLevel;
     return matchesSearch && matchesLevel;
   });
@@ -408,22 +408,20 @@ const AdminLogsAndQueues = () => {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab('logs')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'logs'
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'logs'
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <HiDocumentText className="h-5 w-5 inline-block mr-2" />
                 System Logs
               </button>
               <button
                 onClick={() => setActiveTab('queues')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'queues'
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'queues'
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <HiClipboardList className="h-5 w-5 inline-block mr-2" />
                 Queue Management
@@ -716,22 +714,20 @@ const AdminLogsAndQueues = () => {
               <nav className="-mb-px flex space-x-8">
                 <button
                   onClick={() => setQueueTab('pending')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    queueTab === 'pending'
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${queueTab === 'pending'
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <HiClock className="h-5 w-5 inline-block mr-2" />
                   Pending Jobs ({queueStats.pending_jobs || 0})
                 </button>
                 <button
                   onClick={() => setQueueTab('failed')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    queueTab === 'failed'
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${queueTab === 'failed'
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <HiXCircle className="h-5 w-5 inline-block mr-2" />
                   Failed Jobs ({queueStats.failed_jobs || 0})
@@ -811,8 +807,8 @@ const AdminLogsAndQueues = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => 
-                              queueTab === 'failed' 
+                            onClick={() =>
+                              queueTab === 'failed'
                                 ? handleDeleteFailedJob(job.id)
                                 : handleDeletePendingJob(job.id)
                             }
@@ -938,11 +934,10 @@ const AdminLogsAndQueues = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Type
                     </label>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      selectedJob.type === 'failed' 
-                        ? 'text-red-600 bg-red-100' 
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${selectedJob.type === 'failed'
+                        ? 'text-red-600 bg-red-100'
                         : 'text-yellow-600 bg-yellow-100'
-                    }`}>
+                      }`}>
                       {selectedJob.type === 'failed' ? <HiXCircle className="h-4 w-4 mr-1" /> : <HiClock className="h-4 w-4 mr-1" />}
                       {selectedJob.type === 'failed' ? 'Failed' : 'Pending'}
                     </span>

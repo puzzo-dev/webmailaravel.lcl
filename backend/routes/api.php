@@ -67,6 +67,10 @@ Route::prefix('tracking')->group(function () {
     Route::get('/unsubscribe/{emailId}', [TrackingController::class, 'unsubscribe']);
 });
 
+// Frontend-friendly unsubscribe routes (no authentication required)
+Route::post('/unsubscribe/{token}', [TrackingController::class, 'unsubscribeFromFrontend']);
+Route::post('/resubscribe/{token}', [TrackingController::class, 'resubscribeFromFrontend']);
+
 // Public billing routes (no authentication required)
 Route::prefix('billing')->group(function () {
     Route::get('/plans', [BillingController::class, 'plans']);

@@ -1,22 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import { 
-  HiCheckCircle, 
-  HiXCircle, 
-  HiClock, 
+import {
+  HiCheckCircle,
+  HiXCircle,
+  HiClock,
   HiExclamation,
   HiRefresh,
   HiArrowLeft
 } from 'react-icons/hi';
-import { fetchSubscriptions } from '../../store/slices/billingSlice';
 import { billingService } from '../../services/api';
 
 const PaymentStatus = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
@@ -39,7 +36,7 @@ const PaymentStatus = () => {
       setLoading(true);
       const response = await billingService.getSubscriptions();
       const sub = response.data?.find(s => s.id == subscriptionId) || response.find?.(s => s.id == subscriptionId);
-      
+
       if (sub) {
         setSubscription(sub);
         // Auto-redirect to billing if payment is confirmed active
@@ -90,7 +87,7 @@ const PaymentStatus = () => {
           textColor: 'text-green-600',
           iconColor: 'text-green-500'
         };
-      
+
       case 'processing':
       case 'confirming':
         return {
@@ -101,7 +98,7 @@ const PaymentStatus = () => {
           textColor: 'text-yellow-600',
           iconColor: 'text-yellow-500'
         };
-      
+
       case 'cancelled':
       case 'canceled':
         return {
@@ -112,7 +109,7 @@ const PaymentStatus = () => {
           textColor: 'text-gray-600',
           iconColor: 'text-gray-500'
         };
-      
+
       case 'failed':
       case 'expired':
         return {
@@ -123,7 +120,7 @@ const PaymentStatus = () => {
           textColor: 'text-red-600',
           iconColor: 'text-red-500'
         };
-      
+
       default:
         return {
           icon: HiClock,
@@ -146,11 +143,11 @@ const PaymentStatus = () => {
       <div className="max-w-md w-full space-y-8">
         <div className={`${statusDisplay.bgColor} rounded-lg p-8 text-center`}>
           <StatusIcon className={`mx-auto h-16 w-16 ${statusDisplay.iconColor} mb-4`} />
-          
+
           <h1 className={`text-2xl font-bold ${statusDisplay.textColor} mb-2`}>
             {statusDisplay.title}
           </h1>
-          
+
           <p className={`${statusDisplay.textColor} mb-6`}>
             {statusDisplay.message}
           </p>
@@ -171,11 +168,10 @@ const PaymentStatus = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Status:</span>
-                  <span className={`font-medium capitalize ${
-                    subscription.status === 'active' ? 'text-green-600' : 
-                    subscription.status === 'processing' ? 'text-yellow-600' : 
-                    'text-gray-600'
-                  }`}>
+                  <span className={`font-medium capitalize ${subscription.status === 'active' ? 'text-green-600' :
+                      subscription.status === 'processing' ? 'text-yellow-600' :
+                        'text-gray-600'
+                    }`}>
                     {subscription.status}
                   </span>
                 </div>

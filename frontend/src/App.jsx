@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useSelector, useDispatch } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import { initializeAuth } from './store/slices/authSlice';
-import { hideSubscriptionOverlay } from './store/slices/uiSlice';
 import { fetchSystemConfig } from './store/slices/systemConfigSlice';
 import { useAppName } from './hooks/useSystemConfig';
 
@@ -43,6 +42,10 @@ import Senders from './pages/senders/Senders';
 import Domains from './pages/domains/Domains';
 import BounceCredentials from './pages/bounce-credentials/BounceCredentials';
 
+// Public Pages
+import Unsubscribe from './pages/Unsubscribe';
+import EmailTracking from './pages/EmailTracking';
+
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
@@ -57,7 +60,7 @@ import AdminPowerMTA from './pages/admin/AdminPowerMTA';
 import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminBilling from './pages/admin/AdminBilling';
 function App() {
-  const { isAuthenticated, user, isLoading, currentView } = useSelector((state) => state.auth);
+  const { isAuthenticated, isLoading, currentView } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const appName = useAppName();
 
@@ -65,7 +68,7 @@ function App() {
     dispatch(initializeAuth());
     // Fetch system config in parallel with auth initialization
     dispatch(fetchSystemConfig());
-  }, []);
+  }, [dispatch]);
 
   // Update document title when app name changes
   useEffect(() => {
@@ -113,7 +116,12 @@ function App() {
           <Route path="/" element={
             !isAuthenticated ? <Landing /> : <Navigate to={currentView === 'admin' ? "/admin" : "/dashboard"} replace />
           } />
-          
+
+          {/* Public Routes - No authentication required */}
+          <Route path="/unsubscribe/:token" element={<Unsubscribe />} />
+          <Route path="/tracking/:action/:emailId" element={<EmailTracking />} />
+          <Route path="/tracking/:action/:emailId/:linkId" element={<EmailTracking />} />
+
           {/* Auth Routes */}
           <Route element={<AuthRoute />}>
             <Route element={<AuthLayout />}>
@@ -145,19 +153,19 @@ function App() {
               <Route path="/bounce-credentials" element={<BounceCredentials />} />
 
               {/* Admin Routes - Only available to admin users */}
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/users" element={<AdminUsers />} />
-                <Route path="/admin/suppression-list" element={<SuppressionList />} />
-                <Route path="/admin/campaigns" element={<AdminCampaigns />} />
-                <Route path="/admin/domains" element={<AdminDomains />} />
-                <Route path="/admin/senders" element={<AdminSenders />} />
-                <Route path="/admin/smtp" element={<AdminSmtp />} />
-                <Route path="/admin/system" element={<AdminSystem />} />
-                <Route path="/admin/backups" element={<AdminBackups />} />
-                <Route path="/admin/logs" element={<AdminLogsAndQueues />} />
-                <Route path="/admin/powermta" element={<AdminPowerMTA />} />
-                <Route path="/admin/notifications" element={<AdminNotifications />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/suppression-list" element={<SuppressionList />} />
+              <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+              <Route path="/admin/domains" element={<AdminDomains />} />
+              <Route path="/admin/senders" element={<AdminSenders />} />
+              <Route path="/admin/smtp" element={<AdminSmtp />} />
+              <Route path="/admin/system" element={<AdminSystem />} />
+              <Route path="/admin/backups" element={<AdminBackups />} />
+              <Route path="/admin/logs" element={<AdminLogsAndQueues />} />
+              <Route path="/admin/powermta" element={<AdminPowerMTA />} />
+              <Route path="/admin/notifications" element={<AdminNotifications />} />
               <Route path="/admin/billing" element={<AdminBilling />} />
             </Route>
           </Route>
@@ -184,15 +192,15 @@ function App() {
                 <p className="mt-2 text-gray-500">The page you're looking for doesn't exist.</p>
                 <div className="mt-8">
                   {isAuthenticated ? (
-                    <a 
-                      href={currentView === 'admin' ? '/admin' : '/dashboard'} 
+                    <a
+                      href={currentView === 'admin' ? '/admin' : '/dashboard'}
                       className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg inline-block"
                     >
                       Go to {currentView === 'admin' ? 'Admin Dashboard' : 'Dashboard'}
                     </a>
                   ) : (
-                    <a 
-                      href="/" 
+                    <a
+                      href="/"
                       className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg inline-block"
                     >
                       Go to Home

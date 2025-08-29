@@ -114,12 +114,18 @@ class SendEmailJob implements ShouldQueue
             // Get campaign attachments if any
             $attachments = [];
             if ($this->campaign->attachments) {
-                $attachments = json_decode($this->campaign->attachments, true) ?? [];
+                // Campaign model casts attachments as array, so no need to json_decode
+                $attachments = $this->campaign->attachments;
             }
 
+            // Create campaign email instance outside try block to access in catch
+            $campaignEmail = new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData, $attachments);
+            
             // Send email using Laravel's Mail facade
-            Mail::to($this->recipient)
-                ->send(new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData, $attachments));
+            Mail::to($this->recipient)->send($campaignEmail);
+            
+            // Mark email as successfully sent
+            $campaignEmail->markAsSent();
 
             // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND
             $sender->incrementDailySent();
@@ -152,26 +158,30 @@ class SendEmailJob implements ShouldQueue
             $this->checkCampaignCompletion();
 
         } catch (\Exception $e) {
-            // Increment failed count for queued jobs only
-            $this->campaign->increment('total_failed');
+            // Mark email as failed if we have the campaign email instance
+            if (isset($campaignEmail)) {
+                $campaignEmail->markAsFailed($e->getMessage());
+            }
             
-            // Get updated campaign data for status logging
-            $updatedCampaign = $this->campaign->fresh();
+            // Don't increment total_failed here - it will be handled in the failed() method
+            // to prevent double counting when job fails and gets retried
+            
+            // Get current campaign data for status logging (without incrementing)
+            $currentCampaign = $this->campaign->fresh();
             
             Log::error('Campaign email sending failed', [
                 'campaign_id' => $this->campaign->id,
-                'campaign_name' => $updatedCampaign->name,
-                'campaign_status' => $updatedCampaign->status,
+                'campaign_name' => $currentCampaign->name,
+                'campaign_status' => $currentCampaign->status,
                 'recipient' => $this->recipient,
                 'sender_id' => $this->sender->id,
                 'sender_email' => $this->sender->email,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'total_sent' => $updatedCampaign->total_sent,
-                'total_failed' => $updatedCampaign->total_failed,
-                'total_recipients' => $updatedCampaign->recipient_count,
-                'progress_percentage' => $updatedCampaign->recipient_count > 0 ? 
-                    round((($updatedCampaign->total_sent + $updatedCampaign->total_failed) / $updatedCampaign->recipient_count) * 100, 2) : 0
+                'current_total_sent' => $currentCampaign->total_sent,
+                'current_total_failed' => $currentCampaign->total_failed,
+                'total_recipients' => $currentCampaign->recipient_count,
+                'job_will_retry' => $this->attempts() < $this->tries
             ]);
 
             // Re-throw the exception to trigger job failure
@@ -264,7 +274,8 @@ class SendEmailJob implements ShouldQueue
     {
         // Use database transaction to prevent race conditions
         \DB::transaction(function () {
-            $campaign = $this->campaign->lockForUpdate()->fresh();
+            // Get fresh campaign instance with lock
+            $campaign = \App\Models\Campaign::lockForUpdate()->find($this->campaign->id);
             $totalProcessed = ($campaign->total_sent ?? 0) + ($campaign->total_failed ?? 0);
             $totalRecipients = $campaign->recipient_count ?? 0;
             

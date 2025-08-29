@@ -28,7 +28,7 @@ const useBilling = () => {
   // Load all billing data
   const loadBillingData = useCallback(async () => {
     if (isLoading) return;
-    
+
     try {
       // Always load public data (plans)
       const publicPromises = [
@@ -52,7 +52,7 @@ const useBilling = () => {
           console.warn(`Failed to load ${endpoints[index]}:`, result.reason);
         }
       });
-      
+
     } catch (error) {
       console.error('Failed to load billing data:', error);
       // Don't show toast error for data loading failures to avoid UX issues
@@ -77,7 +77,7 @@ const useBilling = () => {
           'Accept': 'text/html,application/pdf,*/*',
         },
       });
-      
+
       if (!downloadResponse.ok) {
         let errorMessage = `HTTP ${downloadResponse.status}`;
         try {
@@ -95,21 +95,18 @@ const useBilling = () => {
 
       // Get content type and determine file extension
       const contentType = downloadResponse.headers.get('content-type');
-      let fileExtension = 'pdf';
       let fileName = `invoice-${invoiceId}.pdf`;
-      
+
       if (contentType) {
         if (contentType.includes('text/html')) {
-          fileExtension = 'html';
           fileName = `invoice-${invoiceId}.html`;
         } else if (contentType.includes('application/pdf')) {
-          fileExtension = 'pdf';
           fileName = `invoice-${invoiceId}.pdf`;
         }
       }
 
       const blob = await downloadResponse.blob();
-      
+
       // Validate blob size
       if (blob.size === 0) {
         toast.error('Downloaded file is empty');
@@ -123,13 +120,13 @@ const useBilling = () => {
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      
+
       // Clean up
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       }, 100);
-      
+
       toast.success('Invoice downloaded successfully');
       return true;
     } catch (error) {
@@ -149,7 +146,7 @@ const useBilling = () => {
     try {
       const response = await api.get(`/billing/invoice/${invoiceId}/view`);
       console.log('Invoice details:', response);
-      
+
       // The api wrapper already handles the response parsing
       if (response.success !== false) {
         toast.success('Invoice details loaded');
@@ -225,7 +222,7 @@ const useBilling = () => {
 
   // Check if there are any pending payments
   const hasPendingPayments = () => {
-    return getFormattedPaymentHistory().some(payment => 
+    return getFormattedPaymentHistory().some(payment =>
       payment.status === 'pending' || payment.status === 'processing'
     );
   };

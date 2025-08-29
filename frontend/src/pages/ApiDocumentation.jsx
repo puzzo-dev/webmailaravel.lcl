@@ -41,25 +41,10 @@ const ApiDocumentation = () => {
     try {
       await navigator.clipboard.writeText(text);
       toast.success('Copied to clipboard!');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to copy');
     }
   };
-
-  const sections = [
-    { id: 'overview', title: 'Overview', icon: HiBookOpen },
-    { id: 'authentication', title: 'Authentication', icon: HiKey },
-    { id: 'campaigns', title: 'Campaigns', icon: HiMail },
-    { id: 'users', title: 'Users', icon: HiUsers },
-    { id: 'analytics', title: 'Analytics', icon: HiChartBar },
-    { id: 'domains', title: 'Domains', icon: HiGlobe },
-    { id: 'senders', title: 'Senders', icon: HiMail },
-    { id: 'suppression', title: 'Suppression', icon: HiShieldCheck },
-    { id: 'billing', title: 'Billing', icon: HiCube },
-    { id: 'admin', title: 'Admin', icon: HiCog },
-    { id: 'webhooks', title: 'Webhooks', icon: HiLightningBolt },
-    { id: 'examples', title: 'Examples', icon: HiTerminal },
-  ];
 
   const apiEndpoints = {
     authentication: [
@@ -437,7 +422,7 @@ const ApiDocumentation = () => {
 
   const renderEndpointSection = (sectionKey) => {
     const endpoints = apiEndpoints[sectionKey] || [];
-    
+
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -445,33 +430,31 @@ const ApiDocumentation = () => {
           <p className="text-gray-600 mb-6">
             Manage {sectionKey} through these RESTful API endpoints.
           </p>
-          
+
           <div className="space-y-4">
             {endpoints.map((endpoint, index) => (
               <div key={index} className="border border-gray-200 rounded-lg">
-                <div 
+                <div
                   className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => setActiveEndpoint(activeEndpoint === `${sectionKey}-${index}` ? null : `${sectionKey}-${index}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        endpoint.method === 'GET' ? 'bg-green-100 text-green-800' :
-                        endpoint.method === 'POST' ? 'bg-blue-100 text-blue-800' :
-                        endpoint.method === 'PUT' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${endpoint.method === 'GET' ? 'bg-green-100 text-green-800' :
+                          endpoint.method === 'POST' ? 'bg-blue-100 text-blue-800' :
+                            endpoint.method === 'PUT' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                        }`}>
                         {endpoint.method}
                       </span>
                       <code className="text-sm font-mono text-gray-800">{endpoint.endpoint}</code>
                     </div>
-                    <HiChevronRight className={`h-5 w-5 text-gray-400 transition-transform ${
-                      activeEndpoint === `${sectionKey}-${index}` ? 'rotate-90' : ''
-                    }`} />
+                    <HiChevronRight className={`h-5 w-5 text-gray-400 transition-transform ${activeEndpoint === `${sectionKey}-${index}` ? 'rotate-90' : ''
+                      }`} />
                   </div>
                   <p className="text-sm text-gray-600 mt-2">{endpoint.description}</p>
                 </div>
-                
+
                 {activeEndpoint === `${sectionKey}-${index}` && (
                   <div className="border-t border-gray-200 p-4 bg-gray-50">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -486,15 +469,15 @@ const ApiDocumentation = () => {
                           ))}
                         </div>
                       </div>
-                      
+
                       <div>
                         <h4 className="font-semibold text-gray-900 mb-3">Response</h4>
                         <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto">
-{JSON.stringify(endpoint.response, null, 2)}
+                          {JSON.stringify(endpoint.response, null, 2)}
                         </pre>
                       </div>
                     </div>
-                    
+
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <h4 className="font-semibold text-gray-900 mb-2">Example Request</h4>
                       <div className="bg-gray-800 text-gray-100 p-3 rounded">
@@ -558,7 +541,7 @@ const ApiDocumentation = () => {
         <p className="text-gray-600 mb-6">
           Webhooks allow you to receive real-time notifications about campaign events.
         </p>
-        
+
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="font-semibold text-blue-900 mb-2">Webhook Events</h3>
           <ul className="text-sm text-blue-800 space-y-1">
@@ -570,38 +553,38 @@ const ApiDocumentation = () => {
             <li>• <code>email.unsubscribed</code> - Recipient unsubscribed</li>
           </ul>
         </div>
-        
+
         <div className="bg-gray-800 text-gray-100 p-4 rounded-lg">
           <h4 className="font-semibold mb-2">Example Webhook Payload:</h4>
           <pre className="text-xs overflow-x-auto">
-{JSON.stringify({
-  event: "email.opened",
-  timestamp: "2024-01-15T10:30:00Z",
-  data: {
-    campaign_id: 123,
-    email_id: "abc123",
-    recipient: "user@example.com",
-    user_agent: "Mozilla/5.0...",
-    ip_address: "192.168.1.1"
-  }
-}, null, 2)}
+            {JSON.stringify({
+              event: "email.opened",
+              timestamp: "2024-01-15T10:30:00Z",
+              data: {
+                campaign_id: 123,
+                email_id: "abc123",
+                recipient: "user@example.com",
+                user_agent: "Mozilla/5.0...",
+                ip_address: "192.168.1.1"
+              }
+            }, null, 2)}
           </pre>
         </div>
       </div>
     </div>
   );
-  
+
   const renderExamplesSection = () => (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Code Examples</h2>
-        
+
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">JavaScript/Node.js</h3>
             <div className="bg-gray-800 text-gray-100 p-4 rounded-lg">
               <pre className="text-sm overflow-x-auto">
-{`// Create a new campaign
+                {`// Create a new campaign
 const response = await fetch('/api/campaigns', {
   method: 'POST',
   headers: {
@@ -622,14 +605,14 @@ const campaign = await response.json();`}
               </pre>
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">PHP/Laravel</h3>
             <div className="bg-gray-800 text-gray-100 p-4 rounded-lg">
               <pre className="text-sm overflow-x-auto">
-{`<?php
+                {`<?php
 // Using Guzzle HTTP client
-$client = new \GuzzleHttp\Client();
+$client = new \\GuzzleHttp\\Client(); // eslint-disable-line no-useless-escape
 
 $response = $client->post('https://yourapi.com/api/campaigns', [
     'headers' => [
@@ -650,12 +633,12 @@ $campaign = json_decode($response->getBody(), true);`}
               </pre>
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Python</h3>
             <div className="bg-gray-800 text-gray-100 p-4 rounded-lg">
               <pre className="text-sm overflow-x-auto">
-{`import requests
+                {`import requests
 
 # Create a new campaign
 url = 'https://yourapi.com/api/campaigns'
@@ -686,67 +669,66 @@ campaign = response.json()`}
     <div className="flex">
       {/* Sidebar */}
       <div className="w-64 bg-white shadow-sm border-r border-gray-200 min-h-screen">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">API Documentation</h2>
-            <div className="mt-2">
-              <a 
-                href={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/api/documentation`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
-              >
-                <HiExternalLink className="h-3 w-3 mr-1" />
-                Swagger UI
-              </a>
-            </div>
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">API Documentation</h2>
+          <div className="mt-2">
+            <a
+              href={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'}/api/documentation`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center"
+            >
+              <HiExternalLink className="h-3 w-3 mr-1" />
+              Swagger UI
+            </a>
           </div>
-          <nav className="p-4">
-            <ul className="space-y-2">
-              {['overview', 'authentication', 'campaigns', 'analytics', 'users', 'domains', 'senders', 'suppression', 'billing', 'webhooks', 'examples'].map((sectionId) => {
-                const getIcon = (section) => {
-                  switch(section) {
-                    case 'overview': return HiHome;
-                    case 'authentication': return HiLockClosed;
-                    case 'campaigns': return HiClipboard;
-                    case 'analytics': return HiChartBar;
-                    case 'users': return HiUser;
-                    case 'domains': return HiGlobe;
-                    case 'senders': return HiMail;
-                    case 'suppression': return HiBan;
-                    case 'billing': return HiCreditCard;
-                    case 'webhooks': return HiLink;
-                    case 'examples': return HiCode;
-                    default: return HiCode;
-                  }
-                };
-                
-                const Icon = getIcon(sectionId);
-                const title = sectionId.charAt(0).toUpperCase() + sectionId.slice(1);
-                
-                return (
-                  <li key={sectionId}>
-                    <button
-                      onClick={() => setActiveSection(sectionId)}
-                      className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        activeSection === sectionId
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5 mr-3" />
-                      {title}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
         </div>
+        <nav className="p-4">
+          <ul className="space-y-2">
+            {['overview', 'authentication', 'campaigns', 'analytics', 'users', 'domains', 'senders', 'suppression', 'billing', 'webhooks', 'examples'].map((sectionId) => {
+              const getIcon = (section) => {
+                switch (section) {
+                  case 'overview': return HiHome;
+                  case 'authentication': return HiLockClosed;
+                  case 'campaigns': return HiClipboard;
+                  case 'analytics': return HiChartBar;
+                  case 'users': return HiUser;
+                  case 'domains': return HiGlobe;
+                  case 'senders': return HiMail;
+                  case 'suppression': return HiBan;
+                  case 'billing': return HiCreditCard;
+                  case 'webhooks': return HiLink;
+                  case 'examples': return HiCode;
+                  default: return HiCode;
+                }
+              };
 
-        {/* Main Content */}
-        <div className="flex-1 p-8">
-          {renderContent()}
-        </div>
+              const Icon = getIcon(sectionId);
+              const title = sectionId.charAt(0).toUpperCase() + sectionId.slice(1);
+
+              return (
+                <li key={sectionId}>
+                  <button
+                    onClick={() => setActiveSection(sectionId)}
+                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${activeSection === sectionId
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                  >
+                    <Icon className="h-5 w-5 mr-3" />
+                    {title}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-8">
+        {renderContent()}
+      </div>
     </div>
   );
 };

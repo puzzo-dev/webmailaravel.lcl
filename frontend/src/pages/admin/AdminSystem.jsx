@@ -28,7 +28,6 @@ import {
 import {
   adminService,
   systemSettingsService,
-  securityService,
 } from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -377,10 +376,10 @@ const AdminSystem = () => {
               <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                 <div
                   className={`h-2 rounded-full ${systemStatus.storage_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.storage_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.storage_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.storage_usage}%` }}
                 ></div>
@@ -398,10 +397,10 @@ const AdminSystem = () => {
               <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                 <div
                   className={`h-2 rounded-full ${systemStatus.memory_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.memory_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.memory_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.memory_usage}%` }}
                 ></div>
@@ -419,10 +418,10 @@ const AdminSystem = () => {
               <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                 <div
                   className={`h-2 rounded-full ${systemStatus.cpu_usage > 80
-                      ? "bg-red-600"
-                      : systemStatus.cpu_usage > 60
-                        ? "bg-yellow-600"
-                        : "bg-green-600"
+                    ? "bg-red-600"
+                    : systemStatus.cpu_usage > 60
+                      ? "bg-yellow-600"
+                      : "bg-green-600"
                     }`}
                   style={{ width: `${systemStatus.cpu_usage}%` }}
                 ></div>
@@ -498,8 +497,8 @@ const AdminSystem = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-shrink-0 flex items-center py-4 px-3 mr-6 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                      ? "border-primary-500 text-primary-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-primary-500 text-primary-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                     }`}
                 >
                   <Icon className="h-4 w-4 mr-2 flex-shrink-0" />
@@ -718,7 +717,7 @@ const AdminSystem = () => {
                         env: envResponse.data,
                       }));
                       toast.success("Environment variables refreshed");
-                    } catch (error) {
+                    } catch {
                       toast.error("Failed to load environment variables");
                     }
                   }}

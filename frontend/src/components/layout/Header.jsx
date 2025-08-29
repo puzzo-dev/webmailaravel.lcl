@@ -33,7 +33,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
-  
+
   // Refs for dropdown elements
   const notificationsRef = useRef(null);
   const userMenuRef = useRef(null);
@@ -85,13 +85,13 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
@@ -174,7 +174,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
             >
               <HiMenu className="h-6 w-6" />
             </button>
-            
+
             {/* Global Search */}
             <div className="hidden md:block ml-4">
               <button
@@ -234,24 +234,27 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                         <div
                           key={notification.id}
                           onClick={() => handleNotificationClick(notification)}
-                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                            !notification.read_at ? 'bg-blue-50' : ''
-                          } flex justify-between`}
+                          className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${!notification.read_at ? 'bg-blue-50' : ''
+                            } flex justify-between`}
                         >
                           <div className="flex items-start">
                             <div className="flex-shrink-0">
-                              <div className={`h-8 w-8 ${getNotificationBg(notification)} rounded-full flex items-center justify-center`}>
+                              <div className={`h-6 w-6 ${getNotificationBg(notification)} rounded-full flex items-center justify-center`}>
                                 {getNotificationIcon(notification)}
                               </div>
                             </div>
                             <div className="ml-3 flex-1">
-                              <p className="text-sm font-medium text-gray-900">
+                              <p className="text-xs font-medium text-gray-900 truncate">
                                 {notification.title || 'Notification'}
                               </p>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {notification.message || ''}
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-tight">
+                                {(() => {
+                                  const message = notification.message || '';
+                                  // Truncate message to ~80 characters for preview
+                                  return message.length > 80 ? message.substring(0, 80) + '...' : message;
+                                })()}
                               </p>
-                              <p className="text-xs text-gray-400 mt-2">
+                              <p className="text-xs text-gray-400 mt-1">
                                 {formatTime(notification.created_at)}
                               </p>
                               {!notification.read_at && (
@@ -268,7 +271,7 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     )}
                   </div>
                   <div className="p-4 border-t border-gray-200">
-                    <button 
+                    <button
                       onClick={() => {
                         setShowNotifications(false);
                         if (isAdmin && isAdminView) {
@@ -297,14 +300,14 @@ const Header = ({ onMenuToggle, user, onLogout }) => {
                     {user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase()}
                   </span>
                 </div>
-                                    <span className="hidden md:block text-sm font-medium text-gray-700">
-                      {user?.name || 'User'}
-                      {isAdmin && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                          {currentView === 'admin' ? 'Admin View' : 'User View'}
-                        </span>
-                      )}
+                <span className="hidden md:block text-sm font-medium text-gray-700">
+                  {user?.name || 'User'}
+                  {isAdmin && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                      {currentView === 'admin' ? 'Admin View' : 'User View'}
                     </span>
+                  )}
+                </span>
               </button>
 
               {/* User Dropdown */}

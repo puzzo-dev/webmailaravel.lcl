@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import {
   HiCreditCard,
   HiDocumentText,
@@ -29,25 +30,21 @@ const Billing = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const {
-    subscriptions,
     currentSubscription,
     paymentHistory,
-    paymentRates,
     invoices,
     plans,
     isLoading,
     error,
   } = useSelector((state) => state.billing);
-  
+
   const [activeTab, setActiveTab] = useState('subscription');
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-    
     const loadBillingData = async () => {
       if (!user?.id || isLoading) return;
-      
+
       try {
         // Load data sequentially to avoid overwhelming the backend
         await Promise.allSettled([
@@ -60,9 +57,9 @@ const Billing = () => {
         console.error('Failed to load billing data:', error);
       }
     };
-    
+
     loadBillingData();
-    
+
     // Check if user just registered and came from pricing
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('welcome') === 'true') {
@@ -70,11 +67,8 @@ const Billing = () => {
       // Clean up the URL
       window.history.replaceState({}, '', window.location.pathname);
     }
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [dispatch, user?.id]); // Add user.id as dependency
+
+  }, [dispatch, user?.id, isLoading]); // Add user.id as dependency
 
   useEffect(() => {
     if (error) {
@@ -98,7 +92,7 @@ const Billing = () => {
 
   const handleCancelSubscription = async () => {
     if (!confirm('Are you sure you want to cancel your subscription?')) return;
-    
+
     try {
       if (currentSubscription) {
         await dispatch(cancelSubscription(currentSubscription.id)).unwrap();
@@ -144,7 +138,7 @@ const Billing = () => {
                 Your account has been created successfully. Choose a plan below to unlock premium features and start creating powerful email campaigns.
               </div>
               <div className="mt-3">
-                <button 
+                <button
                   onClick={() => setShowWelcome(false)}
                   className="text-green-600 hover:text-green-800 text-sm font-medium"
                 >
@@ -183,11 +177,10 @@ const Billing = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                       ? 'border-primary-500 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <Icon className="h-5 w-5 mr-2" />
                   {tab.name}
@@ -213,11 +206,10 @@ const Billing = () => {
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        currentSubscription.status === 'active' 
-                          ? 'bg-success-100 text-success-800' 
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${currentSubscription.status === 'active'
+                          ? 'bg-success-100 text-success-800'
                           : 'bg-warning-100 text-warning-800'
-                      }`}>
+                        }`}>
                         {currentSubscription.status === 'active' ? (
                           <HiCheckCircle className="h-4 w-4 mr-1" />
                         ) : (
@@ -260,31 +252,30 @@ const Billing = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                   </div>
                 ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {Array.isArray(plans) && plans.length > 0 ? (
                       plans.map((plan) => (
-                    <div
+                        <div
                           key={plan.id}
-                      className={`border rounded-lg p-6 ${
-                            currentSubscription?.plan?.id === plan.id
-                          ? 'border-primary-500 bg-primary-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="text-center">
-                        <h4 className="text-lg font-medium text-gray-900">{plan.name}</h4>
-                        <div className="mt-2">
-                          <span className="text-3xl font-bold text-gray-900">
+                          className={`border rounded-lg p-6 ${currentSubscription?.plan?.id === plan.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                        >
+                          <div className="text-center">
+                            <h4 className="text-lg font-medium text-gray-900">{plan.name}</h4>
+                            <div className="mt-2">
+                              <span className="text-3xl font-bold text-gray-900">
                                 ${formatNumber(plan.price, 2)}
-                          </span>
+                              </span>
                               <span className="text-gray-500">/{plan.duration_days} days</span>
-                        </div>
+                            </div>
                             {currentSubscription?.plan?.id === plan.id && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 mt-2">
-                            Current Plan
-                          </span>
-                        )}
-                      </div>
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 mt-2">
+                                Current Plan
+                              </span>
+                            )}
+                          </div>
                           <div className="mt-6 space-y-3">
                             <div className="text-sm text-gray-700">
                               <div className="flex justify-between">
@@ -314,15 +305,15 @@ const Billing = () => {
                                 Current Plan
                               </button>
                             ) : (
-                        <button
+                              <button
                                 onClick={() => handleUpgrade(plan.id)}
                                 className="w-full btn btn-primary"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? 'Processing...' : `Upgrade to ${plan.name}`}
-                        </button>
-                      )}
-                    </div>
+                                disabled={isLoading}
+                              >
+                                {isLoading ? 'Processing...' : `Upgrade to ${plan.name}`}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))
                     ) : (
@@ -330,7 +321,7 @@ const Billing = () => {
                         <p className="text-gray-500">No plans available</p>
                       </div>
                     )}
-                </div>
+                  </div>
                 )}
               </div>
 
@@ -395,11 +386,10 @@ const Billing = () => {
                               ${formatNumber(payment.amount, 2)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                payment.status === 'completed'
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${payment.status === 'completed'
                                   ? 'bg-success-100 text-success-800'
                                   : 'bg-warning-100 text-warning-800'
-                              }`}>
+                                }`}>
                                 {payment.status === 'completed' ? (
                                   <HiCheckCircle className="h-3 w-3 mr-1" />
                                 ) : (
@@ -489,11 +479,10 @@ const Billing = () => {
                               ${formatNumber(invoice.amount, 2)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                invoice.status === 'paid'
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${invoice.status === 'paid'
                                   ? 'bg-success-100 text-success-800'
                                   : 'bg-warning-100 text-warning-800'
-                              }`}>
+                                }`}>
                                 {invoice.status === 'paid' ? (
                                   <HiCheckCircle className="h-3 w-3 mr-1" />
                                 ) : (

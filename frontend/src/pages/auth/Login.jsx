@@ -9,18 +9,17 @@ import { HiInbox, HiLockClosed, HiEye, HiEyeOff } from 'react-icons/hi';
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const { isLoading, error, isAuthenticated, loginAttempts } = useSelector((state) => state.auth);
-  
+
   const {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
   } = useForm();
 
   // Redirect if already authenticated
@@ -53,9 +52,9 @@ const Login = () => {
         password: data.password,
         remember: rememberMe,
       })).unwrap();
-      
+
       toast.success('Login successful!');
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

@@ -10,14 +10,14 @@ const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const dispatch = useDispatch();
   const { isLoading, error } = useSelector((state) => state.auth);
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  
+
   const token = searchParams.get('token');
   const email = searchParams.get('email');
-  
+
   const {
     register,
     handleSubmit,
@@ -42,10 +42,10 @@ const ResetPassword = () => {
         password: data.password,
         password_confirmation: data.password_confirmation,
       })).unwrap();
-      
+
       setIsSubmitted(true);
       toast.success('Password reset successfully!');
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

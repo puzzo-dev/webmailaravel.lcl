@@ -51,7 +51,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
     try {
       setLoadingUsers(true);
       const response = await adminService.getUsers();
-      
+
       // Handle different possible response structures
       let userData = [];
       if (response.data?.data) {
@@ -61,7 +61,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
       } else if (response.data?.users) {
         userData = response.data.users;
       }
-      
+
       setAvailableUsers(userData);
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -92,13 +92,13 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
   const handleUserSelect = (userId) => {
     setFormData(prev => ({
       ...prev,
-      user_ids: prev.user_ids.includes(userId) 
+      user_ids: prev.user_ids.includes(userId)
         ? prev.user_ids.filter(id => id !== userId)
         : [...prev.user_ids, userId]
     }));
   };
 
-  const filteredUsers = (Array.isArray(availableUsers) ? availableUsers : []).filter(user => 
+  const filteredUsers = (Array.isArray(availableUsers) ? availableUsers : []).filter(user =>
     user.name?.toLowerCase().includes(searchUsers.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchUsers.toLowerCase())
   );
@@ -143,7 +143,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
                   name="recipient_type"
                   value="all"
                   checked={formData.recipient_type === 'all'}
-                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, recipient_type: e.target.value })}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                 />
                 <label htmlFor="all" className="ml-2 block text-sm text-gray-900">
@@ -153,7 +153,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
                   </div>
                 </label>
               </div>
-              
+
               <div className="flex items-center">
                 <input
                   type="radio"
@@ -161,7 +161,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
                   name="recipient_type"
                   value="active"
                   checked={formData.recipient_type === 'active'}
-                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, recipient_type: e.target.value })}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                 />
                 <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
@@ -179,7 +179,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
                   name="recipient_type"
                   value="role"
                   checked={formData.recipient_type === 'role'}
-                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, recipient_type: e.target.value })}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                 />
                 <label htmlFor="role" className="ml-2 block text-sm text-gray-900">
@@ -197,7 +197,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
                   name="recipient_type"
                   value="specific"
                   checked={formData.recipient_type === 'specific'}
-                  onChange={(e) => setFormData({...formData, recipient_type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, recipient_type: e.target.value })}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
                 />
                 <label htmlFor="specific" className="ml-2 block text-sm text-gray-900">
@@ -216,7 +216,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Select Role</label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="user">Users</option>
@@ -287,7 +287,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Notification Type</label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({...formData, type: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="info">Information</option>
@@ -302,7 +302,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
             <input
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Enter notification title..."
               required
@@ -313,7 +313,7 @@ const CreateNotificationModal = ({ onClose, onSuccess, users }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
             <textarea
               value={formData.message}
-              onChange={(e) => setFormData({...formData, message: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               rows={4}
               className="block w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Enter notification message..."
@@ -408,7 +408,7 @@ const AdminNotifications = () => {
     try {
       setLoading(true);
       const [notificationsResponse, dashboardResponse] = await Promise.all([
-        adminService.getNotifications({ 
+        adminService.getNotifications({
           page: pagination.current_page,
           limit: pagination.per_page,
           filter: filter !== 'all' ? filter : undefined
@@ -423,12 +423,12 @@ const AdminNotifications = () => {
         per_page: notificationsResponse.data.per_page || 20,
         total: notificationsResponse.data.total || 0,
       });
-      
+
       // Ensure data is an array before filtering
-      const notificationsArray = Array.isArray(notificationsResponse.data.data) 
-        ? notificationsResponse.data.data 
+      const notificationsArray = Array.isArray(notificationsResponse.data.data)
+        ? notificationsResponse.data.data
         : [];
-      
+
       setStats({
         total_notifications: notificationsResponse.data.total || 0,
         unread_notifications: notificationsArray.filter(n => !n.read_at).length || 0,
@@ -448,7 +448,7 @@ const AdminNotifications = () => {
       setRefreshing(true);
       await loadData();
       toast.success('Data refreshed successfully');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to refresh data');
     } finally {
       setRefreshing(false);
@@ -461,7 +461,7 @@ const AdminNotifications = () => {
         await adminService.deleteNotification(notificationId);
         toast.success('Notification deleted successfully');
         await loadData();
-      } catch (error) {
+      } catch (_error) {
         toast.error('Failed to delete notification');
       }
     }
@@ -472,7 +472,7 @@ const AdminNotifications = () => {
       await adminService.markNotificationAsRead(notificationId);
       toast.success('Notification marked as read');
       await loadData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to mark notification as read');
     }
   };
@@ -483,7 +483,7 @@ const AdminNotifications = () => {
       toast.success('Notification created successfully');
       setShowCreateModal(false);
       await loadData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to create notification');
     }
   };
@@ -492,7 +492,7 @@ const AdminNotifications = () => {
     // Filter by status
     if (filter === 'unread' && notification.read_at) return false;
     if (filter === 'read' && !notification.read_at) return false;
-    
+
     // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -503,7 +503,7 @@ const AdminNotifications = () => {
         notification.user?.email?.toLowerCase().includes(searchLower)
       );
     }
-    
+
     return true;
   });
 
@@ -525,13 +525,13 @@ const AdminNotifications = () => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
@@ -663,7 +663,7 @@ const AdminNotifications = () => {
               <dl>
                 <dt className="text-sm font-medium text-gray-500 truncate">Engagement Rate</dt>
                 <dd className="text-3xl font-bold text-gray-900">
-                  {stats.total_notifications > 0 
+                  {stats.total_notifications > 0
                     ? Math.round(((stats.total_notifications - stats.unread_notifications) / stats.total_notifications) * 100)
                     : 0}%
                 </dd>
@@ -735,11 +735,10 @@ const AdminNotifications = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredNotifications.length > 0 ? (
                 filteredNotifications.map((notification) => (
-                  <tr 
-                    key={notification.id} 
-                    className={`hover:bg-gray-50 transition-colors ${
-                      !notification.read_at ? 'bg-blue-50' : ''
-                    }`}
+                  <tr
+                    key={notification.id}
+                    className={`hover:bg-gray-50 transition-colors ${!notification.read_at ? 'bg-blue-50' : ''
+                      }`}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-start space-x-3">
@@ -761,21 +760,19 @@ const AdminNotifications = () => {
                       <div className="text-sm text-gray-500">{notification.user?.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        notification.notification_type === 'success' ? 'bg-green-100 text-green-800' :
-                        notification.notification_type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                        notification.notification_type === 'error' ? 'bg-red-100 text-red-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${notification.notification_type === 'success' ? 'bg-green-100 text-green-800' :
+                          notification.notification_type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                            notification.notification_type === 'error' ? 'bg-red-100 text-red-800' :
+                              'bg-blue-100 text-blue-800'
+                        }`}>
                         {notification.notification_type || notification.type || 'info'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        notification.read_at 
-                          ? 'bg-gray-100 text-gray-800' 
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${notification.read_at
+                          ? 'bg-gray-100 text-gray-800'
                           : 'bg-red-100 text-red-800'
-                      }`}>
+                        }`}>
                         {notification.read_at ? 'Read' : 'Unread'}
                       </span>
                     </td>
@@ -821,7 +818,7 @@ const AdminNotifications = () => {
                       {searchTerm || filter !== 'all' ? 'No matching notifications' : 'No notifications found'}
                     </h3>
                     <p className="text-gray-500">
-                      {searchTerm || filter !== 'all' 
+                      {searchTerm || filter !== 'all'
                         ? 'Try adjusting your search or filter criteria.'
                         : 'Notifications will appear here when they are created.'}
                     </p>
@@ -874,7 +871,7 @@ const AdminNotifications = () => {
                   {selectedNotification.read_at ? `Read on ${new Date(selectedNotification.read_at).toLocaleString()}` : 'Unread'}
                 </p>
               </div>
-              
+
               {/* Security Details for Login Notifications */}
               {(selectedNotification.notification_type === 'login' || selectedNotification.type === 'security') && (
                 <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
@@ -916,7 +913,7 @@ const AdminNotifications = () => {
       )}
 
       {/* Create Notification Modal */}
-      {showCreateModal && <CreateNotificationModal 
+      {showCreateModal && <CreateNotificationModal
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateNotification}
         users={stats.total_users}

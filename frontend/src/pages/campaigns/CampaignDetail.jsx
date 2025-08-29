@@ -17,6 +17,10 @@ import {
   HiClock,
   HiUserGroup,
   HiDuplicate,
+  HiX,
+  HiDocumentText,
+  HiPhotograph,
+  HiArchive
 } from 'react-icons/hi';
 import { fetchCampaign, fetchCampaignStats, fetchCampaignTracking, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
 import toast from 'react-hot-toast';
@@ -26,7 +30,7 @@ const CampaignDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
+
   const { currentCampaign, campaignStats, campaignTracking, isLoading } = useSelector((state) => state.campaigns);
   const [activeTab, setActiveTab] = useState('overview');
   const [actionLoading, setActionLoading] = useState(false);
@@ -34,6 +38,8 @@ const CampaignDetail = () => {
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [failedJobs, setFailedJobs] = useState([]);
   const [loadingFailedJobs, setLoadingFailedJobs] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -46,9 +52,9 @@ const CampaignDetail = () => {
   // Auto-refresh for running campaigns
   useEffect(() => {
     let intervalId;
-    
+
     if (currentCampaign && (
-      currentCampaign.status?.toLowerCase() === 'running' || 
+      currentCampaign.status?.toLowerCase() === 'running' ||
       currentCampaign.status?.toLowerCase() === 'active'
     )) {
       // Refresh every 30 seconds for running campaigns
@@ -183,6 +189,8 @@ const CampaignDetail = () => {
       'active': { color: 'bg-green-100 text-green-800', label: 'Active' },
       'processing': { color: 'bg-blue-100 text-blue-800', label: 'Processing' },
       'sending': { color: 'bg-green-100 text-green-800', label: 'Sending' },
+      'pending': { color: 'bg-indigo-100 text-indigo-800', label: 'Pending' },
+      'queued': { color: 'bg-indigo-100 text-indigo-800', label: 'Queued' },
       'paused': { color: 'bg-yellow-100 text-yellow-800', label: 'Paused' },
       'stopped': { color: 'bg-red-100 text-red-800', label: 'Stopped' },
       'completed': { color: 'bg-blue-100 text-blue-800', label: 'Completed' },
@@ -231,6 +239,144 @@ const CampaignDetail = () => {
     );
   }
 
+  // Helper function to get icon based on file type
+  const getFileIcon = (mimeType, fileName) => {
+    const ext = fileName?.toLowerCase().split('.').pop() || '';
+
+    if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
+      return HiPhotograph;
+    }
+
+    if (mimeType?.includes('pdf') || ext === 'pdf') {
+      return HiDocumentText;
+    }
+
+    if (['doc', 'docx'].includes(ext) || mimeType?.includes('wordprocessingml')) {
+      return HiDocumentText;
+    }
+
+    if (['xls', 'xlsx'].includes(ext) || mimeType?.includes('spreadsheetml')) {
+      return HiDocumentText;
+    }
+
+    if (['ppt', 'pptx'].includes(ext) || mimeType?.includes('presentationml')) {
+      return HiDocumentText;
+    }
+
+    if (mimeType?.includes('zip') || mimeType?.includes('archive') || ['zip', 'rar', '7z'].includes(ext)) {
+      return HiArchive;
+    }
+
+    return HiDocumentText;
+  };
+
+  // Preview attachment function
+  const handlePreviewAttachment = async (attachment, index) => {
+    const mimeType = attachment.mime_type || attachment.mime;
+    const fileName = attachment.original_name || attachment.name;
+
+    // Enhanced file type detection
+    const getFileCategory = (mimeType, fileName) => {
+      const ext = fileName.toLowerCase().split('.').pop();
+
+      if (mimeType?.startsWith('image/')) return 'image';
+      if (mimeType?.includes('pdf')) return 'pdf';
+      if (mimeType?.includes('text/') || ['txt', 'log', 'md'].includes(ext)) return 'text';
+      if (['doc', 'docx'].includes(ext) || mimeType?.includes('wordprocessingml')) return 'word';
+      if (['xls', 'xlsx'].includes(ext) || mimeType?.includes('spreadsheetml')) return 'excel';
+      if (['ppt', 'pptx'].includes(ext) || mimeType?.includes('presentationml')) return 'powerpoint';
+
+      return 'unsupported';
+    };
+
+    const fileCategory = getFileCategory(mimeType, fileName);
+
+    setPreviewLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const previewUrl = `/api/campaigns/${currentCampaign.id}/attachments/${index}/download`;
+
+      let previewData = {
+        name: fileName,
+        type: mimeType,
+        size: attachment.size,
+        category: fileCategory
+      };
+
+      if (fileCategory === 'unsupported') {
+        toast.error(`Preview not supported for ${fileName}. Supported: Images, PDFs, Text files, and Microsoft Office documents.`);
+        return;
+      }
+
+      // For Microsoft Office files, use different approach
+      if (['word', 'excel', 'powerpoint'].includes(fileCategory)) {
+        const response = await fetch(previewUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const fileUrl = URL.createObjectURL(blob);
+
+        previewData.downloadUrl = fileUrl;
+        previewData.isOffice = true;
+
+        setPreviewAttachment(previewData);
+        return;
+      }
+
+      // Handle images, PDFs, and text files
+      const response = await fetch(previewUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      if (fileCategory === 'image') {
+        const blob = await response.blob();
+        previewData.url = URL.createObjectURL(blob);
+        previewData.isImage = true;
+      } else if (fileCategory === 'pdf') {
+        const blob = await response.blob();
+        previewData.url = URL.createObjectURL(blob);
+        previewData.isPdf = true;
+      } else if (fileCategory === 'text') {
+        const textContent = await response.text();
+        previewData.content = textContent;
+        previewData.isText = true;
+      }
+
+      setPreviewAttachment(previewData);
+    } catch (error) {
+      console.error('Preview failed:', error);
+      toast.error(`Failed to preview ${fileName}: ${error.message}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    if (previewAttachment?.url) {
+      URL.revokeObjectURL(previewAttachment.url);
+    }
+    if (previewAttachment?.downloadUrl) {
+      URL.revokeObjectURL(previewAttachment.downloadUrl);
+    }
+    setPreviewAttachment(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -259,7 +405,7 @@ const CampaignDetail = () => {
                 <span className="hidden sm:inline">{actionLoading ? 'Starting...' : 'Start'}</span>
               </button>
             )}
-            
+
             {(currentCampaign.status?.toLowerCase() === 'running' || currentCampaign.status?.toLowerCase() === 'active') && (
               <button
                 onClick={() => handleAction('pause')}
@@ -270,7 +416,7 @@ const CampaignDetail = () => {
                 <span className="hidden sm:inline">{actionLoading ? 'Pausing...' : 'Pause'}</span>
               </button>
             )}
-            
+
             {currentCampaign.status?.toLowerCase() === 'paused' && (
               <button
                 onClick={() => handleAction('resume')}
@@ -281,20 +427,20 @@ const CampaignDetail = () => {
                 <span className="hidden sm:inline">{actionLoading ? 'Resuming...' : 'Resume'}</span>
               </button>
             )}
-            
-            {(currentCampaign.status?.toLowerCase() === 'running' || 
-              currentCampaign.status?.toLowerCase() === 'active' || 
+
+            {(currentCampaign.status?.toLowerCase() === 'running' ||
+              currentCampaign.status?.toLowerCase() === 'active' ||
               currentCampaign.status?.toLowerCase() === 'paused') && (
-              <button
-                onClick={() => handleAction('stop')}
-                disabled={actionLoading}
-                className="btn btn-danger flex items-center disabled:opacity-50 text-sm lg:text-base"
-              >
-                <HiStop className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
-                <span className="hidden sm:inline">{actionLoading ? 'Stopping...' : 'Stop'}</span>
-              </button>
-            )}
-            
+                <button
+                  onClick={() => handleAction('stop')}
+                  disabled={actionLoading}
+                  className="btn btn-danger flex items-center disabled:opacity-50 text-sm lg:text-base"
+                >
+                  <HiStop className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
+                  <span className="hidden sm:inline">{actionLoading ? 'Stopping...' : 'Stop'}</span>
+                </button>
+              )}
+
             <button
               onClick={() => navigate(`/campaigns/${id}/edit`)}
               className="btn btn-secondary flex items-center text-sm lg:text-base"
@@ -302,7 +448,7 @@ const CampaignDetail = () => {
               <HiPencil className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
               <span className="hidden sm:inline">Edit</span>
             </button>
-            
+
             <button
               onClick={handleDuplicate}
               disabled={actionLoading}
@@ -311,7 +457,7 @@ const CampaignDetail = () => {
               <HiDuplicate className="h-4 w-4 lg:h-5 lg:w-5 mr-1 lg:mr-2" />
               <span className="hidden sm:inline">{actionLoading ? 'Duplicating...' : 'Duplicate'}</span>
             </button>
-            
+
             <button
               onClick={handleDelete}
               className="btn btn-danger flex items-center text-sm lg:text-base"
@@ -402,11 +548,10 @@ const CampaignDetail = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 px-2 lg:px-1 border-b-2 font-medium text-sm capitalize whitespace-nowrap flex-shrink-0 ${
-                  activeTab === tab
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className={`py-4 px-2 lg:px-1 border-b-2 font-medium text-sm capitalize whitespace-nowrap flex-shrink-0 ${activeTab === tab
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 {tab}
               </button>
@@ -529,7 +674,7 @@ const CampaignDetail = () => {
           {activeTab === 'content' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Email Content</h3>
-              
+
               {currentCampaign.enable_content_switching && currentCampaign.contents && currentCampaign.contents.length > 1 ? (
                 <div className="space-y-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -537,7 +682,7 @@ const CampaignDetail = () => {
                       <strong>Content Switching Enabled:</strong> This campaign uses {currentCampaign.contents.length} content variations for A/B testing
                     </p>
                   </div>
-                  
+
                   {currentCampaign.contents.map((content, index) => (
                     <div key={content.id || index} className="border border-gray-200 rounded-lg">
                       <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
@@ -549,8 +694,8 @@ const CampaignDetail = () => {
                         )}
                       </div>
                       <div className="p-4">
-                        <div dangerouslySetInnerHTML={{ 
-                          __html: content.html_body || content.body || content.content || 'No content available' 
+                        <div dangerouslySetInnerHTML={{
+                          __html: content.html_body || content.body || content.content || 'No content available'
                         }} />
                       </div>
                     </div>
@@ -562,11 +707,11 @@ const CampaignDetail = () => {
                     <h4 className="font-medium text-gray-900 mb-2">
                       {currentCampaign.contents[0].name || 'Campaign Content'}
                     </h4>
-                    <div dangerouslySetInnerHTML={{ 
-                      __html: currentCampaign.contents[0].html_body || 
-                               currentCampaign.contents[0].body || 
-                               currentCampaign.email_content || 
-                               'No content available' 
+                    <div dangerouslySetInnerHTML={{
+                      __html: currentCampaign.contents[0].html_body ||
+                        currentCampaign.contents[0].body ||
+                        currentCampaign.email_content ||
+                        'No content available'
                     }} />
                   </div>
                 </div>
@@ -581,7 +726,7 @@ const CampaignDetail = () => {
           {activeTab === 'senders' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Sender Configuration</h3>
-              
+
               {currentCampaign.senders && currentCampaign.senders.length > 0 ? (
                 <div className="space-y-4">
                   {currentCampaign.senders.length > 1 && (
@@ -591,7 +736,7 @@ const CampaignDetail = () => {
                       </p>
                     </div>
                   )}
-                  
+
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {currentCampaign.senders.map((sender, index) => (
                       <div key={index} className="border border-gray-200 rounded-lg p-4">
@@ -649,11 +794,11 @@ const CampaignDetail = () => {
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Campaign Attachments</h3>
               <div className="mb-4 p-3 bg-gray-100 rounded text-sm">
-                <strong>Debug Info:</strong><br/>
-                Attachments field exists: {currentCampaign?.attachments ? 'Yes' : 'No'}<br/>
-                Attachments type: {typeof currentCampaign?.attachments}<br/>
-                Attachments value: {JSON.stringify(currentCampaign?.attachments)}<br/>
-                Is array: {Array.isArray(currentCampaign?.attachments) ? 'Yes' : 'No'}<br/>
+                <strong>Debug Info:</strong><br />
+                Attachments field exists: {currentCampaign?.attachments ? 'Yes' : 'No'}<br />
+                Attachments type: {typeof currentCampaign?.attachments}<br />
+                Attachments value: {JSON.stringify(currentCampaign?.attachments)}<br />
+                Is array: {Array.isArray(currentCampaign?.attachments) ? 'Yes' : 'No'}<br />
                 Length: {currentCampaign?.attachments?.length || 'N/A'}
               </div>
               {(() => {
@@ -667,124 +812,88 @@ const CampaignDetail = () => {
                     attachments = null;
                   }
                 }
-                
+
                 return attachments && Array.isArray(attachments) && attachments.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-800">
-                      <strong>Note:</strong> These attachments were included with every email sent in this campaign.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {attachments.map((attachment, index) => (
-                      <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.original_name || attachment.name}>
-                              {attachment.original_name || attachment.name}
-                            </h4>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Size: {(attachment.size / 1024).toFixed(1)} KB
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Type: {attachment.mime_type || attachment.mime}
-                            </p>
-                          </div>
-                          <div className="ml-4 flex-shrink-0">
-                            <button
-                              onClick={() => {
-                                const token = localStorage.getItem('token');
-                                const downloadUrl = `/api/campaigns/${currentCampaign.id}/attachments/${index}/download`;
-                                
-                                // Create a temporary link with authorization header
-                                const link = document.createElement('a');
-                                link.href = downloadUrl;
-                                link.download = attachment.original_name || attachment.name;
-                                
-                                // Make authenticated request and handle binary data properly
-                                fetch(downloadUrl, {
-                                  method: 'GET',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                  },
-                                })
-                                .then(response => {
-                                  if (!response.ok) {
-                                    throw new Error(`HTTP error! status: ${response.status}`);
-                                  }
-                                  // Get filename from Content-Disposition header if available
-                                  const contentDisposition = response.headers.get('Content-Disposition');
-                                  let filename = attachment.original_name || attachment.name;
-                                  if (contentDisposition) {
-                                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-                                    if (filenameMatch) {
-                                      filename = filenameMatch[1];
-                                    }
-                                  }
-                                  
-                                  return response.arrayBuffer().then(buffer => ({ buffer, filename }));
-                                })
-                                .then(({ buffer, filename }) => {
-                                  const blob = new Blob([buffer], { 
-                                    type: attachment.mime_type || 'application/octet-stream' 
-                                  });
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.style.display = 'none';
-                                  a.href = url;
-                                  a.download = filename;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
-                                })
-                                .catch(error => {
-                                  console.error('Download failed:', error);
-                                  alert('Failed to download attachment');
-                                });
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                            >
-                              <HiDownload className="h-3 w-3 mr-1" />
-                              Download
-                            </button>
+                  <div className="space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm text-blue-800">
+                        <strong>Note:</strong> These attachments were included with every email sent in this campaign.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {attachments.map((attachment, index) => (
+                        <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-3 flex-1 min-w-0">
+                              {/* File Type Icon */}
+                              <div className="flex-shrink-0">
+                                {(() => {
+                                  const IconComponent = getFileIcon(
+                                    attachment.mime_type || attachment.mime,
+                                    attachment.original_name || attachment.name
+                                  );
+                                  return <IconComponent className="h-8 w-8 text-gray-400" />;
+                                })()}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.original_name || attachment.name}>
+                                  {attachment.original_name || attachment.name}
+                                </h4>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Size: {(attachment.size / 1024).toFixed(1)} KB
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Type: {attachment.mime_type || attachment.mime}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="ml-4 flex-shrink-0">
+                              <button
+                                onClick={() => handlePreviewAttachment(attachment, index)}
+                                disabled={previewLoading}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                              >
+                                <HiEye className="h-3 w-3 mr-1" />
+                                {previewLoading ? 'Loading...' : 'Preview'}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Attachment Summary</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Total Files:</span>
-                        <span className="ml-2 font-medium text-gray-900">{attachments.length}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Total Size:</span>
-                        <span className="ml-2 font-medium text-gray-900">
-                          {(attachments.reduce((total, att) => total + att.size, 0) / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Recipients:</span>
-                        <span className="ml-2 font-medium text-gray-900">{currentCampaign.total_recipients || 0}</span>
+                      ))}
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">Attachment Summary</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Total Files:</span>
+                          <span className="ml-2 font-medium text-gray-900">{attachments.length}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Size:</span>
+                          <span className="ml-2 font-medium text-gray-900">
+                            {(attachments.reduce((total, att) => total + att.size, 0) / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Recipients:</span>
+                          <span className="ml-2 font-medium text-gray-900">{currentCampaign.total_recipients || 0}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
                 ) : (
-                <div className="text-center py-8">
-                  <div className="mx-auto h-12 w-12 text-gray-400">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                  <div className="text-center py-8">
+                    <div className="mx-auto h-12 w-12 text-gray-400">
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">No attachments</h3>
+                    <p className="mt-1 text-sm text-gray-500">This campaign was sent without any file attachments.</p>
                   </div>
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No attachments</h3>
-                  <p className="mt-1 text-sm text-gray-500">This campaign was sent without any file attachments.</p>
-                </div>
-              );
+                );
               })()}
             </div>
           )}
@@ -869,9 +978,9 @@ const CampaignDetail = () => {
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Delivery Rate</span>
                           <span className="text-sm font-medium text-gray-900">
-                            {campaignStats?.delivery_rate || 
-                             (currentCampaign?.total_recipients > 0 ? 
-                              ((currentCampaign.emails_sent - currentCampaign.bounces - currentCampaign.failed) / currentCampaign.total_recipients * 100).toFixed(2) : 0)}%
+                            {campaignStats?.delivery_rate ||
+                              (currentCampaign?.total_recipients > 0 ?
+                                ((currentCampaign.emails_sent - currentCampaign.bounces - currentCampaign.failed) / currentCampaign.total_recipients * 100).toFixed(2) : 0)}%
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -916,17 +1025,17 @@ const CampaignDetail = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {currentCampaign?.enable_content_switching && currentCampaign?.contents?.length > 1 && (
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
                       <h4 className="font-medium text-gray-900 mb-2">A/B Testing Results</h4>
                       <p className="text-sm text-gray-600">
-                        This campaign uses {currentCampaign.contents.length} content variations. 
+                        This campaign uses {currentCampaign.contents.length} content variations.
                         Detailed A/B testing analytics will be available after sufficient data collection.
                       </p>
                     </div>
                   )}
-                  
+
                   {currentCampaign?.senders?.length > 0 && (
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-4">
@@ -935,7 +1044,7 @@ const CampaignDetail = () => {
                           <div className="text-sm text-gray-500">Loading...</div>
                         )}
                       </div>
-                      
+
                       {senderPerformance.length > 0 ? (
                         <div className="space-y-3">
                           {senderPerformance.map((sender) => (
@@ -949,17 +1058,16 @@ const CampaignDetail = () => {
                                   <div className="text-sm font-medium text-gray-900">
                                     Score: {sender.reputation_score}/100
                                   </div>
-                                  <div className={`text-xs px-2 py-1 rounded-full inline-block ${
-                                    sender.deliverability_rating === 'Excellent' ? 'bg-green-100 text-green-800' :
+                                  <div className={`text-xs px-2 py-1 rounded-full inline-block ${sender.deliverability_rating === 'Excellent' ? 'bg-green-100 text-green-800' :
                                     sender.deliverability_rating === 'Good' ? 'bg-blue-100 text-blue-800' :
-                                    sender.deliverability_rating === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
+                                      sender.deliverability_rating === 'Fair' ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-red-100 text-red-800'
+                                    }`}>
                                     {sender.deliverability_rating}
                                   </div>
                                 </div>
                               </div>
-                              
+
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                                 <div>
                                   <span className="text-gray-500">Sent:</span>
@@ -983,15 +1091,15 @@ const CampaignDetail = () => {
                         </div>
                       ) : (
                         <p className="text-sm text-gray-600">
-                          {loadingAnalytics ? 
-                            'Loading sender performance data...' : 
+                          {loadingAnalytics ?
+                            'Loading sender performance data...' :
                             'No sender performance data available yet. Data will appear after emails are sent.'
                           }
                         </p>
                       )}
                     </div>
                   )}
-                  
+
                   {/* Failed Jobs Section */}
                   {(currentCampaign?.total_failed > 0 || failedJobs.length > 0) && (
                     <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -1001,16 +1109,16 @@ const CampaignDetail = () => {
                           <div className="text-sm text-gray-500">Loading...</div>
                         )}
                       </div>
-                      
+
                       {failedJobs.length > 0 ? (
                         <div className="space-y-3">
                           <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                             <p className="text-sm text-red-800">
-                              <strong>Failed Jobs:</strong> {currentCampaign?.total_failed || 0} emails failed to send. 
+                              <strong>Failed Jobs:</strong> {currentCampaign?.total_failed || 0} emails failed to send.
                               You can retry individual jobs or investigate the errors below.
                             </p>
                           </div>
-                          
+
                           <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-gray-50">
@@ -1050,7 +1158,7 @@ const CampaignDetail = () => {
                               </tbody>
                             </table>
                           </div>
-                          
+
                           {currentCampaign?.total_failed > failedJobs.length && (
                             <div className="text-center pt-3">
                               <p className="text-sm text-gray-500">
@@ -1061,8 +1169,8 @@ const CampaignDetail = () => {
                         </div>
                       ) : (
                         <p className="text-sm text-gray-600">
-                          {loadingFailedJobs ? 
-                            'Loading failed jobs...' : 
+                          {loadingFailedJobs ?
+                            'Loading failed jobs...' :
                             'No failed jobs found for this campaign.'
                           }
                         </p>
@@ -1077,6 +1185,169 @@ const CampaignDetail = () => {
           )}
         </div>
       </div>
+
+      {/* Preview Modal */}
+      {previewAttachment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-4xl max-h-screen mx-4 bg-white rounded-lg shadow-xl flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">File Preview</h3>
+                <p className="text-sm text-gray-500">
+                  {previewAttachment.name} ({(previewAttachment.size / 1024).toFixed(1)} KB)
+                </p>
+              </div>
+              <button
+                onClick={closePreview}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <HiX className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 p-6 overflow-auto">
+              {/* Image Preview */}
+              {previewAttachment.isImage && (
+                <div className="text-center">
+                  <img
+                    src={previewAttachment.url}
+                    alt={previewAttachment.name}
+                    className="max-w-full max-h-96 mx-auto rounded shadow-lg"
+                    onError={(e) => {
+                      console.error('Image load error:', e);
+                      toast.error('Failed to load image preview');
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* PDF Preview */}
+              {previewAttachment.isPdf && (
+                <div className="w-full">
+                  <iframe
+                    src={previewAttachment.url}
+                    className="w-full h-96 border rounded"
+                    title={previewAttachment.name}
+                    onError={() => {
+                      toast.error('Failed to load PDF preview');
+                    }}
+                  />
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    If PDF doesn't display properly, try downloading the file or opening in a new tab.
+                  </p>
+                </div>
+              )}
+
+              {/* Text File Preview */}
+              {previewAttachment.isText && (
+                <div className="bg-gray-50 p-4 rounded border">
+                  <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono max-h-96 overflow-auto">
+                    {previewAttachment.content}
+                  </pre>
+                </div>
+              )}
+
+              {/* Microsoft Office Files Preview */}
+              {previewAttachment.isOffice && (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <HiDocumentText className="h-8 w-8 text-blue-600 mr-3" />
+                      <div>
+                        <h4 className="text-sm font-medium text-blue-900">Microsoft Office Document</h4>
+                        <p className="text-xs text-blue-700">
+                          {previewAttachment.category === 'word' && 'Microsoft Word Document (.doc/.docx)'}
+                          {previewAttachment.category === 'excel' && 'Microsoft Excel Spreadsheet (.xls/.xlsx)'}
+                          {previewAttachment.category === 'powerpoint' && 'Microsoft PowerPoint Presentation (.ppt/.pptx)'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-center space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Microsoft Office documents require downloading to view properly.
+                    </p>
+
+                    <button
+                      onClick={() => {
+                        const a = document.createElement('a');
+                        a.href = previewAttachment.downloadUrl;
+                        a.download = previewAttachment.name;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        toast.success('Download started');
+                      }}
+                      className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      <HiDownload className="h-5 w-5 mr-2" />
+                      Download and Open File
+                    </button>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded border">
+                    <h5 className="font-medium text-gray-900 mb-2">How to view this file:</h5>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• Click "Download and Open File" above</li>
+                      <li>• Open with Microsoft Office, LibreOffice, or Google Docs</li>
+                      <li>• For Excel files: Use Microsoft Excel or Google Sheets</li>
+                      <li>• For PowerPoint files: Use PowerPoint or Google Slides</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback for any unhandled cases */}
+              {!previewAttachment.isImage && !previewAttachment.isPdf && !previewAttachment.isText && !previewAttachment.isOffice && (
+                <div className="text-center py-8">
+                  <HiDocumentText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Unavailable</h3>
+                  <p className="text-gray-600 mb-4">
+                    This file type cannot be previewed directly in the browser.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // Trigger download as fallback
+                      const token = localStorage.getItem('token');
+                      const downloadUrl = `/api/campaigns/${currentCampaign.id}/attachments/${previewAttachment.index}/download`;
+
+                      fetch(downloadUrl, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      })
+                        .then(response => response.blob())
+                        .then(blob => {
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = previewAttachment.name;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        });
+                    }}
+                    className="btn btn-primary"
+                  >
+                    <HiDownload className="h-4 w-4 mr-2" />
+                    Download File
+                  </button>
+                </div>
+              )}
+            </div>            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={closePreview}
+                className="btn btn-secondary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

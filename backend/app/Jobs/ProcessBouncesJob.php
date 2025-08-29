@@ -27,11 +27,11 @@ class ProcessBouncesJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(?int $domainId = null, ?int $credentialId = null)
+    public function __construct($domainId = null, $credentialId = null)
     {
         $this->domainId = $domainId;
         $this->credentialId = $credentialId;
-        $this->onQueue('bounces');
+        // Remove explicit queue assignment - use default queue
     }
 
     /**
@@ -138,7 +138,7 @@ class ProcessBouncesJob implements ShouldQueue
             'credentials_processed' => count($results),
             'total_processed' => $totalProcessed,
             'total_suppressed' => $totalSuppressed,
-            'success_rate' => count(array_filter($results, fn($r) => $r['success'])) / max(count($results), 1) * 100
+            'success_rate' => count(array_filter($results, fn($r) => ($r['success'] ?? false) === true)) / max(count($results), 1) * 100
         ], 3600);
     }
 

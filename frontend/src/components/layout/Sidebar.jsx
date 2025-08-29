@@ -65,7 +65,7 @@ const adminNavigation = [
   { name: 'Notifications', href: '/admin/notifications', icon: HiBell },
 ];
 
-const Sidebar = ({ _isOpen, _onClose, user, onLogout }) => {
+const Sidebar = ({ user, onLogout }) => {
   const location = useLocation();
   const { currentView } = useSelector((state) => state.auth);
   const appName = useAppName();
@@ -107,16 +107,14 @@ const Sidebar = ({ _isOpen, _onClose, user, onLogout }) => {
                       <NavLink
                         key={item.name}
                         to={item.href}
-                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
-                          isActive
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${isActive
                             ? 'bg-primary-100 text-primary-900'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         <item.icon
-                          className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                            isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                          }`}
+                          className={`mr-3 flex-shrink-0 h-6 w-6 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                            }`}
                         />
                         {item.name}
                       </NavLink>
@@ -124,7 +122,7 @@ const Sidebar = ({ _isOpen, _onClose, user, onLogout }) => {
                   })}
                 </>
               )}
-              
+
               {/* Admin Navigation - Show only for admin users in admin view */}
               {isAdmin && isAdminView && (
                 <>
@@ -139,16 +137,14 @@ const Sidebar = ({ _isOpen, _onClose, user, onLogout }) => {
                       <NavLink
                         key={item.name}
                         to={item.href}
-                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
-                          isActive
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${isActive
                             ? 'bg-primary-100 text-primary-900'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
+                          }`}
                       >
                         <item.icon
-                          className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                            isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
-                          }`}
+                          className={`mr-3 flex-shrink-0 h-6 w-6 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'
+                            }`}
                         />
                         {item.name}
                       </NavLink>

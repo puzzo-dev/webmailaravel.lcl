@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { fetchCampaigns, deleteCampaign, startCampaign, pauseCampaign, stopCampaign, resumeCampaign, duplicateCampaign } from '../../store/slices/campaignSlice';
 import { toast } from 'react-hot-toast';
-import { getErrorMessage, getSuccessMessage } from '../../utils/errorHandler';
+import { getErrorMessage } from '../../utils/errorHandler';
 import {
   HiPlus,
   HiSearch,
@@ -36,10 +36,10 @@ const Campaigns = () => {
   const dispatch = useDispatch();
   const { campaigns, isLoading, pagination } = useSelector((state) => state.campaigns);
   const { handleSubscriptionError } = useSubscriptionError();
-  
+
   // Ensure campaigns is always an array
   const safeCampaigns = Array.isArray(campaigns) ? campaigns : [];
-  
+
   // State management
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -56,13 +56,13 @@ const Campaigns = () => {
   const isInitialMount = useRef(true);
 
   // Debounced search function - memoized to prevent recreation
-  const debouncedSearch = useCallback(
-    debounce((search, status, date, sortBy, sortOrder) => {
-      dispatch(fetchCampaigns({ 
-        page: 1, 
-        limit: 10, 
-        search, 
-        status, 
+  const debouncedSearch = useMemo(
+    () => debounce((search, status, date, sortBy, sortOrder) => {
+      dispatch(fetchCampaigns({
+        page: 1,
+        limit: 10,
+        search,
+        status,
         date_filter: date,
         sort_by: sortBy,
         sort_order: sortOrder
@@ -70,16 +70,16 @@ const Campaigns = () => {
         handleSubscriptionError(error);
       });
     }, 300),
-    [] // Empty dependency array to prevent recreation
+    [dispatch, handleSubscriptionError]
   );
 
   // Initial load
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
-    dispatch(fetchCampaigns({ page: 1, limit: 10 })).catch(error => {
-      handleSubscriptionError(error);
-    });
+      dispatch(fetchCampaigns({ page: 1, limit: 10 })).catch(error => {
+        handleSubscriptionError(error);
+      });
     }
   }, [dispatch, handleSubscriptionError]);
 
@@ -88,7 +88,7 @@ const Campaigns = () => {
     if (!isInitialMount.current) {
       const currentFilters = { searchTerm, statusFilter, dateFilter, sortBy, sortOrder };
       const prevFiltersValue = prevFilters.current;
-      
+
       // Only trigger search if filters actually changed
       if (
         currentFilters.searchTerm !== prevFiltersValue.searchTerm ||
@@ -104,10 +104,10 @@ const Campaigns = () => {
   }, [searchTerm, statusFilter, dateFilter, sortBy, sortOrder, debouncedSearch]);
 
   const handlePageChange = (page) => {
-    dispatch(fetchCampaigns({ 
-      page, 
-      limit: 10, 
-      search: searchTerm, 
+    dispatch(fetchCampaigns({
+      page,
+      limit: 10,
+      search: searchTerm,
       status: statusFilter,
       date_filter: dateFilter,
       sort_by: sortBy,
@@ -169,8 +169,6 @@ const Campaigns = () => {
       if (!handleSubscriptionError(error)) {
         toast.error(getErrorMessage(error));
       }
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -195,7 +193,7 @@ const Campaigns = () => {
         toast.error(errorMessage);
       }
     } finally {
-      setActionLoading(false);
+      setIsPerformingBulkAction(false);
       // Refresh campaigns list to ensure UI is in sync
       dispatch(fetchCampaigns());
     }
@@ -232,6 +230,8 @@ const Campaigns = () => {
       'active': { color: 'bg-green-100 text-green-800', label: 'Active' },
       'processing': { color: 'bg-blue-100 text-blue-800', label: 'Processing' },
       'sending': { color: 'bg-success-100 text-success-800', label: 'Sending' },
+      'pending': { color: 'bg-indigo-100 text-indigo-800', label: 'Pending' },
+      'queued': { color: 'bg-indigo-100 text-indigo-800', label: 'Queued' },
       'scheduled': { color: 'bg-blue-100 text-blue-800', label: 'Scheduled' },
       'paused': { color: 'bg-yellow-100 text-yellow-800', label: 'Paused' },
       'stopped': { color: 'bg-red-100 text-red-800', label: 'Stopped' },
@@ -257,7 +257,7 @@ const Campaigns = () => {
 
   const getActionButtons = (campaign) => {
     const buttons = [];
-    
+
     if (campaign.status === 'draft' || campaign.status === 'scheduled') {
       buttons.push(
         <button
@@ -270,7 +270,7 @@ const Campaigns = () => {
         </button>
       );
     }
-    
+
     if (campaign.status === 'sending') {
       buttons.push(
         <button
@@ -283,7 +283,7 @@ const Campaigns = () => {
         </button>
       );
     }
-    
+
     if (campaign.status === 'paused') {
       buttons.push(
         <button
@@ -296,7 +296,7 @@ const Campaigns = () => {
         </button>
       );
     }
-    
+
     if (['sending', 'paused'].includes(campaign.status)) {
       buttons.push(
         <button
@@ -309,7 +309,7 @@ const Campaigns = () => {
         </button>
       );
     }
-    
+
     return buttons;
   };
 
@@ -533,7 +533,7 @@ const Campaigns = () => {
             <HiMail className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No campaigns found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {hasActiveFilters 
+              {hasActiveFilters
                 ? 'Try adjusting your filters to see more results.'
                 : 'Get started by creating your first campaign.'
               }
@@ -699,9 +699,8 @@ const Campaigns = () => {
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
-                          className={`pagination-button ${
-                            page === pagination.current_page ? 'pagination-button-active' : ''
-                          }`}
+                          className={`pagination-button ${page === pagination.current_page ? 'pagination-button-active' : ''
+                            }`}
                         >
                           {page}
                         </button>

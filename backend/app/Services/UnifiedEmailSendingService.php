@@ -56,15 +56,12 @@ class UnifiedEmailSendingService
             // Dispatch email jobs for all recipients
             $this->dispatchEmailJobs($recipients, $sender, $content, $campaign);
 
-            // Update campaign completion status
-            $campaign->update([
-                'total_sent' => count($recipients),
-                'status' => 'COMPLETED'
-            ]);
+            // Note: total_sent will be updated by SendEmailJob when emails are actually sent
+            // Don't set total_sent here as it causes double counting
 
             DB::commit();
 
-            $this->logInfo('Single email sent successfully', [
+            $this->logInfo('Single email job dispatched successfully', [
                 'campaign_id' => $campaign->id,
                 'recipients_count' => count($recipients)
             ]);
@@ -137,21 +134,18 @@ class UnifiedEmailSendingService
                     $totalSent++;
                 }
 
-                // Update campaign progress
-                $campaign->update([
-                    'total_sent' => $totalSent,
-                    'progress_percentage' => ($totalSent / count($recipients)) * 100
-                ]);
+                // Note: Campaign progress and total_sent will be updated by SendEmailJob 
+                // when emails are actually sent. Don't update here to avoid double counting.
             }
 
-            $this->logInfo('Campaign emails dispatched successfully', [
+            $this->logInfo('Campaign email jobs dispatched successfully', [
                 'campaign_id' => $campaign->id,
-                'total_sent' => $totalSent
+                'jobs_dispatched' => $totalSent // Changed from total_sent to jobs_dispatched for clarity
             ]);
 
             return [
                 'success' => true,
-                'total_sent' => $totalSent,
+                'jobs_dispatched' => $totalSent, // Changed from total_sent to jobs_dispatched
                 'batches_processed' => count($batches)
             ];
 

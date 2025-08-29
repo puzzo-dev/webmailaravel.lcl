@@ -26,10 +26,8 @@ import {
 const SuppressionList = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { list = [], statistics = {}, pagination = {}, isLoading = false, isImporting = false, isExporting = false, error = null } = useSelector((state) => state.suppression || {});
-  const [activeTab, setActiveTab] = useState('list');
+  const { list = [], statistics = {}, isLoading = false, isImporting = false, isExporting = false, error = null } = useSelector((state) => state.suppression || {});
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEmails, setSelectedEmails] = useState([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
@@ -43,11 +41,11 @@ const SuppressionList = () => {
 
   const handleUpload = async () => {
     if (!uploadFile) return;
-    
+
     const formData = new FormData();
     formData.append('file', uploadFile);
     formData.append('reason', uploadReason);
-    
+
     try {
       await dispatch(importSuppressionList(formData)).unwrap();
       setShowUploadModal(false);
@@ -62,14 +60,14 @@ const SuppressionList = () => {
 
   const handleAddEmail = async () => {
     if (!newEmail) return;
-    
+
     try {
       const emailData = {
         email: newEmail,
         reason: 'manual',
         source: 'manual',
       };
-      
+
       // Add email to suppression list
       await dispatch(importSuppressionList({ emails: [emailData] })).unwrap();
       setShowAddModal(false);
@@ -119,11 +117,11 @@ const SuppressionList = () => {
               <h3 className="text-sm font-medium text-red-800">Access Denied</h3>
               <div className="mt-2 text-sm text-red-700">
                 <p>
-                  Suppression list management is restricted to administrators only. 
+                  Suppression list management is restricted to administrators only.
                   This ensures system-wide compliance and prevents reputation damage.
                 </p>
                 <p className="mt-2">
-                  <strong>Note:</strong> All campaigns automatically use the system-wide suppression list 
+                  <strong>Note:</strong> All campaigns automatically use the system-wide suppression list
                   to prevent sending to suppressed email addresses.
                 </p>
               </div>
@@ -304,13 +302,12 @@ const SuppressionList = () => {
                     {email.email}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      email.reason === 'bounce'
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${email.reason === 'bounce'
                         ? 'bg-danger-100 text-danger-800'
                         : email.reason === 'complaint'
-                        ? 'bg-warning-100 text-warning-800'
-                        : 'bg-info-100 text-info-800'
-                    }`}>
+                          ? 'bg-warning-100 text-warning-800'
+                          : 'bg-info-100 text-info-800'
+                      }`}>
                       {email.reason}
                     </span>
                   </td>
@@ -321,11 +318,10 @@ const SuppressionList = () => {
                     {email.source}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      email.status === 'active'
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${email.status === 'active'
                         ? 'bg-success-100 text-success-800'
                         : 'bg-gray-100 text-gray-800'
-                    }`}>
+                      }`}>
                       {email.status}
                     </span>
                   </td>

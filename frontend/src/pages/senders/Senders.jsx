@@ -19,12 +19,12 @@ import { formatDate } from '../../utils/helpers';
 import { formatNumber } from '../../utils/format';
 import { toast } from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorHandler';
-import { 
-  fetchSenders, 
-  createSender, 
-  updateSender, 
-  deleteSender, 
-  testSenderConnection 
+import {
+  fetchSenders,
+  createSender,
+  updateSender,
+  deleteSender,
+  testSenderConnection
 } from '../../store/slices/senderSlice';
 import { fetchDomains } from '../../store/slices/domainsSlice';
 import SmartForm from '../../components/SmartForm';
@@ -41,20 +41,20 @@ const Senders = () => {
   // Filter domains and senders based on current view
   const isAdminView = currentView === 'admin';
   const isAdmin = user?.role === 'admin';
-  
+
   // In user view, only show domains and senders that belong to the current user
   // In admin view, show all domains and senders
-  const filteredDomains = isAdmin && isAdminView 
-    ? safeDomains 
+  const filteredDomains = isAdmin && isAdminView
+    ? safeDomains
     : safeDomains.filter(domain => domain.user_id === user?.id);
-    
-  const filteredSenders = isAdmin && isAdminView 
-    ? senders 
+
+  const filteredSenders = isAdmin && isAdminView
+    ? senders
     : senders.filter(sender => {
-        // Find the domain for this sender
-        const senderDomain = safeDomains.find(domain => domain.id === sender.domain_id);
-        return senderDomain && senderDomain.user_id === user?.id;
-      });
+      // Find the domain for this sender
+      const senderDomain = safeDomains.find(domain => domain.id === sender.domain_id);
+      return senderDomain && senderDomain.user_id === user?.id;
+    });
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -78,10 +78,10 @@ const Senders = () => {
 
   const validation = {
     name: { required: true, minLength: 2 },
-    email: { 
-      required: true, 
-      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, 
-      message: 'Please enter a valid email address' 
+    email: {
+      required: true,
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      message: 'Please enter a valid email address'
     },
     domain_id: { required: true },
     from_name: { required: true },
@@ -117,7 +117,7 @@ const Senders = () => {
 
   const handleDeleteSender = async (senderId) => {
     if (!confirm('Are you sure you want to delete this sender?')) return;
-    
+
     setIsSubmitting(true);
     try {
       await dispatch(deleteSender(senderId)).unwrap();
@@ -132,9 +132,9 @@ const Senders = () => {
   const handleTestConnection = async () => {
     setIsSubmitting(true);
     try {
-      await dispatch(testSenderConnection({ 
-        id: selectedSender.id, 
-        test_email: selectedSender.email 
+      await dispatch(testSenderConnection({
+        id: selectedSender.id,
+        test_email: selectedSender.email
       })).unwrap();
       toast.success('Connection test successful');
       setShowTestModal(false);
@@ -179,9 +179,6 @@ const Senders = () => {
     setShowTestModal(true);
   };
 
-  // Ensure senders is always an array
-  const safeSenders = Array.isArray(senders) ? senders : [];
-
   const renderSenderForm = ({ SmartInput, SmartSelect, formData, handleInputChange, isSaving }) => (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -218,7 +215,7 @@ const Senders = () => {
           </option>
           {filteredDomains.map((domain) => (
             <option key={domain.id} value={domain.id}>
-              {domain.name || domain.domain} 
+              {domain.name || domain.domain}
               {domain.status === 'active' ? ' (Active)' : ' (Inactive)'}
             </option>
           ))}
@@ -261,7 +258,7 @@ const Senders = () => {
           <div>
             <h4 className="text-sm font-medium text-blue-900">SMTP Configuration</h4>
             <p className="text-sm text-blue-700 mt-1">
-              SMTP settings are configured at the domain level. 
+              SMTP settings are configured at the domain level.
               The selected domain's SMTP configuration will be used for this sender.
             </p>
           </div>
@@ -279,11 +276,10 @@ const Senders = () => {
             <div className="flex items-center">
               <h1 className="text-2xl font-bold text-gray-900">Sender Management</h1>
               {isAdmin && (
-                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
-                  isAdminView 
-                    ? 'bg-blue-100 text-blue-800' 
+                <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${isAdminView
+                    ? 'bg-blue-100 text-blue-800'
                     : 'bg-green-100 text-green-800'
-                }`}>
+                  }`}>
                   {isAdminView ? 'Admin View' : 'User View'}
                 </span>
               )}
@@ -327,11 +323,10 @@ const Senders = () => {
                         <p className="text-sm text-gray-500">{sender.email}</p>
                       </div>
                     </div>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      sender.status === 'active'
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sender.status === 'active'
                         ? 'bg-success-100 text-success-800'
                         : 'bg-gray-100 text-gray-800'
-                    }`}>
+                      }`}>
                       {sender.status}
                     </span>
                   </div>
@@ -385,14 +380,14 @@ const Senders = () => {
               <div className="text-center py-8">
                 <HiMail className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-2 text-sm font-medium text-gray-900">
-                  {isAdmin && isAdminView 
-                    ? 'No senders found in the system' 
+                  {isAdmin && isAdminView
+                    ? 'No senders found in the system'
                     : 'No senders found'
                   }
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  {isAdmin && isAdminView 
-                    ? 'Add senders to the system for users to manage.' 
+                  {isAdmin && isAdminView
+                    ? 'Add senders to the system for users to manage.'
                     : 'Get started by adding your first sender account.'
                   }
                 </p>
@@ -417,7 +412,7 @@ const Senders = () => {
           <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Sender</h3>
-              
+
               <SmartForm
                 onSubmit={handleAddSender}
                 initialData={formData}
@@ -453,7 +448,7 @@ const Senders = () => {
           <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Sender</h3>
-              
+
               <SmartForm
                 onSubmit={handleEditSender}
                 initialData={formData}
@@ -492,7 +487,7 @@ const Senders = () => {
               <p className="text-gray-600 mb-6">
                 This will test the SMTP connection for <strong>{selectedSender?.name}</strong>.
               </p>
-              
+
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setShowTestModal(false)}

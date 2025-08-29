@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { getErrorMessage } from '../../utils/errorHandler';
-import { 
-  HiMail, 
-  HiPaperAirplane, 
+import {
+  HiMail,
+  HiPaperAirplane,
   HiEye,
   HiUsers,
   HiCog,
@@ -48,7 +48,7 @@ const SingleSend = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.to || !formData.sender_id || !formData.subject || !formData.content) {
       toast.error('Please fill in all required fields');
       return;
@@ -57,14 +57,21 @@ const SingleSend = () => {
     setLoading(true);
     try {
       const submitData = new FormData();
-      
-      // Add basic form fields
+
+      // Add basic form fields with proper boolean handling
       Object.keys(formData).forEach(key => {
         if (key !== 'attachments') {
-          submitData.append(key, formData[key]);
+          let value = formData[key];
+
+          // Convert boolean fields to proper format for Laravel validation
+          if (key === 'enable_open_tracking' || key === 'enable_click_tracking' || key === 'enable_unsubscribe_link') {
+            value = value ? '1' : '0';
+          }
+
+          submitData.append(key, value);
         }
       });
-      
+
       // Add attachments
       selectedAttachments.forEach((file, index) => {
         submitData.append(`attachments[${index}]`, file);
@@ -140,7 +147,7 @@ const SingleSend = () => {
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Email Details</h2>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="p-6 space-y-6">
                 {/* Recipients */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -158,7 +165,7 @@ const SingleSend = () => {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       BCC (optional)
@@ -255,7 +262,7 @@ const SingleSend = () => {
                       </p>
                     </div>
                   </div>
-                  
+
                   {selectedAttachments.length > 0 && (
                     <div className="mt-3 space-y-2">
                       <h4 className="text-xs font-medium text-gray-700">Selected Files:</h4>
@@ -295,7 +302,7 @@ const SingleSend = () => {
                       />
                       <span className="ml-2 text-sm text-gray-700">Enable open tracking</span>
                     </label>
-                    
+
                     <label className="flex items-center">
                       <input
                         type="checkbox"
@@ -306,7 +313,7 @@ const SingleSend = () => {
                       />
                       <span className="ml-2 text-sm text-gray-700">Enable click tracking</span>
                     </label>
-                    
+
                     <label className="flex items-center">
                       <input
                         type="checkbox"
@@ -330,7 +337,7 @@ const SingleSend = () => {
                     <HiEye className="h-4 w-4 mr-2" />
                     {showPreview ? 'Hide Preview' : 'Preview'}
                   </button>
-                  
+
                   <button
                     type="submit"
                     disabled={loading}

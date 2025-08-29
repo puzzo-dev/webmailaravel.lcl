@@ -16,19 +16,6 @@ const CampaignList = ({
   emptyMessage = "No campaigns found",
   className = ""
 }) => {
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'active':
-        return <HiPlay className="h-4 w-4" />;
-      case 'paused':
-        return <HiPause className="h-4 w-4" />;
-      case 'stopped':
-        return <HiStop className="h-4 w-4" />;
-      default:
-        return <HiMail className="h-4 w-4" />;
-    }
-  };
-
   const getActionButtons = (campaign) => {
     const buttons = [];
 
@@ -158,7 +145,7 @@ const CampaignList = ({
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-6">
                 {/* Campaign Stats */}
                 <div className="flex items-center space-x-4 text-sm text-gray-500">

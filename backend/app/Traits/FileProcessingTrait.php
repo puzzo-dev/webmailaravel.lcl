@@ -76,30 +76,46 @@ trait FileProcessingTrait
      */
     protected function validateFile(UploadedFile $file, array $options): void
     {
-        // Convert extensions to MIME types for validation
-        $allowedMimes = [];
-        foreach ($options['allowed_extensions'] as $ext) {
-            switch ($ext) {
-                case 'csv':
-                    $allowedMimes = array_merge($allowedMimes, ['text/csv', 'application/csv']);
-                    break;
-                case 'txt':
-                    $allowedMimes[] = 'text/plain';
-                    break;
-                case 'xlsx':
-                    $allowedMimes[] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                    break;
-                case 'xls':
-                    $allowedMimes[] = 'application/vnd.ms-excel';
-                    break;
-            }
-        }
-
         // Use ValidationTrait method if available
         if (method_exists($this, 'validateFileUpload')) {
-            $result = $this->validateFileUpload($file, $allowedMimes, $options['max_size']);
+            $result = $this->validateFileUpload($file, $options['allowed_extensions'], $options['max_size']);
+            
+            // Debug logging
+            \Log::debug('File validation result', [
+                'file_name' => $file->getClientOriginalName(),
+                'result' => $result,
+                'is_valid' => $result['is_valid'] ?? 'not_set'
+            ]);
+            
             if (!$result['is_valid']) {
-                throw new \Exception('File validation failed: ' . implode(', ', array_values($result['errors'])[0] ?? []));
+                // Handle errors properly - errors array structure is ['file' => ['error messages']]
+                $errors = $result['errors'] ?? [];
+                
+                \Log::debug('File validation errors detail', [
+                    'errors_structure' => $errors,
+                    'errors_keys' => array_keys($errors)
+                ]);
+                
+                if (isset($errors['file']) && is_array($errors['file'])) {
+                    $errorMessages = $errors['file'];
+                } else {
+                    // Fallback: get all error messages if structure is different
+                    $errorMessages = [];
+                    foreach ($errors as $field => $fieldErrors) {
+                        if (is_array($fieldErrors)) {
+                            $errorMessages = array_merge($errorMessages, $fieldErrors);
+                        }
+                    }
+                }
+                
+                $errorMessage = !empty($errorMessages) ? implode(', ', $errorMessages) : 'File validation failed';
+                
+                \Log::debug('Final validation error message', [
+                    'error_message' => $errorMessage,
+                    'error_messages_array' => $errorMessages
+                ]);
+                
+                throw new \Exception('File validation failed: ' . $errorMessage);
             }
         } else {
             // Fallback validation

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { api } from '../../services/api';
 import { serializeError } from '../../utils/errorHandler';
 
 export const fetchCampaigns = createAsyncThunk(
@@ -45,7 +45,7 @@ export const createCampaign = createAsyncThunk(
       console.log('=== REDUX SLICE DEBUG ===');
       console.log('campaignData type:', typeof campaignData);
       console.log('campaignData instanceof FormData:', campaignData instanceof FormData);
-      
+
       if (campaignData instanceof FormData) {
         console.log('FormData entries in slice:');
         for (let [key, value] of campaignData.entries()) {
@@ -60,7 +60,7 @@ export const createCampaign = createAsyncThunk(
       }
 
       console.log(campaignData);
-      
+
       const response = await api.post('/campaigns', campaignData);
       return response.data;
     } catch (error) {
@@ -85,7 +85,7 @@ export const deleteCampaign = createAsyncThunk(
   'campaigns/deleteCampaign',
   async (campaignId, { rejectWithValue }) => {
     try {
-      const response = await api.delete(`/campaigns/${campaignId}`);
+      await api.delete(`/campaigns/${campaignId}`);
       return campaignId;
     } catch (error) {
       return rejectWithValue(serializeError(error));

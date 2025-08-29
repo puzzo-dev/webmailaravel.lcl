@@ -18,13 +18,14 @@ import {
 } from 'react-icons/hi';
 import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatDate, formatFileSize } from '../../utils/helpers';
+import { formatDate } from '../../utils/helpers';
 
 const AdminLogs = () => {
   const { user } = useSelector((state) => state.auth);
   const [selectedFile, setSelectedFile] = useState('laravel.log');
   const [searchTerm, setSearchTerm] = useState('');
   const [logLevel, setLogLevel] = useState('all');
+  const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showLogDetail, setShowLogDetail] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
@@ -72,7 +73,7 @@ const AdminLogs = () => {
         level: logLevel !== 'all' ? logLevel : undefined,
         search: searchTerm || undefined,
       });
-      
+
       setLogs(response.data.logs || []);
       setPagination({
         current_page: response.data.current_page || 1,
@@ -94,7 +95,7 @@ const AdminLogs = () => {
 
   const handleClearLogs = async () => {
     if (!confirm('Are you sure you want to clear all logs? This action cannot be undone.')) return;
-    
+
     try {
       setLoading(true);
       await adminService.clearLogs(selectedFile);
@@ -135,8 +136,8 @@ const AdminLogs = () => {
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (log.context && Array.isArray(log.context) && log.context.length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
+      (log.context && Array.isArray(log.context) && log.context.length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (log.context && typeof log.context === 'object' && Object.keys(log.context).length > 0 && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesLevel = logLevel === 'all' || log.level === logLevel || log.channel === logLevel;
     return matchesSearch && matchesLevel;
   });
@@ -284,8 +285,8 @@ const AdminLogs = () => {
               Log Level
             </label>
             <select
-              value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
+              value={logLevel}
+              onChange={(e) => setLogLevel(e.target.value)}
               className="block w-full px-2 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
             >
               {logLevels.map((level) => (
@@ -310,7 +311,7 @@ const AdminLogs = () => {
             <button
               onClick={() => {
                 setSearchTerm('');
-                setLevelFilter('all');
+                setLogLevel('all');
               }}
               className="px-3 py-1.5 lg:px-4 lg:py-2 text-xs lg:text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium transition-colors w-full flex items-center justify-center"
             >
@@ -359,15 +360,15 @@ const AdminLogs = () => {
                 <tr key={log.id} className="hover:bg-gray-50">
                   <td className="px-2 lg:px-6 py-2 lg:py-4 text-xs text-gray-900">
                     <div className="truncate max-w-[80px] lg:max-w-none">
-                      {new Date(log.timestamp).toLocaleTimeString('en-US', { 
-                        hour12: false, 
-                        hour: '2-digit', 
+                      {new Date(log.timestamp).toLocaleTimeString('en-US', {
+                        hour12: false,
+                        hour: '2-digit',
                         minute: '2-digit'
                       })}
                     </div>
                     <div className="text-xs text-gray-400 lg:hidden">
-                      {new Date(log.timestamp).toLocaleDateString('en-US', { 
-                        month: 'short', 
+                      {new Date(log.timestamp).toLocaleDateString('en-US', {
+                        month: 'short',
                         day: 'numeric'
                       })}
                     </div>

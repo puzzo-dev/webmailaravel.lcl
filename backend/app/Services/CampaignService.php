@@ -98,7 +98,7 @@ class CampaignService
                 'enable_unsubscribe_link' => $data['enable_unsubscribe_link'] ?? true,
                 'recipient_field_mapping' => $data['recipient_field_mapping'] ?? null,
                 'attachments' => !empty($data['attachments']) ? $data['attachments'] : null,
-                'status' => 'DRAFT',
+                'status' => 'draft',
             ]);
 
             // Store recipient data in cache for template variable processing
@@ -570,51 +570,22 @@ class CampaignService
             // Pre-cache campaign data for performance
             $this->precacheCampaignData($campaign);
 
-            // Update campaign status
+            // Update campaign status to sending (actively being processed)
             $campaign->update([
-                'status' => 'running',
+                'status' => 'sending',
                 'started_at' => now(),
             ]);
 
-            // Check if queue workers are available, if not process synchronously
-            try {
-                // Test queue worker availability by checking recent job processing
-                $recentJobs = \Illuminate\Support\Facades\DB::table('jobs')
-                    ->where('created_at', '>', now()->subMinutes(5))
-                    ->where('attempts', '>', 0)
-                    ->count();
+            // Dispatch campaign processing job to queue - always use queue for bulk campaigns
+            ProcessCampaignJob::dispatch($campaign->id)->onConnection('database');
                 
-                $queueWorkerAvailable = $recentJobs > 0;
-            } catch (\Exception $e) {
-                $queueWorkerAvailable = false;
-            }
-
-            if ($queueWorkerAvailable) {
-                // Dispatch campaign processing job to queue
-                ProcessCampaignJob::dispatch($campaign->id)->onQueue('campaigns')->onConnection('database');
-                    
-                $this->logInfo('Campaign dispatched to queue', [
-                    'campaign_id' => $campaign->id,
-                ]);
-            } else {
-                // Process synchronously for immediate sending
-                $this->logWarning('Queue worker unavailable, processing synchronously', [
-                    'campaign_id' => $campaign->id,
-                ]);
-                
-                // Process first batch immediately
-                $result = $this->processCampaign($campaign, 50); // Smaller batch for sync processing
-                
-                $this->logInfo('Campaign processed synchronously', [
-                    'campaign_id' => $campaign->id,
-                    'emails_sent' => $result['emails_sent'] ?? 0,
-                    'remaining_recipients' => $result['remaining_recipients'] ?? 0,
-                ]);
-            }
+            $this->logInfo('Campaign dispatched to queue', [
+                'campaign_id' => $campaign->id,
+            ]);
 
             $this->logMethodExit(__METHOD__, [
                 'campaign_id' => $campaign->id,
-                'status' => 'running'
+                'status' => 'sending'
             ]);
 
             return [
@@ -734,10 +705,12 @@ class CampaignService
         $this->logMethodEntry(__METHOD__, ['recipient' => $data['to']]);
 
         try {
+            \Log::debug('Step 1: Getting sender and validating');
             // Get sender and validate
             $sender = \App\Models\Sender::findOrFail($data['sender_id']);
             $user = Auth::user();
 
+            \Log::debug('Step 2: Checking user limits');
             // Check user limits
             $userLimits = $user->getPlanLimits();
             $userDailySent = $user->getDailySentCount();
@@ -746,18 +719,31 @@ class CampaignService
                 throw new \Exception('Daily sending limit reached for your plan');
             }
 
+            \Log::debug('Step 3: Checking sender limits');
             // Check sender limits
             if (!$sender->canSendToday()) {
                 throw new \Exception('Sender daily limit reached');
             }
 
+            \Log::debug('Step 4: Creating content object');
             // Create content object for email
             $content = new \App\Models\Content([
                 'subject' => $data['subject'],
-                'body' => $data['content'],
+                'html_body' => $data['content'],
+                'text_body' => strip_tags($data['content']), // Create text version
                 'type' => 'html'
             ]);
 
+            \Log::debug('CampaignEmail content processing', [
+                'campaign_id' => 'pending_creation',
+                'content_id' => 'null',
+                'has_html_body' => !empty($data['content']),
+                'has_text_body' => !empty(strip_tags($data['content'])),
+                'html_body_length' => strlen($data['content']),
+                'text_body_length' => strlen(strip_tags($data['content']))
+            ]);
+
+            \Log::debug('Step 5: Creating campaign record');
             // Create campaign record for tracking
             $campaign = Campaign::create([
                 'user_id' => $user->id,
@@ -777,9 +763,20 @@ class CampaignService
                 'started_at' => now(),
             ]);
 
+            \Log::debug('CampaignEmail content processing', [
+                'campaign_id' => $campaign->id,
+                'content_id' => 'null',
+                'has_html_body' => !empty($data['content']),
+                'has_text_body' => !empty(strip_tags($data['content'])),
+                'html_body_length' => strlen($data['content']),
+                'text_body_length' => strlen(strip_tags($data['content']))
+            ]);
+
+            \Log::debug('Step 6: Configuring mail for sender');
             // Configure mail settings for sender
             $this->configureMailForSender($sender);
 
+            \Log::debug('Step 7: About to send email, creating CampaignEmail object');
             // Send email directly using Mail facade
             \Illuminate\Support\Facades\Mail::to($data['to'])
                 ->when(!empty($data['bcc']), function ($mail) use ($data) {
@@ -787,9 +784,10 @@ class CampaignService
                 })
                 ->send(new \App\Mail\CampaignEmail($campaign, $content, $sender, $data['to'], [], $data['attachments'] ?? []));
 
+            \Log::debug('Step 8: Email sent successfully, updating campaign');
             // Update campaign and sender stats
             $campaign->update([
-                'status' => 'COMPLETED',
+                'status' => 'completed',
                 'total_sent' => 1,
                 'completed_at' => now(),
             ]);
@@ -882,7 +880,6 @@ class CampaignService
             if ($queueWorkerAvailable) {
                 // Dispatch campaign processing job to queue
                 \App\Jobs\ProcessCampaignJob::dispatch($campaign->id)
-                    ->onQueue('campaigns')
                     ->onConnection('database');
                     
                 $this->logInfo('Campaign resumed and dispatched to queue', [
@@ -971,7 +968,7 @@ class CampaignService
                 'enable_click_tracking' => $originalCampaign->enable_click_tracking,
                 'enable_unsubscribe_link' => $originalCampaign->enable_unsubscribe_link,
                 'recipient_field_mapping' => $originalCampaign->recipient_field_mapping,
-                'status' => 'DRAFT',
+                'status' => 'draft',
             ];
 
             // Create the duplicated campaign
@@ -1159,17 +1156,26 @@ class CampaignService
             $senders = is_array($campaignData['senders']) ? collect($campaignData['senders']) : $campaignData['senders'];
             $contents = is_array($campaignData['contents']) ? collect($campaignData['contents']) : $campaignData['contents'];
 
-            // Process recipients in batches
-            $processedCount = $campaign->total_sent ?? 0;
-            $recipientsToProcess = array_slice($recipients, $processedCount, $batchSize);
-            $remainingRecipients = count($recipients) - ($processedCount + count($recipientsToProcess));
+            // Process recipients in batches - track unique recipients, not total_sent
+            // Count unique recipients already processed by checking EmailTracking
+            $processedEmails = EmailTracking::where('campaign_id', $campaign->id)
+                ->distinct('recipient_email')
+                ->pluck('recipient_email')
+                ->toArray();
+            $processedCount = count($processedEmails);
+            
+            // Filter out already processed recipients
+            $remainingEmails = array_diff($recipients, $processedEmails);
+            $recipientsToProcess = array_slice(array_values($remainingEmails), 0, $batchSize);
+            $remainingRecipients = count($remainingEmails) - count($recipientsToProcess);
 
             $this->logInfo('Processing campaign batch', [
                 'campaign_id' => $campaign->id,
                 'total_recipients' => count($recipients),
-                'processed_count' => $processedCount,
+                'unique_processed_count' => $processedCount,
                 'batch_size' => count($recipientsToProcess),
                 'remaining_recipients' => $remainingRecipients,
+                'already_processed_emails' => $processedEmails,
             ]);
 
             // Batch dispatch jobs for better performance
@@ -1214,12 +1220,11 @@ class CampaignService
                 }
             }
 
-            // Always dispatch jobs to queue for bulk campaigns - no synchronous fallback
+            // Always dispatch jobs to queue for bulk campaigns
             if (!empty($jobs)) {
                 // Use queue for batch processing - this ensures user refresh doesn't affect sending
                 \Illuminate\Support\Facades\Bus::batch($jobs)
                     ->name("Campaign {$campaign->id} Batch")
-                    ->onQueue('emails')
                     ->dispatch();
                     
                 $this->logInfo('Batch email jobs dispatched to queue', [

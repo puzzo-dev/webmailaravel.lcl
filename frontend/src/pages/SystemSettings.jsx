@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   HiCog,
   HiServer,
@@ -16,7 +16,7 @@ import { systemSettingsService } from '../services/api';
 
 const SystemSettings = () => {
   const { user } = useSelector((state) => state.auth);
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
@@ -74,7 +74,7 @@ const SystemSettings = () => {
       setLoading(false);
       return;
     }
-    
+
     if (user) {
       fetchSettings();
     }
@@ -201,11 +201,10 @@ const SystemSettings = () => {
       </div>
 
       {message.text && (
-        <div className={`mb-6 p-4 rounded-md ${
-          message.type === 'success' 
+        <div className={`mb-6 p-4 rounded-md ${message.type === 'success'
             ? 'bg-green-50 text-green-700 border border-green-200'
             : 'bg-red-50 text-red-700 border border-red-200'
-        }`}>
+          }`}>
           <div className="flex">
             {message.type === 'success' ? (
               <HiCheckCircle className="h-5 w-5 text-green-400" />
@@ -227,11 +226,10 @@ const SystemSettings = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-6 border-b-2 font-medium text-sm flex items-center ${
-                  activeTab === tab.id
+                className={`py-4 px-6 border-b-2 font-medium text-sm flex items-center ${activeTab === tab.id
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <tab.icon className="h-5 w-5 mr-2" />
                 {tab.name}
@@ -712,14 +710,12 @@ const SystemSettings = () => {
                         <button
                           type="button"
                           onClick={() => updateSetting('training', 'default_mode', settings.training.default_mode === 'automatic' ? 'manual' : 'automatic')}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                            settings.training.default_mode === 'automatic' ? 'bg-primary-600' : 'bg-gray-200'
-                          }`}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${settings.training.default_mode === 'automatic' ? 'bg-primary-600' : 'bg-gray-200'
+                            }`}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              settings.training.default_mode === 'automatic' ? 'translate-x-5' : 'translate-x-0'
-                            }`}
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.training.default_mode === 'automatic' ? 'translate-x-5' : 'translate-x-0'
+                              }`}
                           />
                         </button>
                         <span className={`text-sm font-medium ${settings.training.default_mode === 'automatic' ? 'text-primary-600' : 'text-gray-500'}`}>
@@ -728,7 +724,7 @@ const SystemSettings = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                     <div className="flex">
                       <HiExclamation className="h-5 w-5 text-yellow-400" />
@@ -739,12 +735,12 @@ const SystemSettings = () => {
                         <div className="mt-2 text-sm text-yellow-700">
                           {settings.training.default_mode === 'automatic' ? (
                             <p>
-                              Automatic training mode requires PowerMTA integration and configuration files. 
+                              Automatic training mode requires PowerMTA integration and configuration files.
                               Ensure PowerMTA is properly installed and configured before enabling this mode.
                             </p>
                           ) : (
                             <p>
-                              Manual training mode is selected. Campaigns will use manual sender training processes 
+                              Manual training mode is selected. Campaigns will use manual sender training processes
                               without requiring PowerMTA integration.
                             </p>
                           )}
@@ -768,14 +764,12 @@ const SystemSettings = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting('training', 'allow_user_override', !settings.training.allow_user_override)}
-                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                          settings.training.allow_user_override ? 'bg-primary-600' : 'bg-gray-200'
-                        }`}
+                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${settings.training.allow_user_override ? 'bg-primary-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            settings.training.allow_user_override ? 'translate-x-5' : 'translate-x-0'
-                          }`}
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.training.allow_user_override ? 'translate-x-5' : 'translate-x-0'
+                            }`}
                         />
                       </button>
                     </div>
@@ -793,14 +787,12 @@ const SystemSettings = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting('training', 'manual_approval_required', !settings.training.manual_approval_required)}
-                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
-                          settings.training.manual_approval_required ? 'bg-primary-600' : 'bg-gray-200'
-                        }`}
+                        className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${settings.training.manual_approval_required ? 'bg-primary-600' : 'bg-gray-200'
+                          }`}
                       >
                         <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            settings.training.manual_approval_required ? 'translate-x-5' : 'translate-x-0'
-                          }`}
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.training.manual_approval_required ? 'translate-x-5' : 'translate-x-0'
+                            }`}
                         />
                       </button>
                     </div>

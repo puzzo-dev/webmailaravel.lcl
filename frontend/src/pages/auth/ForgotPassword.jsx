@@ -10,7 +10,7 @@ const ForgotPassword = () => {
   const dispatch = useDispatch();
   const { isLoading, error } = useSelector((state) => state.auth);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  
+
   const {
     register,
     handleSubmit,
@@ -29,7 +29,7 @@ const ForgotPassword = () => {
       await dispatch(forgotPassword({ email: data.email })).unwrap();
       setIsSubmitted(true);
       toast.success('Password reset email sent successfully!');
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

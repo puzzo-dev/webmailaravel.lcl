@@ -99,9 +99,9 @@ const notificationsSlice = createSlice({
       if (index !== -1) {
         const wasUnread = !state.notifications[index].read_at;
         const isNowRead = action.payload.read_at;
-        
+
         state.notifications[index] = action.payload;
-        
+
         if (wasUnread && isNowRead) {
           state.unreadCount = Math.max(0, state.unreadCount - 1);
         } else if (!wasUnread && !isNowRead) {
@@ -172,7 +172,7 @@ const notificationsSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(markAllNotificationsAsRead.fulfilled, (state, action) => {
+      .addCase(markAllNotificationsAsRead.fulfilled, (state) => {
         state.isLoading = false;
         if (!Array.isArray(state.notifications)) {
           state.notifications = [];
@@ -227,12 +227,12 @@ const notificationsSlice = createSlice({
   },
 });
 
-export const { 
-  clearError, 
-  addNotification, 
-  updateNotification, 
-  removeNotification, 
-  clearAllNotifications 
+export const {
+  clearError,
+  addNotification,
+  updateNotification,
+  removeNotification,
+  clearAllNotifications
 } = notificationsSlice.actions;
 
 export default notificationsSlice.reducer; 

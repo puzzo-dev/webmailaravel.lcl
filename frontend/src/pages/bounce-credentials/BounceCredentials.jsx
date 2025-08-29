@@ -21,7 +21,7 @@ const BounceCredentials = () => {
     const [domains, setDomains] = useState([]);
     const [statistics, setStatistics] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [, setError] = useState(null);
     const [showForm, setShowForm] = useState(false);
     const [editingCredential, setEditingCredential] = useState(null);
     const [testingCredential, setTestingCredential] = useState(null);
@@ -71,7 +71,7 @@ const BounceCredentials = () => {
             await bounceCredentialService.deleteBounceCredential(id);
             toast.success('Bounce credential deleted successfully');
             loadData();
-        } catch (err) {
+        } catch (_err) {
             toast.error('Failed to delete bounce credential');
         }
     };
@@ -81,7 +81,7 @@ const BounceCredentials = () => {
             await bounceCredentialService.setAsDefault(id);
             toast.success('Credential set as default successfully');
             loadData();
-        } catch (err) {
+        } catch (_err) {
             toast.error('Failed to set credential as default');
         }
     };
@@ -102,7 +102,7 @@ const BounceCredentials = () => {
             setShowForm(false);
             setEditingCredential(null);
             loadData();
-        } catch (err) {
+        } catch (_err) {
             toast.error('Failed to save bounce credential');
         }
     };
@@ -301,7 +301,7 @@ const BounceCredentials = () => {
                                             <div>
                                                 <label className="font-medium text-gray-700">Last Checked:</label>
                                                 <p className="text-gray-600">
-                                                    {credential.last_checked_at 
+                                                    {credential.last_checked_at
                                                         ? new Date(credential.last_checked_at).toLocaleString()
                                                         : 'Never'
                                                     }
@@ -312,7 +312,7 @@ const BounceCredentials = () => {
                                                 <p className="text-gray-600">{credential.processed_count || 0}</p>
                                             </div>
                                         </div>
-                                        
+
                                         {credential.last_error && (
                                             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                                                 <h4 className="font-medium text-red-800 text-sm">Last Error:</h4>

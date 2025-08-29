@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
-import { verify2FA, clearError } from '../../store/slices/authSlice';
+import { verify2FA } from '../../store/slices/authSlice';
 import toast from 'react-hot-toast';
 import { HiShieldCheck, HiKey } from 'react-icons/hi';
 
 const Verify2FA = () => {
   const dispatch = useDispatch();
-  const { isLoading, error } = useSelector((state) => state.auth);
-  
+  const { isLoading } = useSelector((state) => state.auth);
+
   const {
     register,
     handleSubmit,
@@ -16,19 +16,12 @@ const Verify2FA = () => {
     setValue,
   } = useForm();
 
-  useEffect(() => {
-    if (error) {
-      toast.error(error);
-      dispatch(clearError());
-    }
-  }, [error, dispatch]);
-
   const onSubmit = async (data) => {
     try {
       await dispatch(verify2FA({ code: data.code })).unwrap();
       toast.success('2FA verification successful!');
-    } catch (error) {
-      // Error is handled by useEffect above
+    } catch (_error) {
+      // Error is handled by Redux error state
     }
   };
 

@@ -79,7 +79,7 @@ Artisan::command('test:tracking {campaign_id}', function ($campaign_id) {
     // Check for tracking elements
     $hasTrackingPixel = strpos($htmlContent, '/api/tracking/open/') !== false;
     $hasClickTracking = strpos($htmlContent, '/api/tracking/click/') !== false;
-    $hasUnsubscribeLink = strpos($htmlContent, '/api/tracking/unsubscribe/') !== false;
+    $hasUnsubscribeLink = strpos($htmlContent, '/unsubscribe/') !== false;
 
     $this->info("Tracking elements found:");
     $this->info("- Tracking pixel: " . ($hasTrackingPixel ? 'YES' : 'NO'));

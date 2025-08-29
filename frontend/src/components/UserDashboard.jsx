@@ -50,12 +50,9 @@ const UserDashboard = ({ data, onRefresh }) => {
   const safeData = data || {};
   const campaigns = safeData.campaigns || {};
   const USERS = safeData.users || {};
-  const performance = safeData.performance || {};
-  const deliverability = safeData.deliverability || {};
   const REVENUE = safeData.revenue || {};
   const REPUTATION = safeData.reputation || {};
   const bounceProcessing = safeData.bounce_processing || {};
-  const suppression = safeData.suppression || {};
 
   // Generate performance chart data using real backend data
   const getPerformanceData = () => {
@@ -70,15 +67,15 @@ const UserDashboard = ({ data, onRefresh }) => {
         clicked: item.clicked || 0,
       }));
     }
-    
+
     // Fallback to mock data if no real data available
     const dates = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
-      
+
       const dayMultiplier = i === 0 ? 1 : (7 - i) / 7;
-      
+
       dates.push({
         name: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         sent: Math.round((campaigns.emails_sent || 0) * dayMultiplier / 7),
@@ -97,7 +94,7 @@ const UserDashboard = ({ data, onRefresh }) => {
     if (chartData.length > 0) {
       return chartData;
     }
-    
+
     // Fallback to calculated data if no real data available
     const statusData = [
       { name: 'Active', value: campaigns.active || 0, color: '#10B981' },
@@ -123,7 +120,7 @@ const UserDashboard = ({ data, onRefresh }) => {
           <div>
             <h1 className="text-2xl font-bold">Dashboard Overview</h1>
             <p className="text-blue-100 mt-1">
-              {(campaigns.total || 0) > 0 
+              {(campaigns.total || 0) > 0
                 ? `You have ${campaigns.total} campaign${campaigns.total !== 1 ? 's' : ''} total`
                 : "Ready to create your first campaign?"
               }
@@ -248,18 +245,18 @@ const UserDashboard = ({ data, onRefresh }) => {
             <AreaChart data={performanceData}>
               <defs>
                 <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.1} />
                 </linearGradient>
                 <linearGradient id="colorOpened" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/>
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0.1} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{
                   backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
@@ -267,21 +264,21 @@ const UserDashboard = ({ data, onRefresh }) => {
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="sent" 
-                stroke="#3B82F6" 
-                fillOpacity={1} 
-                fill="url(#colorSent)" 
+              <Area
+                type="monotone"
+                dataKey="sent"
+                stroke="#3B82F6"
+                fillOpacity={1}
+                fill="url(#colorSent)"
                 strokeWidth={2}
                 name="Sent"
               />
-              <Area 
-                type="monotone" 
-                dataKey="opened" 
-                stroke="#10B981" 
-                fillOpacity={1} 
-                fill="url(#colorOpened)" 
+              <Area
+                type="monotone"
+                dataKey="opened"
+                stroke="#10B981"
+                fillOpacity={1}
+                fill="url(#colorOpened)"
                 strokeWidth={2}
                 name="Opened"
               />
@@ -306,7 +303,7 @@ const UserDashboard = ({ data, onRefresh }) => {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="date" />
                 <YAxis />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{
                     backgroundColor: 'white',
                     border: '1px solid #e5e7eb',
@@ -365,8 +362,8 @@ const UserDashboard = ({ data, onRefresh }) => {
                 ))}
               </Pie>
               <Tooltip />
-              <Legend 
-                verticalAlign="bottom" 
+              <Legend
+                verticalAlign="bottom"
                 height={36}
                 iconType="circle"
               />

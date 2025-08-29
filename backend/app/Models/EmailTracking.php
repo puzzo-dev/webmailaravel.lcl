@@ -39,6 +39,36 @@ class EmailTracking extends Model
         'complained_at' => 'datetime'
     ];
 
+    protected $appends = ['status'];
+
+    /**
+     * Get the email status based on timestamps
+     */
+    public function getStatusAttribute(): string
+    {
+        if ($this->complained_at) {
+            return 'complained';
+        }
+        
+        if ($this->bounced_at) {
+            return 'bounced';
+        }
+        
+        if ($this->clicked_at) {
+            return 'clicked';
+        }
+        
+        if ($this->opened_at) {
+            return 'opened';
+        }
+        
+        if ($this->sent_at) {
+            return 'sent';
+        }
+        
+        return 'pending';
+    }
+
     // Relationships
     public function campaign(): BelongsTo
     {

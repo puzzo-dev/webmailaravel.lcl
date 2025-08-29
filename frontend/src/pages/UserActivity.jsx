@@ -65,7 +65,7 @@ const UserActivity = () => {
       setRefreshing(true);
       await loadAllData();
       toast.success('Data refreshed successfully');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to refresh data');
     } finally {
       setRefreshing(false);
@@ -77,7 +77,7 @@ const UserActivity = () => {
       await securityService.trustDevice(deviceId);
       toast.success('Device trusted successfully');
       await loadAllData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to trust device');
     }
   };
@@ -87,7 +87,7 @@ const UserActivity = () => {
       await securityService.revokeSession(sessionId);
       toast.success('Session revoked successfully');
       await loadAllData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to revoke session');
     }
   };
@@ -125,13 +125,13 @@ const UserActivity = () => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
@@ -197,11 +197,10 @@ const UserActivity = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
-                activeTab === tab.id
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${activeTab === tab.id
                   ? 'border-primary-500 text-primary-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               <tab.icon className="h-5 w-5 mr-2" />
               {tab.name}
@@ -219,14 +218,12 @@ const UserActivity = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-4">Security Score</h3>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                    (securitySummary.security_score || 0) >= 80 ? 'bg-green-100' : 
-                    (securitySummary.security_score || 0) >= 60 ? 'bg-yellow-100' : 'bg-red-100'
-                  }`}>
-                    <span className={`text-2xl font-bold ${
-                      (securitySummary.security_score || 0) >= 80 ? 'text-green-600' : 
-                      (securitySummary.security_score || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center ${(securitySummary.security_score || 0) >= 80 ? 'bg-green-100' :
+                      (securitySummary.security_score || 0) >= 60 ? 'bg-yellow-100' : 'bg-red-100'
                     }`}>
+                    <span className={`text-2xl font-bold ${(securitySummary.security_score || 0) >= 80 ? 'text-green-600' :
+                        (securitySummary.security_score || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
                       {securitySummary.security_score || 0}
                     </span>
                   </div>
@@ -236,12 +233,11 @@ const UserActivity = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    (securitySummary.security_score || 0) >= 80 ? 'bg-green-100 text-green-800' : 
-                    (securitySummary.security_score || 0) >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {(securitySummary.security_score || 0) >= 80 ? 'Excellent' : 
-                     (securitySummary.security_score || 0) >= 60 ? 'Good' : 'Needs Improvement'}
+                  <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${(securitySummary.security_score || 0) >= 80 ? 'bg-green-100 text-green-800' :
+                      (securitySummary.security_score || 0) >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                    {(securitySummary.security_score || 0) >= 80 ? 'Excellent' :
+                      (securitySummary.security_score || 0) >= 60 ? 'Good' : 'Needs Improvement'}
                   </div>
                 </div>
               </div>

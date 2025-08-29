@@ -10,15 +10,15 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [searchParams] = useSearchParams();
-  
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  
+
   // Check if user came from pricing page
   const fromPricing = searchParams.get('from') === 'pricing';
-  
+
   const { isLoading, error, isAuthenticated } = useSelector((state) => state.auth);
-  
+
   const {
     register,
     handleSubmit,
@@ -54,12 +54,12 @@ const Register = () => {
         password: data.password,
         password_confirmation: data.password_confirmation,
       })).unwrap();
-      
+
       toast.success('Registration successful! Welcome to EmailCampaign.');
       // If user came from pricing, redirect to billing to complete subscription
       const redirectTo = fromPricing ? '/billing?welcome=true' : '/dashboard';
       navigate(redirectTo);
-    } catch (error) {
+    } catch (_error) {
       // Error is handled by useEffect above
     }
   };

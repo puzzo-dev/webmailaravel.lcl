@@ -21,7 +21,7 @@ import NotificationList from '../components/shared/NotificationList';
 
 const Notifications = () => {
   const dispatch = useDispatch();
-  const { notifications, unreadCount, isLoading, error } = useSelector((state) => state.notifications);
+  const { notifications, unreadCount, isLoading } = useSelector((state) => state.notifications);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +36,7 @@ const Notifications = () => {
     try {
       await dispatch(markNotificationAsRead(notificationId)).unwrap();
       toast.success('Notification marked as read');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to mark notification as read');
     }
   };
@@ -45,7 +45,7 @@ const Notifications = () => {
     try {
       await dispatch(deleteNotification(notificationId)).unwrap();
       toast.success('Notification deleted');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to delete notification');
     }
   };
@@ -54,7 +54,7 @@ const Notifications = () => {
     try {
       await dispatch(markAllNotificationsAsRead()).unwrap();
       toast.success('All notifications marked as read');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to mark all notifications as read');
     }
   };
@@ -64,7 +64,7 @@ const Notifications = () => {
       try {
         await dispatch(deleteAllNotifications()).unwrap();
         toast.success('All notifications deleted');
-      } catch (error) {
+      } catch (_error) {
         toast.error('Failed to delete all notifications');
       }
     }
@@ -75,7 +75,7 @@ const Notifications = () => {
       setRefreshing(true);
       await dispatch(fetchNotifications());
       toast.success('Notifications refreshed');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to refresh notifications');
     } finally {
       setRefreshing(false);
@@ -85,7 +85,7 @@ const Notifications = () => {
   const handleViewNotification = async (notification) => {
     setSelectedNotification(notification);
     setShowModal(true);
-    
+
     // Mark as read if not already read
     if (!notification.read_at) {
       try {
@@ -105,7 +105,7 @@ const Notifications = () => {
     // Filter by status
     if (filter === 'unread' && notification.read_at) return false;
     if (filter === 'read' && !notification.read_at) return false;
-    
+
     // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -114,7 +114,7 @@ const Notifications = () => {
         notification.message?.toLowerCase().includes(searchLower)
       );
     }
-    
+
     return true;
   });
 
@@ -143,13 +143,13 @@ const Notifications = () => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
   };
@@ -273,13 +273,12 @@ const Notifications = () => {
               {/* Modal Header */}
               <div className="flex items-center justify-between pb-4 border-b">
                 <div className="flex items-center space-x-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                    selectedNotification.type === 'security' || selectedNotification.type === 'login' 
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedNotification.type === 'security' || selectedNotification.type === 'login'
                       ? 'bg-red-100 text-red-600'
                       : selectedNotification.type === 'campaign'
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                     {getNotificationIcon(selectedNotification.type || selectedNotification.notification_type)}
                   </div>
                   <div>
@@ -304,7 +303,7 @@ const Notifications = () => {
                 <div className="text-sm text-gray-700 whitespace-pre-wrap">
                   {selectedNotification.message || 'No message content available.'}
                 </div>
-                
+
                 {/* Additional notification data */}
                 {selectedNotification.ip_address && (
                   <div className="mt-4 p-3 bg-gray-50 rounded-lg">

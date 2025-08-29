@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import {
   HiPlus,
   HiTrash,
@@ -21,7 +21,6 @@ import { adminService } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminBackups = () => {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const [isLoading, setIsLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -91,7 +90,7 @@ const AdminBackups = () => {
       if (newBackupDescription.trim()) {
         backupData.description = newBackupDescription.trim();
       }
-      
+
       await adminService.createBackup(backupData);
       toast.success('Backup created successfully');
       setShowCreateModal(false);
@@ -111,7 +110,7 @@ const AdminBackups = () => {
     setIsLoading(true);
     try {
       const response = await adminService.downloadBackup(backupId);
-      
+
       // Handle different response types
       let blob;
       if (response instanceof Blob) {
@@ -121,7 +120,7 @@ const AdminBackups = () => {
       } else {
         blob = new Blob([response.data || response]);
       }
-      
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -130,7 +129,7 @@ const AdminBackups = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success('Backup downloaded successfully');
     } catch (error) {
       toast.error('Failed to download backup');
@@ -142,9 +141,9 @@ const AdminBackups = () => {
 
   const handleRestoreBackup = async () => {
     if (!selectedBackup) return;
-    
+
     if (!confirm(`Are you sure you want to restore from backup "${selectedBackup.filename}"? This will overwrite current data.`)) return;
-    
+
     setIsLoading(true);
     try {
       await adminService.restoreBackup(selectedBackup.id);
@@ -164,7 +163,7 @@ const AdminBackups = () => {
 
   const handleDeleteBackup = async (backupId) => {
     if (!confirm('Are you sure you want to delete this backup? This action cannot be undone.')) return;
-    
+
     setIsLoading(true);
     try {
       await adminService.deleteBackup(backupId);
@@ -389,68 +388,68 @@ const AdminBackups = () => {
                 </tr>
               ) : (
                 backups.map((backup) => (
-                <tr key={backup.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{backup.filename}</div>
-                      {backup.description && (
-                        <div className="text-sm text-gray-500">{backup.description}</div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatFileSize(backup.size)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDate(backup.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(backup.status || 'completed')}-100 text-${getStatusColor(backup.status || 'completed')}-800`}>
-                      {getStatusIcon(backup.status || 'completed')}
-                      <span className="ml-1">{backup.status || 'completed'}</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {backup.restored_at ? (
+                  <tr key={backup.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div>{formatDate(backup.restored_at)}</div>
-                        <div className="text-xs text-gray-500">by User #{backup.restored_by}</div>
+                        <div className="text-sm font-medium text-gray-900">{backup.filename}</div>
+                        {backup.description && (
+                          <div className="text-sm text-gray-500">{backup.description}</div>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-gray-400">Not restored</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleDownloadBackup(backup.id)}
-                        className="text-primary-600 hover:text-primary-900"
-                        title="Download"
-                      >
-                        <HiDownload className="h-4 w-4" />
-                      </button>
-                      {(backup.status === 'completed' || !backup.status) && (
-                        <button
-                          onClick={() => {
-                            setSelectedBackup(backup);
-                            setShowRestoreModal(true);
-                          }}
-                          className="text-info-600 hover:text-info-900"
-                          title="Restore"
-                        >
-                          <HiRefresh className="h-4 w-4" />
-                        </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatFileSize(backup.size)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(backup.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getStatusColor(backup.status || 'completed')}-100 text-${getStatusColor(backup.status || 'completed')}-800`}>
+                        {getStatusIcon(backup.status || 'completed')}
+                        <span className="ml-1">{backup.status || 'completed'}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {backup.restored_at ? (
+                        <div>
+                          <div>{formatDate(backup.restored_at)}</div>
+                          <div className="text-xs text-gray-500">by User #{backup.restored_by}</div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">Not restored</span>
                       )}
-                      <button
-                        onClick={() => handleDeleteBackup(backup.id)}
-                        className="text-danger-600 hover:text-danger-900"
-                        title="Delete"
-                      >
-                        <HiTrash className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleDownloadBackup(backup.id)}
+                          className="text-primary-600 hover:text-primary-900"
+                          title="Download"
+                        >
+                          <HiDownload className="h-4 w-4" />
+                        </button>
+                        {(backup.status === 'completed' || !backup.status) && (
+                          <button
+                            onClick={() => {
+                              setSelectedBackup(backup);
+                              setShowRestoreModal(true);
+                            }}
+                            className="text-info-600 hover:text-info-900"
+                            title="Restore"
+                          >
+                            <HiRefresh className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteBackup(backup.id)}
+                          className="text-danger-600 hover:text-danger-900"
+                          title="Delete"
+                        >
+                          <HiTrash className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>

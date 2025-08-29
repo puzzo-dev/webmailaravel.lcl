@@ -23,7 +23,6 @@ import {
   HiCheckCircle,
   HiXCircle,
   HiExclamation,
-  HiExclamationCircle,
   HiCamera,
   HiPencil,
   HiChevronRight,
@@ -48,19 +47,12 @@ import {
   testTelegramConnection
 } from '../store/slices/settingsSlice';
 import {
-  fetchSecuritySettings,
   enable2FA,
   disable2FA,
   verify2FA,
-  fetchApiKeys,
   createApiKey,
   deleteApiKey,
-  fetchActiveSessions,
   revokeSession,
-  fetchTrustedDevices,
-  trustDevice,
-  changePassword,
-  clearError,
   clear2FASetup,
 } from '../store/slices/securitySlice';
 
@@ -68,22 +60,19 @@ const Account = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const userState = useSelector((state) => state.user);
-  const { settings, isLoading: settingsLoading } = useSelector((state) => state.settings);
+  const { settings } = useSelector((state) => state.settings);
   const {
     twoFactorEnabled,
-    twoFactorSecret,
     qrCode,
     backupCodes,
     apiKeys,
     activeSessions,
-    trustedDevices,
     isLoading: securityLoading,
-    error,
   } = useSelector((state) => state.security);
-  
+
   // Main tab state
   const [activeTab, setActiveTab] = useState('profile');
-  
+
   // Profile state
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -115,12 +104,6 @@ const Account = () => {
     new_login: true,
     security_alerts: true,
   });
-  const [securitySettings, setSecuritySettings] = useState({
-    two_factor_auth: false,
-    session_timeout: 30,
-    max_login_attempts: 5,
-    require_password_change: false,
-  });
   const [apiSettings, setApiSettings] = useState({
     api_key: '',
     webhook_url: '',
@@ -138,31 +121,20 @@ const Account = () => {
   // Security state
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [securityPasswordData, setSecurityPasswordData] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: '',
-  });
 
   useEffect(() => {
     if (user) {
       dispatch(fetchUserSettings());
-      dispatch(fetchSecuritySettings());
-      dispatch(fetchApiKeys());
-      dispatch(fetchActiveSessions());
-      dispatch(fetchTrustedDevices());
     }
   }, [dispatch, user]);
 
   useEffect(() => {
     if (settings) {
-      setGeneralSettings(settings.general || generalSettings);
-      setNotificationSettings(settings.notifications || notificationSettings);
-      setSecuritySettings(settings.security || securitySettings);
-      setApiSettings(settings.api || apiSettings);
+      setGeneralSettings(prev => settings.general || prev);
+      setNotificationSettings(prev => settings.notifications || prev);
+      setApiSettings(prev => settings.api || prev);
     }
   }, [settings]);
 
@@ -175,29 +147,20 @@ const Account = () => {
     }
   }, [settings]);
 
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        dispatch(clearError());
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error, dispatch]);
-
   // Profile handlers
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     try {
       await dispatch(updateProfile(profileData)).unwrap();
       toast.success('Profile updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update profile');
     }
   };
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (passwordData.new_password !== passwordData.new_password_confirmation) {
       toast.error('New passwords do not match');
       return;
@@ -211,7 +174,7 @@ const Account = () => {
         new_password: '',
         new_password_confirmation: '',
       });
-    } catch (error) {
+    } catch {
       toast.error('Failed to change password');
     }
   };
@@ -239,7 +202,7 @@ const Account = () => {
     try {
       await dispatch(updateGeneralSettings(generalSettings)).unwrap();
       toast.success('General settings updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update general settings');
     } finally {
       setIsSubmitting(false);
@@ -252,21 +215,8 @@ const Account = () => {
     try {
       await dispatch(updateNotificationSettings(notificationSettings)).unwrap();
       toast.success('Notification settings updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update notification settings');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSecuritySubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await dispatch(updateSecuritySettings(securitySettings)).unwrap();
-      toast.success('Security settings updated successfully');
-    } catch (error) {
-      toast.error('Failed to update security settings');
     } finally {
       setIsSubmitting(false);
     }
@@ -278,7 +228,7 @@ const Account = () => {
     try {
       await dispatch(updateApiSettings(apiSettings)).unwrap();
       toast.success('API settings updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update API settings');
     } finally {
       setIsSubmitting(false);
@@ -301,14 +251,6 @@ const Account = () => {
     }));
   };
 
-  const handleSecurityChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setSecuritySettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
   const handleApiChange = (e) => {
     const { name, value } = e.target;
     setApiSettings(prev => ({
@@ -325,7 +267,7 @@ const Account = () => {
         api_key: result.api_key,
       }));
       toast.success('New API key generated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to generate API key');
     }
   };
@@ -341,7 +283,7 @@ const Account = () => {
     try {
       await dispatch(updateTelegramSettings(telegramSettings)).unwrap();
       toast.success('Telegram settings updated successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to update Telegram settings');
     } finally {
       setIsSubmitting(false);
@@ -352,7 +294,7 @@ const Account = () => {
     setTelegramLoading(true);
     setTelegramTestResult(null);
     try {
-      const result = await dispatch(testTelegramConnection(telegramSettings.chat_id)).unwrap();
+      await dispatch(testTelegramConnection(telegramSettings.chat_id)).unwrap();
       setTelegramTestResult({ success: true, message: 'Test message sent successfully!' });
     } catch (error) {
       setTelegramTestResult({ success: false, message: error?.message || 'Failed to send test message.' });
@@ -373,7 +315,7 @@ const Account = () => {
 
   const handleDisable2FA = async () => {
     if (!confirm('Are you sure you want to disable 2FA? This will make your account less secure.')) return;
-    
+
     try {
       await dispatch(disable2FA()).unwrap();
     } catch (error) {
@@ -383,7 +325,7 @@ const Account = () => {
 
   const handleVerify2FA = async () => {
     if (!verificationCode) return;
-    
+
     try {
       await dispatch(verify2FA(verificationCode)).unwrap();
       setShow2FAModal(false);
@@ -396,7 +338,7 @@ const Account = () => {
 
   const handleCreateApiKey = async () => {
     if (!newApiKeyName) return;
-    
+
     try {
       await dispatch(createApiKey({ name: newApiKeyName })).unwrap();
       setShowApiKeyModal(false);
@@ -408,7 +350,7 @@ const Account = () => {
 
   const handleDeleteApiKey = async (keyId) => {
     if (!confirm('Are you sure you want to delete this API key?')) return;
-    
+
     try {
       await dispatch(deleteApiKey(keyId)).unwrap();
     } catch (error) {
@@ -416,40 +358,13 @@ const Account = () => {
     }
   };
 
-  const handleChangePassword = async () => {
-    if (securityPasswordData.new_password !== securityPasswordData.confirm_password) {
-      alert('New passwords do not match');
-      return;
-    }
-    
-    try {
-      await dispatch(changePassword(securityPasswordData)).unwrap();
-      setShowPasswordModal(false);
-      setSecurityPasswordData({
-        current_password: '',
-        new_password: '',
-        confirm_password: '',
-      });
-    } catch (error) {
-      console.error('Password change failed:', error);
-    }
-  };
-
   const handleRevokeSession = async (sessionId) => {
     if (!confirm('Are you sure you want to revoke this session?')) return;
-    
+
     try {
       await dispatch(revokeSession(sessionId)).unwrap();
     } catch (error) {
       console.error('Session revocation failed:', error);
-    }
-  };
-
-  const handleTrustDevice = async (deviceId) => {
-    try {
-      await dispatch(trustDevice(deviceId)).unwrap();
-    } catch (error) {
-      console.error('Device trust failed:', error);
     }
   };
 
@@ -487,19 +402,6 @@ const Account = () => {
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <HiExclamationCircle className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Tabs */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="border-b border-gray-200">
@@ -514,11 +416,10 @@ const Account = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   <Icon className="h-5 w-5 mr-2" />
                   {tab.name}
@@ -779,8 +680,8 @@ const Account = () => {
                       </select>
                     </div>
                     <div className="flex justify-end">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         disabled={isSubmitting}
                         className="btn btn-primary flex items-center"
                       >
@@ -867,8 +768,8 @@ const Account = () => {
                       </div>
                     </div>
                     <div className="flex justify-end">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         disabled={isSubmitting}
                         className="btn btn-primary flex items-center"
                       >
@@ -953,8 +854,8 @@ const Account = () => {
                       </div>
                     </div>
                     <div className="flex justify-end">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         disabled={isSubmitting}
                         className="btn btn-primary flex items-center"
                       >
@@ -1064,11 +965,10 @@ const Account = () => {
                     </p>
                   </div>
                   <div className="flex items-center">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                      twoFactorEnabled
-                        ? 'bg-success-100 text-success-800'
-                        : 'bg-warning-100 text-warning-800'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${twoFactorEnabled
+                      ? 'bg-success-100 text-success-800'
+                      : 'bg-warning-100 text-warning-800'
+                      }`}>
                       {twoFactorEnabled ? (
                         <HiCheckCircle className="h-4 w-4 mr-1" />
                       ) : (
@@ -1217,11 +1117,10 @@ const Account = () => {
                               {formatDate(session.last_used)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                session.current
-                                  ? 'bg-success-100 text-success-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${session.current
+                                ? 'bg-success-100 text-success-800'
+                                : 'bg-gray-100 text-gray-800'
+                                }`}>
                                 {session.current ? 'Current' : 'Active'}
                               </span>
                             </td>

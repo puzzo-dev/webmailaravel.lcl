@@ -9,13 +9,13 @@ export const initializeAuth = createAsyncThunk(
       // Try to get user profile - if successful, user is authenticated
       const response = await authService.getProfile(true); // Mark as auth init
       const user = response.data?.user || response.user || response;
-      
+
       if (user) {
         return { user };
       } else {
         return rejectWithValue('No user found');
       }
-    } catch (error) {
+    } catch (_error) {
       // If API call fails (no cookie, expired token, etc.), user is not authenticated
       return rejectWithValue('Not authenticated');
     }
@@ -31,7 +31,7 @@ export const login = createAsyncThunk(
         password,
         remember: remember,
       });
-      
+
       // The API returns: { success: true, data: { user: {...} } }
       if (response.success && response.data && response.data.user) {
         return response;
@@ -50,7 +50,7 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authService.register(userData);
-      
+
       // The API returns: { success: true, data: { user: {...} } }
       if (response.success && response.data && response.data.user) {
         return response;
@@ -67,7 +67,7 @@ export const register = createAsyncThunk(
 
 export const logout = createAsyncThunk(
   'auth/logout',
-  async (_, { rejectWithValue }) => {
+  async () => {
     try {
       await authService.logout();
       return {};
@@ -158,7 +158,7 @@ export const updateProfile = createAsyncThunk(
       const response = await authService.updateProfile(profileData);
       const responseData = await response.json();
       const user = responseData.user || responseData;
-      
+
       return { user };
     } catch (error) {
       return rejectWithValue(error.message || 'Profile update failed');
@@ -170,9 +170,9 @@ export const updateProfile = createAsyncThunk(
 const hasStoredAuth = () => {
   try {
     // Check if we have any indication of being logged in
-    return document.cookie.includes('laravel_session') || 
-           localStorage.getItem('auth_token') || 
-           sessionStorage.getItem('auth_token');
+    return document.cookie.includes('laravel_session') ||
+      localStorage.getItem('auth_token') ||
+      sessionStorage.getItem('auth_token');
   } catch {
     return false;
   }

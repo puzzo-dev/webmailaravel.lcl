@@ -26,29 +26,45 @@ class CampaignEmail extends Mailable
     public $recipient;
     public $recipientData;
     public $emailTracking;
-    public $attachments;
+    public $campaignAttachments;
 
     /**
      * Create a new message instance.
      */
     public function __construct(Campaign $campaign, Content $content, Sender $sender, string $recipient, array $recipientData = [], array $attachments = [])
     {
+        // Debug attachment data structure
+        \Log::debug('CampaignEmail constructor received attachments', [
+            'attachments_count' => count($attachments),
+            'attachments_structure' => $attachments,
+            'attachment_keys' => !empty($attachments) ? array_keys($attachments[0] ?? []) : [],
+        ]);
+
         $this->campaign = $campaign;
         $this->content = $content;
         $this->sender = $sender;
         $this->recipient = $recipient;
         $this->recipientData = $recipientData;
-        $this->attachments = $attachments;
+        $this->campaignAttachments = $attachments;
 
         // Create email tracking record only if tracking is enabled
         if ($this->campaign->isTrackingEnabled()) {
-            $this->emailTracking = EmailTracking::create([
-                'campaign_id' => $campaign->id,
-                'recipient_email' => $recipient,
-                'email_id' => EmailTracking::generateEmailId(),
-                'sent_at' => now()
-            ]);
+            // Check if tracking record already exists to prevent duplicates
+            $existingTracking = EmailTracking::where('campaign_id', $campaign->id)
+                ->where('recipient_email', $recipient)
+                ->first();
             
+            if (!$existingTracking) {
+                $this->emailTracking = EmailTracking::create([
+                    'campaign_id' => $campaign->id,
+                    'recipient_email' => $recipient,
+                    'sender_id' => $sender->id,
+                    'email_id' => EmailTracking::generateEmailId(),
+                    // Don't set sent_at yet - will be set after successful sending
+                ]);
+            } else {
+                $this->emailTracking = $existingTracking;
+            }
         }
     }
 
@@ -102,6 +118,16 @@ class CampaignEmail extends Mailable
      */
     public function content(): MailContent
     {
+        // Log content state for debugging
+        \Log::debug('CampaignEmail content processing', [
+            'campaign_id' => $this->campaign->id,
+            'content_id' => $this->content->id ?? 'null',
+            'has_html_body' => !empty($this->content->html_body),
+            'has_text_body' => !empty($this->content->text_body),
+            'html_body_length' => $this->content->html_body ? strlen($this->content->html_body) : 0,
+            'text_body_length' => $this->content->text_body ? strlen($this->content->text_body) : 0,
+        ]);
+
         $htmlContent = $this->processTemplateVariables($this->content->html_body);
         $textContent = $this->processTemplateVariables($this->content->text_body);
 
@@ -109,6 +135,15 @@ class CampaignEmail extends Mailable
         if ($this->campaign->isTrackingEnabled()) {
             $htmlContent = $this->addTrackingToHtml($htmlContent);
             $textContent = $this->addTrackingToText($textContent);
+        }
+
+        // Ensure we have some content to send
+        if (empty($htmlContent) && empty($textContent)) {
+            $htmlContent = '<p>No content available</p>';
+            \Log::warning('CampaignEmail: Both HTML and text content are empty', [
+                'campaign_id' => $this->campaign->id,
+                'content_id' => $this->content->id ?? 'null',
+            ]);
         }
 
         return new MailContent(
@@ -119,8 +154,12 @@ class CampaignEmail extends Mailable
     /**
      * Process template variables in content
      */
-    private function processTemplateVariables(string $content): string
+    private function processTemplateVariables(?string $content): string
     {
+        if ($content === null) {
+            return '';
+        }
+        
         return $this->campaign->processTemplateVariables($content, $this->recipientData);
     }
 
@@ -251,16 +290,32 @@ class CampaignEmail extends Mailable
     }
 
     /**
-     * Get unsubscribe URL
+     * Get unsubscribe URL pointing to frontend page
      */
     private function getUnsubscribeUrl(): string
     {
         if ($this->emailTracking) {
-            return URL::to('/api/tracking/unsubscribe/' . $this->emailTracking->email_id);
+            // Generate token for frontend unsubscribe page
+            $token = $this->generateUnsubscribeToken($this->recipient, $this->campaign->id);
+            
+            // Return frontend URL instead of direct API call
+            $frontendUrl = config('app.frontend_url', config('app.url'));
+            return $frontendUrl . '/unsubscribe/' . $token;
         }
 
-        // Fallback to campaign's unsubscribe link method
-        return $this->campaign->getUnsubscribeLink($this->recipient);
+        // Fallback to campaign's unsubscribe link method (also update this to use frontend)
+        $token = $this->generateUnsubscribeToken($this->recipient, $this->campaign->id);
+        $frontendUrl = config('app.frontend_url', config('app.url'));
+        return $frontendUrl . '/unsubscribe/' . $token;
+    }
+
+    /**
+     * Generate unsubscribe token for frontend
+     */
+    private function generateUnsubscribeToken(string $email, int $campaignId): string
+    {
+        // Use same token generation method as Campaign model for consistency
+        return hash('sha256', $email . $campaignId . config('app.key'));
     }
 
     /**
@@ -321,15 +376,44 @@ class CampaignEmail extends Mailable
     public function attachments(): array
     {
         $attachmentObjects = [];
-        
-        foreach ($this->attachments as $attachment) {
+
+        foreach ($this->campaignAttachments as $attachment) {
             if (isset($attachment['path']) && \Storage::disk('local')->exists($attachment['path'])) {
-                $attachmentObjects[] = \Illuminate\Mail\Mailables\Attachment::fromStorageDisk('local', $attachment['path'])
-                    ->as($attachment['name'] ?? basename($attachment['path']))
-                    ->withMime($attachment['mime'] ?? 'application/octet-stream');
+                $attachmentObjects[] = \Illuminate\Mail\Mailables\Attachment::fromStorageDisk(
+                    'local',
+                    $attachment['path']
+                )->as($attachment['name'] ?? $attachment['original_name'] ?? basename($attachment['path']))
+                 ->withMime($attachment['mime_type'] ?? $attachment['mime'] ?? 'application/octet-stream');
             }
         }
-        
+
         return $attachmentObjects;
+    }
+
+    /**
+     * Mark email as successfully sent
+     */
+    public function markAsSent(): void
+    {
+        if ($this->emailTracking && !$this->emailTracking->sent_at) {
+            $this->emailTracking->update([
+                'sent_at' => now(),
+                'failed_at' => null // Clear any previous failure
+            ]);
+        }
+    }
+
+    /**
+     * Mark email as failed
+     */
+    public function markAsFailed(string $reason = null): void
+    {
+        if ($this->emailTracking && !$this->emailTracking->failed_at) {
+            $this->emailTracking->update([
+                'failed_at' => now(),
+                'failure_reason' => $reason,
+                'sent_at' => null // Clear sent status if it was set
+            ]);
+        }
     }
 } 

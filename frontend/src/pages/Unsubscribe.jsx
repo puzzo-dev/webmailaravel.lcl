@@ -1,20 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { HiMail, HiCheckCircle, HiExclamationCircle, HiUserRemove, HiHome } from 'react-icons/hi';
 
 const Unsubscribe = () => {
   const { token } = useParams();
   const [unsubscribeStatus, setUnsubscribeStatus] = useState('processing'); // processing, success, error, already_unsubscribed
-  const [unsubscribeData, setUnsubscribeData] = useState(null);
   const [email, setEmail] = useState('');
 
   useEffect(() => {
     if (token) {
       processUnsubscribe();
     }
-  }, [token]);
+  }, [token, processUnsubscribe]);
 
-  const processUnsubscribe = async () => {
+  const processUnsubscribe = useCallback(async () => {
     try {
       const response = await fetch(`/api/unsubscribe/${token}`, {
         method: 'POST',
@@ -31,7 +30,6 @@ const Unsubscribe = () => {
         } else {
           setUnsubscribeStatus('success');
         }
-        setUnsubscribeData(data);
         setEmail(data.email || '');
       } else {
         setUnsubscribeStatus('error');
@@ -41,7 +39,7 @@ const Unsubscribe = () => {
       setUnsubscribeStatus('error');
       console.error('Unsubscribe error:', error);
     }
-  };
+  }, [token]);
 
   const handleResubscribe = async () => {
     if (!token) return;
@@ -58,7 +56,6 @@ const Unsubscribe = () => {
 
       if (response.ok) {
         setUnsubscribeStatus('resubscribed');
-        setUnsubscribeData(data);
       } else {
         console.error('Resubscribe failed:', data.message);
       }
@@ -89,7 +86,7 @@ const Unsubscribe = () => {
           <p className="text-sm text-gray-500 mb-6">
             You will no longer receive marketing emails from us. Please allow up to 48 hours for this change to take effect.
           </p>
-          
+
           <div className="space-y-3">
             <button
               onClick={handleResubscribe}
@@ -97,7 +94,7 @@ const Unsubscribe = () => {
             >
               Changed your mind? Resubscribe
             </button>
-            
+
             <Link
               to="/"
               className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -121,7 +118,7 @@ const Unsubscribe = () => {
           <p className="text-sm text-gray-500 mb-6">
             If you're still receiving emails, please allow up to 48 hours for changes to take effect.
           </p>
-          
+
           <div className="space-y-3">
             <button
               onClick={handleResubscribe}
@@ -129,7 +126,7 @@ const Unsubscribe = () => {
             >
               Want to resubscribe? Click here
             </button>
-            
+
             <Link
               to="/"
               className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -153,7 +150,7 @@ const Unsubscribe = () => {
           <p className="text-sm text-gray-500 mb-6">
             You will continue to receive our marketing emails and updates.
           </p>
-          
+
           <Link
             to="/"
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -176,7 +173,7 @@ const Unsubscribe = () => {
           <p className="text-sm text-gray-500 mb-6">
             If you continue to have issues, please contact our support team for assistance.
           </p>
-          
+
           <div className="space-y-3">
             <button
               onClick={processUnsubscribe}
@@ -184,7 +181,7 @@ const Unsubscribe = () => {
             >
               Try Again
             </button>
-            
+
             <Link
               to="/"
               className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

@@ -8,7 +8,6 @@ const AnalyticsChart = ({
   type = 'line',
   height = 300,
   className = '',
-  _showLegend = true,
   showGrid = true,
   color = 'blue'
 }) => {
@@ -54,16 +53,16 @@ const AnalyticsChart = ({
             <XAxis dataKey="date" />
             <YAxis />
             <Tooltip formatter={(value) => [formatNumber(value), 'Value']} />
-            <Area 
-              type="monotone" 
-              dataKey="value" 
-              stroke={chartColor} 
-              fill={chartColor} 
-              fillOpacity={0.3} 
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={chartColor}
+              fill={chartColor}
+              fillOpacity={0.3}
             />
           </AreaChart>
         );
-      
+
       case 'bar':
         return (
           <BarChart {...commonProps}>
@@ -74,7 +73,7 @@ const AnalyticsChart = ({
             <Bar dataKey="value" fill={chartColor} />
           </BarChart>
         );
-      
+
       default: // 'line'
         return (
           <LineChart {...commonProps}>
@@ -82,10 +81,10 @@ const AnalyticsChart = ({
             <XAxis dataKey="date" />
             <YAxis />
             <Tooltip formatter={(value) => [formatNumber(value), 'Value']} />
-            <Line 
-              type="monotone" 
-              dataKey="value" 
-              stroke={chartColor} 
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={chartColor}
               strokeWidth={2}
               dot={{ fill: chartColor }}
             />

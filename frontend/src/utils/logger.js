@@ -29,7 +29,7 @@ class Logger {
     if (this.shouldLog(LOG_LEVELS.ERROR)) {
       console.error(`[ERROR] ${message}`, ...args);
     }
-    
+
     // In production, send errors to monitoring service
     if (!import.meta.env.DEV) {
       this.sendToMonitoring('error', message, args);
@@ -78,7 +78,7 @@ class Logger {
   }
 
   // Send to monitoring service in production
-  sendToMonitoring(level, message, args) {
+  sendToMonitoring(level, message) {
     // Placeholder for production monitoring integration
     // Could integrate with Sentry, LogRocket, etc.
     if (window.Sentry) {

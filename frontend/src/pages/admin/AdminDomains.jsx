@@ -17,14 +17,14 @@ import {
   HiClock as ClockIcon
 } from 'react-icons/hi2';
 import { adminService } from '../../services/api';
-import { formatDate, formatNumber } from '../../utils/helpers';
+import { formatDate } from '../../utils/helpers';
 import Skeleton from '../../components/ui/Skeleton';
 import toast from 'react-hot-toast';
 
 const AdminDomains = () => {
   const { user } = useSelector((state) => state.auth);
   const [domains, setDomains] = useState([]);
-  
+
   // Ensure domains is always an array
   const safeDomains = Array.isArray(domains) ? domains : [];
   const [loading, setLoading] = useState(true);
@@ -63,16 +63,16 @@ const AdminDomains = () => {
         limit: pagination.per_page,
         ...filters
       };
-      
+
       const response = await adminService.getDomains(params);
-      
+
       // Ensure domains is always an array
-      const domainsData = Array.isArray(response.data.data) 
-        ? response.data.data 
-        : Array.isArray(response.data) 
-        ? response.data 
-        : [];
-      
+      const domainsData = Array.isArray(response.data.data)
+        ? response.data.data
+        : Array.isArray(response.data)
+          ? response.data
+          : [];
+
       setDomains(domainsData);
       setPagination({
         current_page: response.data.pagination?.current_page || response.pagination?.current_page || 1,
@@ -119,10 +119,10 @@ const AdminDomains = () => {
 
   const handleBulkAction = async (action) => {
     if (selectedDomains.length === 0) return;
-    
+
     try {
       setActionLoading(true);
-      
+
       for (const domainId of selectedDomains) {
         if (action === 'delete') {
           await adminService.deleteDomain(domainId);
@@ -130,7 +130,7 @@ const AdminDomains = () => {
           await adminService.updateDomainStatus(domainId, action);
         }
       }
-      
+
       toast.success(`Bulk ${action} completed successfully`);
       setSelectedDomains([]);
       await fetchDomains();
@@ -144,7 +144,7 @@ const AdminDomains = () => {
 
   const handleDeleteDomain = async (domainId, domainName) => {
     if (!confirm(`Are you sure you want to delete domain "${domainName}"?`)) return;
-    
+
     try {
       setActionLoading(true);
       await adminService.deleteDomain(domainId);
@@ -165,10 +165,10 @@ const AdminDomains = () => {
       suspended: { color: 'bg-red-100 text-red-800', icon: ExclamationTriangleIcon },
       pending: { color: 'bg-yellow-100 text-yellow-800', icon: ClockIcon }
     };
-    
+
     const config = statusConfig[status] || statusConfig.inactive;
     const Icon = config.icon;
-    
+
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         <Icon className="w-3 h-3 mr-1" />
@@ -183,10 +183,10 @@ const AdminDomains = () => {
       warning: { color: 'bg-yellow-100 text-yellow-800', icon: ExclamationTriangleIcon },
       critical: { color: 'bg-red-100 text-red-800', icon: XCircleIcon }
     };
-    
+
     const config = healthConfig[health] || healthConfig.good;
     const Icon = config.icon;
-    
+
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         <Icon className="w-3 h-3 mr-1" />
@@ -238,7 +238,7 @@ const AdminDomains = () => {
         </div>
         <div className="flex space-x-3">
           <button
-            onClick={() => {/* Add new domain */}}
+            onClick={() => {/* Add new domain */ }}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Add Domain
@@ -278,7 +278,7 @@ const AdminDomains = () => {
               <option value="pending">Pending</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Bounce Processing</label>
             <select
@@ -291,7 +291,7 @@ const AdminDomains = () => {
               <option value="false">Without Bounce Processing</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
             <input
@@ -302,7 +302,7 @@ const AdminDomains = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          
+
           <div className="flex items-end">
             <button
               onClick={() => setFilters({ status: '', user: '', search: '', hasBounceProcessing: '' })}
@@ -402,60 +402,60 @@ const AdminDomains = () => {
                 </tr>
               ) : (
                 safeDomains.map((domain) => (
-                <tr key={domain.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={selectedDomains.includes(domain.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedDomains([...selectedDomains, domain.id]);
-                        } else {
-                          setSelectedDomains(selectedDomains.filter(id => id !== domain.id));
-                        }
-                      }}
+                  <tr key={domain.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedDomains.includes(domain.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedDomains([...selectedDomains, domain.id]);
+                          } else {
+                            setSelectedDomains(selectedDomains.filter(id => id !== domain.id));
+                          }
+                        }}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
                         <GlobeAltIcon className="h-5 w-5 text-gray-400 mr-2" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{domain.name}</div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{domain.name}</div>
                           {domain.description && (
                             <div className="text-sm text-gray-500">{domain.description}</div>
                           )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {domain.user?.name || 'Unknown User'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(domain.is_active ? 'active' : 'inactive')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(domain.is_active ? 'active' : 'inactive')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {getHealthBadge(domain.health_status || 'good')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
                         {domain.smtp_config ? (
                           <CheckCircleIcon className="h-4 w-4 text-green-500" />
-                      ) : (
+                        ) : (
                           <XCircleIcon className="h-4 w-4 text-red-500" />
-                      )}
+                        )}
                         <span className="ml-1 text-sm text-gray-900">
                           {domain.smtp_config ? 'Configured' : 'Not Configured'}
                         </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                      {domain.enable_bounce_processing ? (
+                        {domain.enable_bounce_processing ? (
                           <CheckCircleIcon className="h-4 w-4 text-green-500" />
-                      ) : (
+                        ) : (
                           <XCircleIcon className="h-4 w-4 text-gray-400" />
-                      )}
+                        )}
                         <span className="ml-1 text-sm text-gray-900">
                           {domain.enable_bounce_processing ? 'Enabled' : 'Disabled'}
                         </span>
@@ -463,46 +463,46 @@ const AdminDomains = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(domain.created_at)}
-                  </td>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedDomain(domain);
-                          setShowDomainModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900"
+                        <button
+                          onClick={() => {
+                            setSelectedDomain(domain);
+                            setShowDomainModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
                           title="View Details"
-                      >
+                        >
                           <EyeIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleTestConnection(domain.id)}
-                        disabled={testingConnection}
-                        className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                        </button>
+                        <button
+                          onClick={() => handleTestConnection(domain.id)}
+                          disabled={testingConnection}
+                          className="text-green-600 hover:text-green-900 disabled:opacity-50"
                           title="Test Connection"
-                      >
+                        >
                           <PlayIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(domain.id, domain.is_active ? 'inactive' : 'active')}
+                        </button>
+                        <button
+                          onClick={() => handleStatusChange(domain.id, domain.is_active ? 'inactive' : 'active')}
                           disabled={actionLoading}
                           className="text-orange-600 hover:text-orange-900 disabled:opacity-50"
                           title={domain.is_active ? 'Deactivate' : 'Activate'}
-                      >
+                        >
                           {domain.is_active ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
-                      </button>
-                      <button
+                        </button>
+                        <button
                           onClick={() => handleDeleteDomain(domain.id, domain.name)}
                           disabled={actionLoading}
                           className="text-red-600 hover:text-red-900 disabled:opacity-50"
                           title="Delete Domain"
-                      >
+                        >
                           <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>

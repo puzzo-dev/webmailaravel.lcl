@@ -288,7 +288,9 @@ class Campaign extends Model
         // Generate a unique unsubscribe token
         $token = hash('sha256', $email . $this->id . config('app.key'));
         
-        return url('/api/tracking/unsubscribe/' . $token . '?email=' . urlencode($email));
+        // Return frontend URL instead of direct API call for better UX
+        $frontendUrl = config('app.frontend_url', config('app.url'));
+        return $frontendUrl . '/unsubscribe/' . $token;
     }
 
     /**

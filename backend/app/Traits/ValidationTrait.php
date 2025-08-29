@@ -299,10 +299,10 @@ trait ValidationTrait
     /**
      * Validate file upload using Laravel's validation
      */
-    protected function validateFileUpload($file, array $allowedMimes, int $maxSize = 10240): array
+    protected function validateFileUpload($file, array $allowedExtensions, int $maxSize = 10240): array
     {
         $validator = Validator::make(['file' => $file], [
-            'file' => "required|file|mimes:" . implode(',', $allowedMimes) . "|max:{$maxSize}"
+            'file' => "required|file|mimes:" . implode(',', $allowedExtensions) . "|max:{$maxSize}"
         ]);
 
         if ($validator->fails()) {

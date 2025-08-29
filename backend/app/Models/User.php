@@ -310,4 +310,14 @@ class User extends Authenticatable implements JWTSubject
     {
         $this->update(['last_manual_training_at' => now()]);
     }
+
+    /**
+     * Get the count of emails sent by this user today
+     */
+    public function getDailySentCount(): int
+    {
+        return $this->campaigns()
+            ->whereDate('created_at', today())
+            ->sum('total_recipients') ?: 0;
+    }
 }

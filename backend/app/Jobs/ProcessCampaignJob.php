@@ -70,7 +70,6 @@ class ProcessCampaignJob implements ShouldQueue
                 
                 self::dispatch($this->campaignId, $this->batchSize)
                     ->delay(now()->addSeconds($nextDelay))
-                    ->onQueue('campaigns')
                     ->onConnection('database');
                 
                 Log::info('Scheduled next campaign batch', [
