@@ -1,0 +1,29 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1D4ED8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="envelope-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F1F5F9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="url(#bg-gradient)"/>
+  
+  <!-- Email envelope -->
+  <g transform="translate(6, 8)">
+    <!-- Envelope body -->
+    <rect x="0" y="2" width="20" height="14" rx="2" fill="url(#envelope-gradient)" stroke="#E2E8F0" stroke-width="0.5"/>
+    
+    <!-- Envelope flap -->
+    <path d="M0 4 L10 10 L20 4" stroke="#3B82F6" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Send indicator (small arrow) -->
+    <circle cx="17" cy="5" r="2.5" fill="#10B981"/>
+    <path d="M15.5 5 L17 3.5 L18.5 5" stroke="white" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
