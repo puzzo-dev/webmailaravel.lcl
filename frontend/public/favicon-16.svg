@@ -1,0 +1,17 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="16" height="16" rx="3" fill="#3B82F6" />
+
+    <!-- Email envelope -->
+    <g transform="translate(2, 3)">
+        <!-- Envelope body -->
+        <rect x="0" y="1" width="12" height="8" rx="1" fill="white" />
+
+        <!-- Envelope flap -->
+        <path d="M0 2.5 L6 6 L12 2.5" stroke="#3B82F6" stroke-width="1" fill="none" />
+
+        <!-- Send indicator -->
+        <circle cx="10" cy="3" r="1.5" fill="#10B981" />
+        <path d="M9.3 3 L10 2.3 L10.7 3" stroke="white" stroke-width="0.7" fill="none" />
+    </g>
+</svg>
