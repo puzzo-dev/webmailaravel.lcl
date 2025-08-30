@@ -299,7 +299,7 @@ class CampaignEmail extends Mailable
             $token = $this->generateUnsubscribeToken($this->recipient, $this->campaign->id);
             
             // Return frontend URL instead of direct API call
-            $frontendUrl = config('app.frontend_url', config('app.url'));
+            $frontendUrl = config('app.frontend_url');
             return $frontendUrl . '/unsubscribe/' . $token;
         }
 
