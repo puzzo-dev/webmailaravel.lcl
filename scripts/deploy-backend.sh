@@ -148,7 +148,19 @@ RESTORE_EOF
 # Function to deploy backend
 deploy_backend() {
     echo "📤 Uploading backend files..."
+    # First, upload all files (excluding git and development env files)
     sshpass -p "${PROD_PASSWORD}" rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='storage/logs/*' --exclude='bootstrap/cache/*' --exclude='.env' --exclude='.env.local' --exclude='.env.backup' -e "ssh -o StrictHostKeyChecking=no" ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/
+    
+    # Explicitly upload the .env.production file (it might be in .gitignore)
+    echo "📤 Uploading .env.production file..."
+    sshpass -p "${PROD_PASSWORD}" scp -o StrictHostKeyChecking=no ${RELEASE_DIR}/.env.production ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/.env.production
+    
+    # Verify the .env.production file was uploaded
+    echo "🔍 Verifying .env.production upload..."
+    ${SSH} "ls -la /tmp/${RELEASE_NAME}_backend_new/.env.production" || {
+        echo "❌ ERROR: Failed to upload .env.production file"
+        exit 1
+    }
 
     # Deploy backend on server
     ${SSH} bash -s << EOF
