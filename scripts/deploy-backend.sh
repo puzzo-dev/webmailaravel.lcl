@@ -1,7 +1,27 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting backend deployment with backup/restore functionality..."
+echo "🚀 Starting backend deployment..."
+echo "📁 Release directory: ${RELEASE_DIR}"
+echo "📋 Release name: ${RELEASE_NAME}"
+
+# Check if backend directory exists
+if [ ! -d "${RELEASE_DIR}" ]; then
+    echo "❌ ERROR: Backend directory '${RELEASE_DIR}' not found!"
+    exit 1
+fi
+
+echo "📂 Current working directory: $(pwd)"
+echo "📂 Release directory contents:"
+ls -la "${RELEASE_DIR}/" | head -10
+
+if [ -f "${RELEASE_DIR}/.env.production" ]; then
+    echo "✅ Found .env.production file"
+    echo "📋 File size: $(stat -c%s "${RELEASE_DIR}/.env.production") bytes"
+else
+    echo "❌ ERROR: .env.production file not found!"
+    exit 1
+fi
 
 # Configuration variables
 APP_NAME="Campaign Pro X"
@@ -153,14 +173,20 @@ deploy_backend() {
     
     # Explicitly upload the .env.production file (it might be in .gitignore)
     echo "📤 Uploading .env.production file..."
-    sshpass -p "${PROD_PASSWORD}" scp -o StrictHostKeyChecking=no ${RELEASE_DIR}/.env.production ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/.env.production
-    
-    # Verify the .env.production file was uploaded
-    echo "🔍 Verifying .env.production upload..."
-    ${SSH} "ls -la /tmp/${RELEASE_NAME}_backend_new/.env.production" || {
-        echo "❌ ERROR: Failed to upload .env.production file"
+    if [ -f "${RELEASE_DIR}/.env.production" ]; then
+        sshpass -p "${PROD_PASSWORD}" scp -o StrictHostKeyChecking=no "${RELEASE_DIR}/.env.production" ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/.env.production
+        
+        # Verify the .env.production file was uploaded
+        echo "🔍 Verifying .env.production upload..."
+        ${SSH} "ls -la /tmp/${RELEASE_NAME}_backend_new/.env.production" || {
+            echo "❌ ERROR: Failed to upload .env.production file"
+            exit 1
+        }
+        echo "✅ .env.production file uploaded successfully"
+    else
+        echo "❌ ERROR: .env.production file not found at ${RELEASE_DIR}/.env.production"
         exit 1
-    }
+    fi
 
     # Deploy backend on server
     ${SSH} bash -s << EOF
