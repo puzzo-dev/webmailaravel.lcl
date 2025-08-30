@@ -9,7 +9,8 @@ const Unsubscribe = () => {
 
   const processUnsubscribe = useCallback(async () => {
     try {
-      const response = await fetch(`/api/unsubscribe/${token}`, {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
+      const response = await fetch(`${apiBaseUrl}/unsubscribe/${token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -45,7 +46,8 @@ const Unsubscribe = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(`/api/resubscribe/${token}`, {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
+      const response = await fetch(`${apiBaseUrl}/resubscribe/${token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

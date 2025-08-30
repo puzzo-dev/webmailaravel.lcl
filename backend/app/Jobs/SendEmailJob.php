@@ -56,8 +56,17 @@ class SendEmailJob implements ShouldQueue
         }
         
         try {
-            // Get fresh data
+            // Get fresh data with null check
             $sender = $this->sender->fresh();
+            if (!$sender) {
+                Log::error('Sender no longer exists', [
+                    'campaign_id' => $this->campaign->id,
+                    'sender_id' => $this->sender->id,
+                    'recipient' => $this->recipient
+                ]);
+                throw new \Exception('Sender no longer exists');
+            }
+            
             $user = $this->campaign->user;
             $userLimits = $user->getPlanLimits();
             
@@ -194,13 +203,27 @@ class SendEmailJob implements ShouldQueue
      */
     private function configureMailForSender(): void
     {
+        // Check if sender exists and has domain
+        if (!$this->sender) {
+            throw new \Exception('Sender is null');
+        }
+        
+        if (!$this->sender->domain) {
+            Log::error('Sender has no domain assigned', [
+                'sender_id' => $this->sender->id,
+                'sender_email' => $this->sender->email
+            ]);
+            throw new \Exception('Sender has no domain assigned');
+        }
+        
         // Get the sender's domain SMTP configuration
         $smtpConfig = $this->sender->domain->smtpConfig;
         
         if (!$smtpConfig) {
             Log::error('No SMTP configuration found for sender domain', [
                 'sender_id' => $this->sender->id,
-                'domain_id' => $this->sender->domain_id
+                'domain_id' => $this->sender->domain_id,
+                'domain_name' => $this->sender->domain->name ?? 'unknown'
             ]);
             throw new \Exception('No SMTP configuration found for sender domain');
         }

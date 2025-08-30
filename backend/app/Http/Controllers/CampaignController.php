@@ -94,11 +94,7 @@ class CampaignController extends Controller
                 'subject' => 'required|string|max:255',
                 'content' => 'required|string',
                 'attachments' => 'nullable|array',
-                'attachments.*' => 'file|max:' . config('constants.file_upload.max_size_kb', 10240) . '|mimes:' . implode(',', array_merge(
-                    config('constants.file_upload.allowed_extensions.documents', []),
-                    config('constants.file_upload.allowed_extensions.images', []),
-                    config('constants.file_upload.allowed_extensions.archives', [])
-                )),
+                'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png,gif,zip',
                 'enable_open_tracking' => 'nullable|string',
                 'enable_click_tracking' => 'nullable|string',
                 'enable_unsubscribe_link' => 'nullable|string',

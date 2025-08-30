@@ -11,6 +11,10 @@ class UserLogin extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    public $timeout = 30; // Set timeout to 30 seconds
+    public $tries = 2; // Only try twice
+    public $backoff = [10]; // Wait 10 seconds before retry
+
     protected $loginData;
 
     /**
@@ -28,10 +32,11 @@ class UserLogin extends Notification implements ShouldQueue
     {
         $channels = ['database']; // Always store in database
         
+        // Temporarily disable email notifications for login alerts to prevent SMTP timeouts
         // Add email channel if user has email notifications enabled
-        if ($notifiable->email_notifications_enabled) {
-            $channels[] = 'mail';
-        }
+        // if ($notifiable->email_notifications_enabled) {
+        //     $channels[] = 'mail';
+        // }
         
         // Add Telegram channel if user has Telegram notifications enabled and chat ID
         if ($notifiable->telegram_notifications_enabled && $notifiable->telegram_chat_id) {
@@ -120,5 +125,16 @@ class UserLogin extends Notification implements ShouldQueue
             'text' => $message,
             'parse_mode' => 'HTML'
         ];
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        \Illuminate\Support\Facades\Log::error('UserLogin notification failed', [
+            'error' => $exception->getMessage(),
+            'login_data' => $this->loginData
+        ]);
     }
 }

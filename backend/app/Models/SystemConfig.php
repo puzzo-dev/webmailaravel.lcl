@@ -296,4 +296,93 @@ class SystemConfig extends Model
     {
         static::setValue($key, $value, $description);
     }
+
+    /**
+     * Sync system configuration to .env file
+     */
+    public static function syncToEnvFile(): bool
+    {
+        try {
+            $envPath = base_path('.env');
+            
+            if (!file_exists($envPath)) {
+                return false;
+            }
+
+            $envContent = file_get_contents($envPath);
+
+            // Map of system config keys to env keys
+            $configMapping = [
+                'SYSTEM_SMTP_HOST' => 'MAIL_HOST',
+                'SYSTEM_SMTP_PORT' => 'MAIL_PORT',
+                'SYSTEM_SMTP_USERNAME' => 'MAIL_USERNAME',
+                'SYSTEM_SMTP_PASSWORD' => 'MAIL_PASSWORD',
+                'SYSTEM_SMTP_ENCRYPTION' => 'MAIL_ENCRYPTION',
+                'SYSTEM_SMTP_FROM_ADDRESS' => 'MAIL_FROM_ADDRESS',
+                'SYSTEM_SMTP_FROM_NAME' => 'MAIL_FROM_NAME',
+            ];
+
+            // Update both system config values and their corresponding ENV values
+            foreach ($configMapping as $systemKey => $envKey) {
+                $value = static::get($systemKey);
+                if ($value !== null) {
+                    // Update the ENV key as well
+                    $envContent = static::updateEnvValue($envContent, $envKey, $value);
+                    // Ensure system key exists
+                    $envContent = static::updateEnvValue($envContent, $systemKey, $value);
+                }
+            }
+
+            // Update MAIL_MAILER to smtp if system SMTP is configured
+            $smtpHost = static::get('SYSTEM_SMTP_HOST');
+            if ($smtpHost) {
+                $envContent = static::updateEnvValue($envContent, 'MAIL_MAILER', 'smtp');
+            }
+
+            file_put_contents($envPath, $envContent);
+            
+            return true;
+        } catch (\Exception $e) {
+            \Log::error('Failed to sync system config to env file: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update or add an environment variable in the env content
+     */
+    private static function updateEnvValue(string $envContent, string $key, $value): string
+    {
+        // Handle null values
+        if ($value === null || $value === '') {
+            $formattedValue = '';
+        } else {
+            // Handle boolean values
+            if (is_bool($value)) {
+                $formattedValue = $value ? 'true' : 'false';
+            } else {
+                $value = (string) $value;
+                
+                // Check if value needs quoting (contains spaces, special chars, etc.)
+                if (preg_match('/[\s#"\'@\\\\]/', $value)) {
+                    // Remove existing quotes and add proper ones
+                    $cleanValue = trim($value, '"\'');
+                    $formattedValue = '"' . str_replace('"', '\\"', $cleanValue) . '"';
+                } else {
+                    $formattedValue = $value;
+                }
+            }
+        }
+
+        $pattern = "/^{$key}=.*$/m";
+        $replacement = "{$key}={$formattedValue}";
+
+        if (preg_match($pattern, $envContent)) {
+            // Update existing value
+            return preg_replace($pattern, $replacement, $envContent);
+        } else {
+            // Add new value at the end
+            return $envContent . "\n{$replacement}";
+        }
+    }
 }

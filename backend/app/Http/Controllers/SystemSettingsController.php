@@ -6,11 +6,17 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 use App\Models\SystemConfig;
+use App\Traits\ResponseTrait;
 use Illuminate\Validation\Rule;
 
 class SystemSettingsController extends Controller
 {
+    use ResponseTrait;
+    
     /**
      * Get system settings
      */
@@ -66,36 +72,55 @@ class SystemSettingsController extends Controller
     public function update(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
+            // Debug logging
+            \Log::info('SystemSettings update request received', [
+                'user_id' => Auth::id(),
+                'request_data' => $request->all(),
+                'headers' => $request->headers->all()
+            ]);
+
             // Check if user has admin role
             if (!Auth::user()->hasRole('admin')) {
+                \Log::warning('SystemSettings update denied - not admin', ['user_id' => Auth::id()]);
                 return $this->forbiddenResponse('Access denied. Admin role required.');
             }
 
-            $request->validate([
-                // System SMTP validation
-                'system_smtp.host' => 'sometimes|string|max:255',
-                'system_smtp.port' => 'sometimes|integer|min:1|max:65535',
-                'system_smtp.username' => 'sometimes|string|max:255',
-                'system_smtp.password' => 'sometimes|string|max:255',
-                'system_smtp.encryption' => ['sometimes', Rule::in(['tls', 'ssl', 'none'])],
-                'system_smtp.from_address' => 'sometimes|email|max:255',
-                'system_smtp.from_name' => 'sometimes|string|max:255',
-                
-                // Webmail validation
-                'webmail.url' => 'sometimes|nullable|url|max:255',
-                'webmail.enabled' => 'sometimes|boolean',
-                
-                // System validation
-                'system.app_name' => 'sometimes|string|max:255',
-                'system.app_url' => 'sometimes|url|max:255',
-                'system.timezone' => 'sometimes|string|max:50',
-                'system.max_campaigns_per_day' => 'sometimes|integer|min:1|max:1000',
-                'system.max_recipients_per_campaign' => 'sometimes|integer|min:1|max:100000',
-                
-                // Notification validation
-                'notifications.email_enabled' => 'sometimes|boolean',
-                'notifications.telegram_enabled' => 'sometimes|boolean',
-            ]);
+            \Log::info('Starting validation...');
+            
+            try {
+                $request->validate([
+                    // System SMTP validation
+                    'system_smtp.host' => 'sometimes|string|max:255',
+                    'system_smtp.port' => 'sometimes|integer|min:1|max:65535',
+                    'system_smtp.username' => 'sometimes|string|max:255',
+                    'system_smtp.password' => 'sometimes|string|max:255',
+                    'system_smtp.encryption' => ['sometimes', Rule::in(['tls', 'ssl', 'none'])],
+                    'system_smtp.from_address' => 'sometimes|email|max:255',
+                    'system_smtp.from_name' => 'sometimes|string|max:255',
+                    
+                    // Webmail validation
+                    'webmail.url' => 'sometimes|nullable|url|max:255',
+                    'webmail.enabled' => 'sometimes|boolean',
+                    
+                    // System validation
+                    'system.app_name' => 'sometimes|string|max:255',
+                    'system.app_url' => 'sometimes|url|max:255',
+                    'system.timezone' => 'sometimes|string|max:50',
+                    'system.max_campaigns_per_day' => 'sometimes|integer|min:1|max:1000',
+                    'system.max_recipients_per_campaign' => 'sometimes|integer|min:1|max:100000',
+                    
+                    // Notification validation
+                    'notifications.email_enabled' => 'sometimes|boolean',
+                    'notifications.telegram_enabled' => 'sometimes|boolean',
+                ]);
+                \Log::info('Validation passed');
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                \Log::error('Validation failed', [
+                    'errors' => $e->errors(),
+                    'request_data' => $request->all()
+                ]);
+                throw $e;
+            }
 
             $updatedSettings = [];
 
@@ -156,7 +181,43 @@ class SystemSettingsController extends Controller
                 }
             }
 
-            return $this->successResponse($updatedSettings, 'System settings updated successfully');
+            // Sync configuration to .env file
+            \Log::info('Starting .env sync...');
+            try {
+                $syncResult = SystemConfig::syncToEnvFile();
+                \Log::info('Sync result', ['success' => $syncResult]);
+                if (!$syncResult) {
+                    \Log::warning('System config updated but failed to sync to .env file');
+                }
+            } catch (\Exception $e) {
+                \Log::error('Sync to env file failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $syncResult = false;
+            }
+
+            // Clear configuration cache
+            \Log::info('Clearing caches...');
+            try {
+                // Use simpler cache clearing that doesn't hang
+                \Cache::flush();
+                \Log::info('Cache flushed successfully');
+                
+                // Only clear config cache, avoid other artisan commands that might hang
+                if (function_exists('opcache_reset')) {
+                    opcache_reset();
+                    \Log::info('OPCache reset successfully');
+                }
+                
+                \Log::info('All caches cleared successfully');
+            } catch (\Exception $e) {
+                \Log::error('Failed to clear caches', ['error' => $e->getMessage()]);
+                // Don't let cache clearing failure stop the whole operation
+            }
+
+            \Log::info('Returning success response', ['updated_settings' => $updatedSettings]);
+            return $this->successResponse($updatedSettings, 'System settings updated successfully' . ($syncResult ? ' and synced to environment' : ' (sync to env failed)'));
         }, 'update_system_settings');
     }
 
@@ -189,23 +250,47 @@ class SystemSettingsController extends Controller
                     'from_name' => SystemConfig::get('SYSTEM_SMTP_FROM_NAME', env('MAIL_FROM_NAME')),
                 ];
 
-                // Configure mail settings temporarily
-                Config::set('mail.mailers.smtp.host', $systemSmtp['host']);
-                Config::set('mail.mailers.smtp.port', $systemSmtp['port']);
-                Config::set('mail.mailers.smtp.username', $systemSmtp['username']);
-                Config::set('mail.mailers.smtp.password', $systemSmtp['password']);
-                Config::set('mail.mailers.smtp.encryption', $systemSmtp['encryption']);
-                Config::set('mail.from.address', $systemSmtp['from_address']);
-                Config::set('mail.from.name', $systemSmtp['from_name']);
+                // Validate SMTP settings
+                if (empty($systemSmtp['host']) || empty($systemSmtp['port'])) {
+                    return $this->errorResponse('SMTP configuration is incomplete. Please configure SMTP settings first.', 400);
+                }
 
-                // Send test email
-                \Mail::raw('This is a test email from your system SMTP configuration.', function ($message) use ($testEmail, $systemSmtp) {
-                    $message->to($testEmail)
-                           ->subject('System SMTP Test Email')
-                           ->from($systemSmtp['from_address'], $systemSmtp['from_name']);
-                });
+                // Create a custom mailer instance with test settings
+                $transport = new \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport(
+                    $systemSmtp['host'],
+                    $systemSmtp['port'],
+                    $systemSmtp['encryption'] === 'ssl' ? true : ($systemSmtp['encryption'] === 'tls' ? null : false)
+                );
 
-                return $this->successResponse(null, 'Test email sent successfully');
+                if (!empty($systemSmtp['username'])) {
+                    $transport->setUsername($systemSmtp['username']);
+                }
+                if (!empty($systemSmtp['password'])) {
+                    $transport->setPassword($systemSmtp['password']);
+                }
+
+                $mailer = new \Symfony\Component\Mailer\Mailer($transport);
+
+                // Create test email
+                $email = (new \Symfony\Component\Mime\Email())
+                    ->from($systemSmtp['from_address'])
+                    ->to($testEmail)
+                    ->subject('System SMTP Test Email - ' . now()->format('Y-m-d H:i:s'))
+                    ->text('This is a test email from your system SMTP configuration. If you receive this email, your SMTP settings are working correctly.')
+                    ->html('<p>This is a test email from your system SMTP configuration.</p><p>If you receive this email, your SMTP settings are working correctly.</p><hr><p><small>Sent at: ' . now()->format('Y-m-d H:i:s') . '</small></p>');
+
+                // Send the email
+                $mailer->send($email);
+
+                return $this->successResponse([
+                    'test_email' => $testEmail,
+                    'smtp_host' => $systemSmtp['host'],
+                    'smtp_port' => $systemSmtp['port'],
+                    'timestamp' => now()->toISOString(),
+                ], 'Test email sent successfully to ' . $testEmail);
+
+            } catch (\Symfony\Component\Mailer\Exception\TransportException $e) {
+                return $this->errorResponse('SMTP Connection Failed: ' . $e->getMessage() . '. Please check your SMTP host, port, and credentials.', 500);
             } catch (\Exception $e) {
                 return $this->errorResponse('Failed to send test email: ' . $e->getMessage(), 500);
             }

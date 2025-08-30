@@ -552,11 +552,11 @@ const Campaigns = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="table">
+            <div className="w-full">
+              <table className="table w-full">
                 <thead className="table-header">
                   <tr>
-                    <th className="table-header-cell w-4">
+                    <th className="table-header-cell w-10">
                       <input
                         type="checkbox"
                         checked={selectedCampaigns.length === safeCampaigns.length && safeCampaigns.length > 0}
@@ -564,14 +564,11 @@ const Campaigns = () => {
                         className="form-checkbox"
                       />
                     </th>
-                    <th className="table-header-cell">Campaign</th>
-                    <th className="table-header-cell">Status</th>
-                    <th className="table-header-cell">Recipients</th>
-                    <th className="table-header-cell">Sent</th>
-                    <th className="table-header-cell">Opens</th>
-                    <th className="table-header-cell">Clicks</th>
-                    <th className="table-header-cell">Created</th>
-                    <th className="table-header-cell">Actions</th>
+                    <th className="table-header-cell min-w-[200px]">Campaign</th>
+                    <th className="table-header-cell w-24">Status</th>
+                    <th className="table-header-cell w-32">Stats</th>
+                    <th className="table-header-cell w-28">Created</th>
+                    <th className="table-header-cell w-32">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="table-body">
@@ -587,70 +584,68 @@ const Campaigns = () => {
                       </td>
                       <td className="table-cell">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{campaign.name}</div>
-                          <div className="text-sm text-gray-500">{campaign.subject}</div>
+                          <div className="text-sm font-medium text-gray-900 truncate">{campaign.name}</div>
+                          <div className="text-sm text-gray-500 truncate">{campaign.subject}</div>
                         </div>
                       </td>
                       <td className="table-cell">
                         {getStatusBadge(campaign.status)}
                       </td>
                       <td className="table-cell">
-                        <div className="flex items-center">
-                          <HiUserGroup className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.recipient_count || 0}</span>
+                        <div className="space-y-1">
+                          <div className="flex items-center text-xs">
+                            <HiUserGroup className="h-3 w-3 text-gray-400 mr-1" />
+                            <span>{campaign.recipient_count || 0} recipients</span>
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <HiMail className="h-3 w-3 text-gray-400 mr-1" />
+                            <span>{campaign.total_sent || 0} sent</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-xs">
+                            <div className="flex items-center">
+                              <HiEye className="h-3 w-3 text-gray-400 mr-1" />
+                              <span>{campaign.opens || 0}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <HiCursorClick className="h-3 w-3 text-gray-400 mr-1" />
+                              <span>{campaign.clicks || 0}</span>
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="table-cell">
-                        <div className="flex items-center">
-                          <HiMail className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.total_sent || 0}</span>
-                        </div>
+                        <div className="text-xs text-gray-900">{formatDate(campaign.created_at)}</div>
                       </td>
                       <td className="table-cell">
-                        <div className="flex items-center">
-                          <HiEye className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.opens || 0}</span>
-                        </div>
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex items-center">
-                          <HiCursorClick className="h-4 w-4 text-gray-400 mr-1" />
-                          <span className="text-sm text-gray-900">{campaign.clicks || 0}</span>
-                        </div>
-                      </td>
-                      <td className="table-cell">
-                        <div className="text-sm text-gray-900">{formatDate(campaign.created_at)}</div>
-                      </td>
-                      <td className="table-cell">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1">
                           {getActionButtons(campaign)}
                           <Link
                             to={`/campaigns/${campaign.id}`}
                             className="text-primary-600 hover:text-primary-900 transition-colors"
                             title="View Campaign"
                           >
-                            <HiEye className="h-4 w-4" />
+                            <HiEye className="h-3 w-3" />
                           </Link>
                           <Link
                             to={`/campaigns/${campaign.id}/edit`}
                             className="text-gray-600 hover:text-gray-900 transition-colors"
                             title="Edit Campaign"
                           >
-                            <HiPencil className="h-4 w-4" />
+                            <HiPencil className="h-3 w-3" />
                           </Link>
                           <button
                             onClick={() => handleDuplicate(campaign.id, campaign.name)}
                             className="text-blue-600 hover:text-blue-900 transition-colors"
                             title="Duplicate Campaign"
                           >
-                            <HiDuplicate className="h-4 w-4" />
+                            <HiDuplicate className="h-3 w-3" />
                           </button>
                           <button
                             onClick={() => handleDelete(campaign.id)}
                             className="text-danger-600 hover:text-danger-900 transition-colors"
                             title="Delete Campaign"
                           >
-                            <HiTrash className="h-4 w-4" />
+                            <HiTrash className="h-3 w-3" />
                           </button>
                         </div>
                       </td>

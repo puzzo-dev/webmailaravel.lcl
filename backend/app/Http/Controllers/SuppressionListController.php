@@ -46,65 +46,6 @@ class SuppressionListController extends Controller
     }
 
     /**
-     * Handle unsubscribe request
-     */
-    public function unsubscribe(Request $request, string $emailId): JsonResponse
-    {
-        try {
-            $email = $request->get('email');
-            
-            if (!$email || !$this->validateEmail($email)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid email address'
-                ], 400);
-            }
-
-            $metadata = [
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'unsubscribed_at' => now()->toISOString()
-            ];
-
-            $result = $this->handleUnsubscribe($emailId, $email, $metadata);
-
-            if ($result['success']) {
-                Log::info('Unsubscribe processed', [
-                    'email' => $email,
-                    'email_id' => $emailId,
-                    'ip' => $request->ip()
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $result['message'],
-                    'data' => [
-                        'email' => $email,
-                        'unsubscribed_at' => now()->toISOString()
-                    ]
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to process unsubscribe',
-                    'error' => $result['error']
-                ], 500);
-            }
-
-        } catch (\Exception $e) {
-            Log::error('Unsubscribe failed', [
-                'email_id' => $emailId,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process unsubscribe request'
-            ], 500);
-        }
-    }
-
-    /**
      * Process FBL file upload
      */
     public function processFBLFile(Request $request): JsonResponse

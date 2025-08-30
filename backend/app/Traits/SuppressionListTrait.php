@@ -111,13 +111,13 @@ trait SuppressionListTrait
     /**
      * Handle unsubscribe request
      */
-    protected function handleUnsubscribe(string $emailId, string $email, array $metadata = []): array
+    protected function handleUnsubscribe(?string $emailId, string $email, array $metadata = []): array
     {
         $this->logMethodEntry(__METHOD__, ['email_id' => $emailId, 'email' => $email]);
 
         try {
-            // Find email tracking record
-            $emailTracking = EmailTracking::where('email_id', $emailId)->first();
+            // Find email tracking record (only if emailId is provided)
+            $emailTracking = $emailId ? EmailTracking::where('email_id', $emailId)->first() : null;
             
             if ($emailTracking) {
                 // Update email tracking
@@ -154,11 +154,14 @@ trait SuppressionListTrait
             }
 
             // If no tracking record found, still add to suppression list
+            $source = $emailId ? 'manual' : 'frontend_token';
+            $reason = $emailId ? 'User unsubscribed (no tracking record)' : 'User unsubscribed via frontend token';
+            
             SuppressionList::addEmail(
                 $email,
                 'unsubscribe',
-                'manual',
-                'User unsubscribed (no tracking record)',
+                $source,
+                $reason,
                 $metadata
             );
 

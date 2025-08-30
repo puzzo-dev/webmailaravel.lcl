@@ -64,7 +64,6 @@ Route::get('/config', [PublicConfigController::class, 'getPublicConfig']);
 Route::prefix('tracking')->group(function () {
     Route::get('/open/{emailId}', [TrackingController::class, 'trackOpen']);
     Route::get('/click/{emailId}/{linkId}', [TrackingController::class, 'trackClick']);
-    Route::get('/unsubscribe/{emailId}', [TrackingController::class, 'unsubscribe']);
 });
 
 // Frontend-friendly unsubscribe routes (no authentication required)
@@ -215,11 +214,6 @@ Route::middleware(['auth:api'])->group(function () {
         
         // Webhook for payment processing
         Route::post('/webhook', [BillingController::class, 'webhook']);
-    });
-
-    // Public suppression routes (for unsubscribe links, etc.)
-    Route::prefix('suppression-list')->group(function () {
-        Route::post('/unsubscribe/{emailId}', [SuppressionListController::class, 'unsubscribe']);
     });
 
     // Sender routes (require active subscription)

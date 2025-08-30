@@ -917,6 +917,26 @@ export const adminService = {
         return response.data;
     },
 
+    async deleteCampaign(campaignId) {
+        const response = await api.delete(`/campaigns/${campaignId}`);
+        return response.data;
+    },
+
+    async startCampaign(campaignId) {
+        const response = await api.post(`/campaigns/${campaignId}/start`);
+        return response.data;
+    },
+
+    async pauseCampaign(campaignId) {
+        const response = await api.post(`/campaigns/${campaignId}/pause`);
+        return response.data;
+    },
+
+    async stopCampaign(campaignId) {
+        const response = await api.post(`/campaigns/${campaignId}/stop`);
+        return response.data;
+    },
+
     async getDomains(params = {}) {
         const response = await api.get('/admin/domains', { params });
         return response.data;

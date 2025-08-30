@@ -54,6 +54,20 @@ class ProcessCampaignJob implements ShouldQueue
                 return;
             }
 
+            // Check if recipient list file exists
+            if (!$campaign->recipient_list_path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($campaign->recipient_list_path)) {
+                Log::error('Campaign recipient list file not found', [
+                    'campaign_id' => $this->campaignId,
+                    'recipient_list_path' => $campaign->recipient_list_path,
+                    'storage_root' => storage_path('app/private'),
+                    'full_path_check' => storage_path('app/private/' . $campaign->recipient_list_path)
+                ]);
+                
+                // Mark campaign as failed
+                $campaign->update(['status' => 'failed']);
+                return;
+            }
+
             // Process campaign
             $result = $campaignService->processCampaign($campaign, $this->batchSize);
 

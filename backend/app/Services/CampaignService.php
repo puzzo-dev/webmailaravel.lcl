@@ -6,6 +6,7 @@ use App\Events\CampaignStatusChanged;
 use App\Jobs\ProcessCampaignJob;
 use App\Models\Campaign;
 use App\Models\Content;
+use App\Models\EmailTracking;
 use App\Models\Sender;
 use App\Models\User;
 use App\Notifications\CampaignCompleted;
@@ -372,7 +373,7 @@ class CampaignService
     private function uploadRecipientList($file, string $campaignName): array
     {
         try {
-            $uploadResult = $this->uploadFile($file, 'campaigns/recipients', [
+            $uploadResult = $this->uploadFile($file, 'recipient_lists', [
                 'disk' => 'local',
                 'visibility' => 'private',
                 'max_size' => 10240, // 10MB
@@ -942,6 +943,9 @@ class CampaignService
                 $newFileName = 'recipient_lists/duplicated_'.time().'_'.basename($originalCampaign->recipient_list_path);
                 $this->writeFile($newFileName, $originalFileContent, ['disk' => 'local']);
                 $newRecipientListPath = $newFileName;
+            } else {
+                // If original recipient list file is missing, cannot duplicate
+                throw new \Exception('Cannot duplicate campaign: Original recipient list file not found. Please ensure the original campaign has a valid recipient list.');
             }
 
             // Get current user's senders to use for the duplicate
