@@ -19,9 +19,11 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        env('FRONTEND_URL', 'http://localhost:3000'),
-    ],
+    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 
+        env('APP_ENV') === 'production' 
+            ? 'https://campaignprox.msz-pl.com' 
+            : 'http://localhost:3000'
+    )),
 
     'allowed_origins_patterns' => [],
 

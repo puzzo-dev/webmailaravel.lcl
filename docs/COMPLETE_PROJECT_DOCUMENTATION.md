@@ -445,6 +445,62 @@ Use the enhanced `rollback.sh` script:
 
 ## Configuration Fixes
 
+### CORS Configuration Fix
+
+#### Issue
+CORS errors in production where the frontend (`https://campaignprox.msz-pl.com`) cannot access the backend API (`https://api.msz-pl.com`) due to incorrect `Access-Control-Allow-Origin` headers.
+
+#### Root Cause
+The production server was using development environment settings where `CORS_ALLOWED_ORIGINS` was set to `http://localhost:3000` instead of the production frontend URL.
+
+#### Solution
+1. **Updated CORS configuration** in `backend/config/cors.php` to be environment-aware:
+
+```php
+'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 
+    env('APP_ENV') === 'production' 
+        ? 'https://campaignprox.msz-pl.com' 
+        : 'http://localhost:3000'
+)),
+```
+
+2. **Added CORS environment variable** to production configuration:
+
+```env
+# In .env.production
+CORS_ALLOWED_ORIGINS=https://campaignprox.msz-pl.com
+```
+
+3. **Created production CORS fix script** (`scripts/fix-production-cors.sh`) to:
+   - Backup current environment file
+   - Copy `.env.production` to `.env`
+   - Clear and rebuild Laravel caches
+   - Verify configuration settings
+
+#### Manual Fix Steps
+If CORS errors occur in production, run the fix script:
+
+```bash
+cd /home/campaignprox/domains/api.msz-pl.com/public_html
+/path/to/scripts/fix-production-cors.sh
+```
+
+Or manually:
+
+```bash
+# Copy production environment
+cp .env.production .env
+
+# Clear Laravel caches
+php artisan config:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Restart web server (if needed)
+sudo systemctl reload apache2
+```
+
 ### Unsubscribe Link Configuration
 
 #### Issue
