@@ -282,10 +282,8 @@ const CampaignBuilder = () => {
     } catch (error) {
       console.error('❌ Campaign creation failed:', error);
 
-      const errorMessage = error.response?.data?.message ||
-        error.response?.data?.errors ||
-        error.message ||
-        'Failed to create campaign';
+      // Use the error handler utility for better error messages
+      const errorMessage = getErrorMessage(error);
 
       toast.error(errorMessage);
     } finally {

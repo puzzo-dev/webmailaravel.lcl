@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Device;
+use App\Models\UserActivity;
 use App\Traits\GeoIPTrait;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
@@ -640,6 +641,132 @@ class UserController extends Controller
                 return $this->errorResponse('Failed to send Telegram test message: ' . $e->getMessage());
             }
         }, 'test_telegram');
+    }
+
+    /**
+     * Get user activities
+     */
+    public function getActivities(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $limit = $request->input('limit', 50);
+            $user = Auth::user();
+            
+            $activities = UserActivity::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get()
+                ->map(function ($activity) {
+                    return [
+                        'id' => $activity->id,
+                        'type' => $activity->activity_type,
+                        'description' => $activity->activity_description,
+                        'metadata' => $activity->metadata ?? [],
+                        'created_at' => $activity->created_at->toISOString(),
+                    ];
+                });
+            
+            return $this->successResponse($activities, 'Activities retrieved successfully');
+        }, 'get_activities');
+    }
+
+    /**
+     * Get specific activity
+     */
+    public function getActivity(Request $request, $id): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $user = Auth::user();
+            
+            $activity = UserActivity::where('user_id', $user->id)
+                ->where('id', $id)
+                ->first();
+                
+            if (!$activity) {
+                return $this->errorResponse('Activity not found', 404);
+            }
+            
+            $activityData = [
+                'id' => $activity->id,
+                'type' => $activity->activity_type,
+                'description' => $activity->activity_description,
+                'metadata' => $activity->metadata ?? [],
+                'created_at' => $activity->created_at->toISOString(),
+            ];
+            
+            return $this->successResponse($activityData, 'Activity retrieved successfully');
+        }, 'get_activity');
+    }
+
+    /**
+     * Create new activity (for logging purposes)
+     */
+    public function createActivity(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $validator = Validator::make($request->all(), [
+                'type' => 'required|string|max:255',
+                'description' => 'required|string|max:500',
+                'metadata' => 'nullable|array',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+
+            $activity = UserActivity::logActivity(
+                Auth::id(),
+                $request->type,
+                $request->description,
+                null,
+                null,
+                $request->metadata ?? []
+            );
+
+            return $this->createdResponse([
+                'id' => $activity->id,
+                'type' => $activity->activity_type,
+                'description' => $activity->activity_description,
+                'metadata' => $activity->metadata ?? [],
+                'created_at' => $activity->created_at->toISOString(),
+            ], 'Activity logged successfully');
+        }, 'create_activity');
+    }
+
+    /**
+     * Get activity statistics
+     */
+    public function getActivityStats(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
+            
+            $totalActivities = UserActivity::where('user_id', $user->id)->count();
+            $activitiesThisWeek = UserActivity::where('user_id', $user->id)
+                ->where('created_at', '>=', now()->subWeek())
+                ->count();
+            $activitiesThisMonth = UserActivity::where('user_id', $user->id)
+                ->where('created_at', '>=', now()->subMonth())
+                ->count();
+                
+            $activityTypes = UserActivity::where('user_id', $user->id)
+                ->selectRaw('activity_type, COUNT(*) as count')
+                ->groupBy('activity_type')
+                ->pluck('count', 'activity_type')
+                ->toArray();
+                
+            $mostFrequentType = array_keys($activityTypes, max($activityTypes))[0] ?? null;
+            
+            $stats = [
+                'total_activities' => $totalActivities,
+                'activities_this_week' => $activitiesThisWeek,
+                'activities_this_month' => $activitiesThisMonth,
+                'most_frequent_type' => $mostFrequentType,
+                'activity_types' => $activityTypes,
+            ];
+            
+            return $this->successResponse($stats, 'Activity stats retrieved successfully');
+        }, 'get_activity_stats');
     }
 
 

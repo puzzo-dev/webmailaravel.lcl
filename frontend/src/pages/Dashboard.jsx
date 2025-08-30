@@ -27,8 +27,8 @@ const Dashboard = () => {
     try {
       setLoading(true);
       // Use the dedicated dashboard endpoint that provides role-appropriate data
-      const response = await analyticsService.getDashboard();
-      
+      const response = await analyticsService.getDashboardData();
+
       // Ensure we have the expected data structure
       if (response.success && response.data) {
         setDashboardData(response.data);
@@ -37,7 +37,7 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Dashboard data error:', error);
-      
+
       if (error.response?.status === 401) {
         toast.error('Session expired. Please log in again.');
       } else if (error.response?.status === 403) {
@@ -45,7 +45,7 @@ const Dashboard = () => {
       } else {
         toast.error('Failed to load dashboard data. Please try again.');
       }
-      
+
       // Set empty data structure to prevent component errors
       setDashboardData({
         campaigns: {},
@@ -86,7 +86,7 @@ const Dashboard = () => {
     <div className="space-y-6">
       {/* Quick Actions */}
       <QuickActions user={user} />
-      
+
       {/* User Dashboard with Live Data */}
       <UserDashboard data={dashboardData} onRefresh={fetchDashboardData} />
     </div>

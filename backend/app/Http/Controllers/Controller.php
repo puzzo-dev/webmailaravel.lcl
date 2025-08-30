@@ -26,7 +26,8 @@ abstract class Controller
 
             return $this->successResponse($result, ucfirst(str_replace('_', ' ', $operation)) . ' completed successfully');
         } catch (\Exception $e) {
-            return $this->errorResponse('An error occurred during ' . str_replace('_', ' ', $operation), 500, $e->getMessage());
+            // Return the actual exception message for user-facing errors
+            return $this->errorResponse($e->getMessage(), 400);
         }
     }
 

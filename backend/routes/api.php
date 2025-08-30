@@ -96,6 +96,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/sessions', [UserController::class, 'getSessions']);
         Route::get('/me', [AuthController::class, 'me']);
         
+        // User activities routes
+        Route::get('/activities', [UserController::class, 'getActivities']);
+        Route::get('/activities/{id}', [UserController::class, 'getActivity']);
+        Route::post('/activities', [UserController::class, 'createActivity']);
+        Route::get('/activities/stats', [UserController::class, 'getActivityStats']);
+        
         // User settings routes
         Route::get('/settings', [UserController::class, 'getSettings']);
         Route::put('/settings/general', [UserController::class, 'updateGeneralSettings']);

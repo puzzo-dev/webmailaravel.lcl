@@ -9,7 +9,7 @@
  */
 export const serializeError = (error) => {
   if (!error) return null;
-  
+
   return {
     message: error.message || 'An error occurred',
     status: error.response?.status || error.status,
@@ -26,10 +26,22 @@ export const serializeError = (error) => {
  * @returns {string} - User-friendly error message
  */
 export const getErrorMessage = (error) => {
+  // Handle SQL integrity constraint errors
+  const rawMessage = error?.response?.data?.message || error?.data?.message || error?.message;
+  if (rawMessage && rawMessage.includes('SQLSTATE[23000]') && rawMessage.includes('FOREIGN KEY constraint failed')) {
+    return 'Cannot delete sender: This sender is still used by one or more campaigns or emails.';
+  }
   // Handle different error response structures
+  // Prefer backend message if present
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  if (error?.data?.message) {
+    return error.data.message;
+  }
   if (error?.response?.data) {
     const data = error.response.data;
-    
+
     // Laravel validation errors (array format)
     if (data.errors && typeof data.errors === 'object') {
       const firstErrorKey = Object.keys(data.errors)[0];
@@ -37,58 +49,77 @@ export const getErrorMessage = (error) => {
         return data.errors[firstErrorKey][0];
       }
     }
-    
+
     // Error string directly in errors field (our case)
     if (data.errors && typeof data.errors === 'string') {
       return data.errors;
     }
-    
+
     // Standard API error message
     if (data.message) {
       // Check for specific backend error messages and provide user-friendly alternatives
-      if (data.message.includes('No active senders found')) {
+      if (data.message.includes('No senders found for campaign') || data.message.includes('No active senders found')) {
         return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
       }
       if (data.message.includes('No senders found')) {
         return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
       }
+      if (data.message.includes('Total campaign limit reached')) {
+        return data.message; // Pass through the exact limit message from backend
+      }
+      if (data.message.includes('Live campaign limit reached')) {
+        return data.message; // Pass through the exact limit message from backend
+      }
+      if (data.message.includes('Daily sending limit reached')) {
+        return data.message; // Pass through the exact limit message from backend
+      }
       return data.message;
     }
-    
+
     // Error string directly in data
     if (typeof data === 'string') {
       // Check for specific backend error strings
-      if (data.includes('No active senders found')) {
+      if (data.includes('No senders found for campaign') || data.includes('No active senders found')) {
         return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
       }
       if (data.includes('No senders found')) {
         return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
       }
+      if (data.includes('Total campaign limit reached') || data.includes('Live campaign limit reached') || data.includes('Daily sending limit reached')) {
+        return data; // Pass through the exact limit message from backend
+      }
       return data;
     }
-    
+
     // Error with details
     if (data.error) {
       // Check for specific backend error messages
-      if (data.error.includes('No active senders found')) {
+      if (data.error.includes('No senders found for campaign') || data.error.includes('No active senders found')) {
         return 'You need to set up at least one active sender before creating campaigns. Please go to Senders → Add New Sender to configure your email sender.';
       }
       if (data.error.includes('No senders found')) {
         return 'No email senders are configured for your account. Please set up a sender first by going to Senders → Add New Sender.';
       }
+      if (data.error.includes('Total campaign limit reached') || data.error.includes('Live campaign limit reached') || data.error.includes('Daily sending limit reached')) {
+        return data.error; // Pass through the exact limit message from backend
+      }
       return data.error;
     }
   }
-  
+
   // Network or other errors
   if (error?.message) {
     return error.message;
   }
-  
+
   // HTTP status code messages
   if (error?.response?.status) {
     switch (error.response.status) {
       case 400:
+        // If backend provided a message, show it
+        if (error.response?.data?.message) {
+          return error.response.data.message;
+        }
         return 'Bad request. Please check your input.';
       case 401:
         return 'Authentication required. Please log in.';
@@ -101,18 +132,13 @@ export const getErrorMessage = (error) => {
       case 429:
         return 'Too many requests. Please try again later.';
       case 500:
-        // Check if this is a sender-related 500 error by examining the URL or context
-        if (error?.config?.url?.includes('/campaigns') || error?.config?.data?.includes('campaign')) {
-          return 'Campaign creation failed. This might be because you don\'t have any active senders configured. Please set up a sender first by going to Senders → Add New Sender.';
-        }
-        return 'Server error. Please try again later.';
-      case 503:
-        return 'Service temporarily unavailable.';
+        // For campaign-related errors, show generic message since we changed backend to return 400
+        return 'Internal server error. Please try again later.';
       default:
-        return `Request failed with status ${error.response.status}`;
+        return `Server error (${error.response.status}). Please try again later.`;
     }
   }
-  
+
   // Fallback message
   return 'An unexpected error occurred. Please try again.';
 };
@@ -126,11 +152,11 @@ export const getSuccessMessage = (response) => {
   if (response?.data?.message) {
     return response.data.message;
   }
-  
+
   if (response?.message) {
     return response.message;
   }
-  
+
   return 'Operation completed successfully';
 };
 
@@ -158,8 +184,8 @@ export const isAuthError = (error) => {
  * @returns {boolean} - True if validation error
  */
 export const isValidationError = (error) => {
-  return error?.response?.status === 422 || 
-         (error?.response?.data?.errors && typeof error.response.data.errors === 'object');
+  return error?.response?.status === 422 ||
+    (error?.response?.data?.errors && typeof error.response.data.errors === 'object');
 };
 
 export default {
