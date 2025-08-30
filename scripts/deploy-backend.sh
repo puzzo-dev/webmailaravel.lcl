@@ -13,7 +13,7 @@ BACKEND_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html"
 BACKUP_PATH="/home/campaignprox/domains/api.msz-pl.com/public_html/backups"
 DB_PATH="/home/campaignprox/domains/api.msz-pl.com/database.sqlite"
 RELEASE_NAME="${RELEASE_NAME}"
-RELEASE_DIR="deployment/backend"
+RELEASE_DIR="backend"
 PHP_CMD="php8.3"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
@@ -23,9 +23,9 @@ if [ -z "${PROD_SERVER}" ] || [ -z "${PROD_USER}" ] || [ -z "${PROD_PASSWORD}" ]
     exit 1
 fi
 
-# Check if release directory exists
+# Check if backend directory exists
 if [ ! -d "${RELEASE_DIR}" ]; then
-    echo "ERROR: Release directory ${RELEASE_DIR} not found"
+    echo "ERROR: Backend directory ${RELEASE_DIR} not found"
     exit 1
 fi
 
@@ -148,7 +148,7 @@ RESTORE_EOF
 # Function to deploy backend
 deploy_backend() {
     echo "📤 Uploading backend files..."
-    sshpass -p "${PROD_PASSWORD}" rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='storage/logs/*' --exclude='bootstrap/cache/*' -e "ssh -o StrictHostKeyChecking=no" ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/
+    sshpass -p "${PROD_PASSWORD}" rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='storage/logs/*' --exclude='bootstrap/cache/*' --exclude='.env' --exclude='.env.local' --exclude='.env.backup' -e "ssh -o StrictHostKeyChecking=no" ${RELEASE_DIR}/ ${PROD_USER}@${PROD_SERVER}:/tmp/${RELEASE_NAME}_backend_new/
 
     # Deploy backend on server
     ${SSH} bash -s << EOF
@@ -282,11 +282,7 @@ echo "📋 Caching configuration..."
 
 # Create .htaccess for Laravel routing
 echo "📝 Creating .htaccess for Laravel routing..."
-echo "Current directory: \$(pwd)"
-echo "Directory permissions: \$(ls -la . | head -1)"
-
-# Create .htaccess with error checking
-if cat > .htaccess << 'HTACCESS'
+cat > .htaccess << 'HTACCESS'
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
@@ -305,32 +301,6 @@ if cat > .htaccess << 'HTACCESS'
     DirectoryIndex public/index.php
 </IfModule>
 HTACCESS
-then
-    echo "✅ .htaccess created successfully"
-    echo "File size: \$(wc -c < .htaccess) bytes"
-    echo "File permissions: \$(ls -la .htaccess)"
-else
-    echo "❌ ERROR: Failed to create .htaccess file"
-    echo "Attempting manual creation..."
-    echo '<IfModule mod_rewrite.c>' > .htaccess
-    echo '    RewriteEngine On' >> .htaccess
-    echo '    RewriteCond %{REQUEST_FILENAME} !-f' >> .htaccess
-    echo '    RewriteCond %{REQUEST_FILENAME} !-d' >> .htaccess
-    echo '    RewriteCond %{REQUEST_URI} !^/public/' >> .htaccess
-    echo '    RewriteRule ^(.*)$ /public/$1 [L,QSA]' >> .htaccess
-    echo '    RewriteRule ^$ /public/index.php [L]' >> .htaccess
-    echo '</IfModule>' >> .htaccess
-    echo '<IfModule !mod_rewrite.c>' >> .htaccess
-    echo '    DirectoryIndex public/index.php' >> .htaccess
-    echo '</IfModule>' >> .htaccess
-    
-    if [ -f .htaccess ]; then
-        echo "✅ .htaccess created manually"
-    else
-        echo "❌ ERROR: Could not create .htaccess file"
-        exit 1
-    fi
-fi
 
 echo "⚙️ Setting up cron job..."
 # Check if cron.txt exists and set up cron
