@@ -102,7 +102,7 @@ class CampaignEmail extends Mailable
 
         // Add unsubscribe headers only if unsubscribe link is enabled
         if ($this->campaign->enable_unsubscribe_link) {
-            $headers['List-Unsubscribe'] = '<' . $this->getUnsubscribeUrl() . '>';
+            $headers['List-Unsubscribe'] = '<' . $this->campaign->getUnsubscribeLink($this->recipient) . '>';
             $headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
         }
 
@@ -290,40 +290,11 @@ class CampaignEmail extends Mailable
     }
 
     /**
-     * Get unsubscribe URL pointing to frontend page
-     */
-    private function getUnsubscribeUrl(): string
-    {
-        if ($this->emailTracking) {
-            // Generate token for frontend unsubscribe page
-            $token = $this->generateUnsubscribeToken($this->recipient, $this->campaign->id);
-            
-            // Return frontend URL instead of direct API call
-            $frontendUrl = config('app.frontend_url');
-            return $frontendUrl . '/unsubscribe/' . $token;
-        }
-
-        // Fallback to campaign's unsubscribe link method (also update this to use frontend)
-        $token = $this->generateUnsubscribeToken($this->recipient, $this->campaign->id);
-        $frontendUrl = config('app.frontend_url', config('app.url'));
-        return $frontendUrl . '/unsubscribe/' . $token;
-    }
-
-    /**
-     * Generate unsubscribe token for frontend
-     */
-    private function generateUnsubscribeToken(string $email, int $campaignId): string
-    {
-        // Use same token generation method as Campaign model for consistency
-        return hash('sha256', $email . $campaignId . config('app.key'));
-    }
-
-    /**
      * Get unsubscribe footer HTML
      */
     private function getUnsubscribeFooterHtml(): string
     {
-        $unsubscribeUrl = $this->getUnsubscribeUrl();
+        $unsubscribeUrl = $this->campaign->getUnsubscribeLink($this->recipient);
         
         return '
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; text-align: center;">
@@ -341,7 +312,7 @@ class CampaignEmail extends Mailable
      */
     private function getUnsubscribeFooterText(): string
     {
-        $unsubscribeUrl = $this->getUnsubscribeUrl();
+        $unsubscribeUrl = $this->campaign->getUnsubscribeLink($this->recipient);
         
         return "You received this email because you are subscribed to our mailing list.\n" .
                "To unsubscribe, visit: " . $unsubscribeUrl;
