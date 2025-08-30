@@ -282,7 +282,11 @@ echo "📋 Caching configuration..."
 
 # Create .htaccess for Laravel routing
 echo "📝 Creating .htaccess for Laravel routing..."
-cat > .htaccess << 'HTACCESS'
+echo "Current directory: \$(pwd)"
+echo "Directory permissions: \$(ls -la . | head -1)"
+
+# Create .htaccess with error checking
+if cat > .htaccess << 'HTACCESS'
 <IfModule mod_rewrite.c>
     RewriteEngine On
     
@@ -301,6 +305,32 @@ cat > .htaccess << 'HTACCESS'
     DirectoryIndex public/index.php
 </IfModule>
 HTACCESS
+then
+    echo "✅ .htaccess created successfully"
+    echo "File size: \$(wc -c < .htaccess) bytes"
+    echo "File permissions: \$(ls -la .htaccess)"
+else
+    echo "❌ ERROR: Failed to create .htaccess file"
+    echo "Attempting manual creation..."
+    echo '<IfModule mod_rewrite.c>' > .htaccess
+    echo '    RewriteEngine On' >> .htaccess
+    echo '    RewriteCond %{REQUEST_FILENAME} !-f' >> .htaccess
+    echo '    RewriteCond %{REQUEST_FILENAME} !-d' >> .htaccess
+    echo '    RewriteCond %{REQUEST_URI} !^/public/' >> .htaccess
+    echo '    RewriteRule ^(.*)$ /public/$1 [L,QSA]' >> .htaccess
+    echo '    RewriteRule ^$ /public/index.php [L]' >> .htaccess
+    echo '</IfModule>' >> .htaccess
+    echo '<IfModule !mod_rewrite.c>' >> .htaccess
+    echo '    DirectoryIndex public/index.php' >> .htaccess
+    echo '</IfModule>' >> .htaccess
+    
+    if [ -f .htaccess ]; then
+        echo "✅ .htaccess created manually"
+    else
+        echo "❌ ERROR: Could not create .htaccess file"
+        exit 1
+    fi
+fi
 
 echo "⚙️ Setting up cron job..."
 # Check if cron.txt exists and set up cron
