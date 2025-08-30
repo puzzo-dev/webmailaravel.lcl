@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Set default values for deployment variables
+RELEASE_DIR="${RELEASE_DIR:-backend}"
+RELEASE_NAME="${RELEASE_NAME:-deployment_$(date +%Y%m%d_%H%M%S)}"
+
 echo "🚀 Starting backend deployment..."
 echo "📁 Release directory: ${RELEASE_DIR}"
 echo "📋 Release name: ${RELEASE_NAME}"
@@ -8,6 +12,9 @@ echo "📋 Release name: ${RELEASE_NAME}"
 # Check if backend directory exists
 if [ ! -d "${RELEASE_DIR}" ]; then
     echo "❌ ERROR: Backend directory '${RELEASE_DIR}' not found!"
+    echo "📂 Current working directory: $(pwd)"
+    echo "📂 Available directories:"
+    ls -la .
     exit 1
 fi
 
