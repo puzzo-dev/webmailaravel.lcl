@@ -22,13 +22,7 @@ echo "📂 Current working directory: $(pwd)"
 echo "📂 Release directory contents:"
 ls -la "${RELEASE_DIR}/" | head -10
 
-if [ -f "${RELEASE_DIR}/.env.production" ]; then
-    echo "✅ Found .env.production file"
-    echo "📋 File size: $(stat -c%s "${RELEASE_DIR}/.env.production") bytes"
-else
-    echo "❌ ERROR: .env.production file not found!"
-    exit 1
-fi
+# Note: .env.production file check happens during deployment function
 
 # Configuration variables
 APP_NAME="Campaign Pro X"
