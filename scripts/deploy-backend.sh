@@ -190,27 +190,18 @@ composer install --no-dev --optimize-autoloader || {
 }
 
 echo "🔧 Setting up Laravel..."
-# Handle environment file - prioritize production configuration
-if [ -f "\${BACKEND_PATH}_deploying/.env" ]; then
-    echo "Copying .env from previous deployment"
-    cp "\${BACKEND_PATH}_deploying/.env" "\${BACKEND_PATH}/.env"
-elif [ -f ".env.production.example" ]; then
-    echo "✅ Using .env.production.example for production deployment"
-    cp ".env.production.example" ".env"
-elif [ -f ".env.production" ]; then
+# Always use production environment for production deployments
+echo "🔧 Configuring production environment..."
+if [ -f ".env.production" ]; then
     echo "✅ Using .env.production for production deployment"
     cp ".env.production" ".env"
 else
-    echo "⚠️ No production .env file found. Using .env.example as template"
-    cp ".env.example" ".env"
-    echo "🔧 Converting to production settings..."
-    # Convert key settings for production
-    sed -i 's/APP_ENV=local/APP_ENV=production/' .env
-    sed -i 's/APP_DEBUG=true/APP_DEBUG=false/' .env
+    echo "❌ ERROR: .env.production file not found!"
+    exit 1
 fi
 
-# Ensure production-specific settings
-echo "🔧 Applying production environment settings..."
+# Ensure production settings are correct
+echo "🔧 Ensuring production configuration..."
 sed -i 's/APP_ENV=.*/APP_ENV=production/' .env
 sed -i 's/APP_DEBUG=.*/APP_DEBUG=false/' .env
 
@@ -379,12 +370,6 @@ fi
 
 # Test basic Laravel configuration
 echo "🧪 Testing Laravel configuration..."
-if \${PHP_CMD} artisan config:show app.name 2>/dev/null | grep -q "Campaign Pro X\|Laravel"; then
-    echo "✅ Laravel configuration is loading correctly"
-else
-    echo "⚠️ Laravel configuration test incomplete, but continuing..."
-fi
-
 # Restart services
 systemctl reload apache2 2>/dev/null || service apache2 reload 2>/dev/null || echo "Web server reload failed"
 systemctl restart php8.3-fpm 2>/dev/null || service php8.3-fpm restart 2>/dev/null || echo "PHP-FPM restart failed"
