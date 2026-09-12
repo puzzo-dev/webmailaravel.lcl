@@ -235,7 +235,7 @@ class UnifiedEmailSendingService
             'bcc_recipients' => $data['bcc'] ?? null,
             'single_sender_id' => $sender->id,
             'recipient_count' => count($recipients),
-            'status' => 'RUNNING',
+            'status' => 'running',
             'enable_open_tracking' => $data['enable_open_tracking'] ?? true,
             'enable_click_tracking' => $data['enable_click_tracking'] ?? true,
             'enable_unsubscribe_link' => $data['enable_unsubscribe_link'] ?? true,
@@ -279,7 +279,7 @@ class UnifiedEmailSendingService
      */
     private function validateCampaignForSending(Campaign $campaign): void
     {
-        if (!in_array($campaign->status, ['DRAFT', 'PAUSED'])) {
+        if (!in_array($campaign->status, ['draft', 'paused'])) {
             throw new \Exception('Campaign can only be sent from DRAFT or PAUSED status');
         }
 
@@ -300,9 +300,30 @@ class UnifiedEmailSendingService
      */
     private function getCampaignRecipients(Campaign $campaign): array
     {
-        // This would read from the campaign's recipient list file
-        // For now, return empty array - this should be implemented based on file processing logic
-        return [];
+        if (!$campaign->recipient_list_path) {
+            return [];
+        }
+
+        try {
+            if (!\Illuminate\Support\Facades\Storage::disk('local')->exists($campaign->recipient_list_path)) {
+                $this->logError('Recipient list file not found', [
+                    'campaign_id' => $campaign->id,
+                    'path' => $campaign->recipient_list_path,
+                ]);
+                return [];
+            }
+
+            $content = \Illuminate\Support\Facades\Storage::disk('local')->get($campaign->recipient_list_path);
+            $recipients = array_filter(array_map('trim', explode("\n", $content)));
+
+            return $recipients;
+        } catch (\Exception $e) {
+            $this->logError('Failed to read campaign recipients', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
     }
 
     /**

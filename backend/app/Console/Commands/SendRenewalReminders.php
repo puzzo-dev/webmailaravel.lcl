@@ -19,7 +19,7 @@ class SendRenewalReminders extends Command
 
         // Get subscriptions expiring in 7 days
         $subscriptionsExpiringSoon = Subscription::where('status', 'active')
-            ->whereBetween('expiry', [
+            ->whereBetween('ends_at', [
                 now()->addDays(6),
                 now()->addDays(8)
             ])
@@ -28,7 +28,7 @@ class SendRenewalReminders extends Command
 
         // Get subscriptions expiring in 3 days
         $subscriptionsExpiringVerySoon = Subscription::where('status', 'active')
-            ->whereBetween('expiry', [
+            ->whereBetween('ends_at', [
                 now()->addDays(2),
                 now()->addDays(4)
             ])
@@ -37,7 +37,7 @@ class SendRenewalReminders extends Command
 
         // Get subscriptions expiring tomorrow
         $subscriptionsExpiringTomorrow = Subscription::where('status', 'active')
-            ->whereBetween('expiry', [
+            ->whereBetween('ends_at', [
                 now()->addDay()->startOfDay(),
                 now()->addDay()->endOfDay()
             ])

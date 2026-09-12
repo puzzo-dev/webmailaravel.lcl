@@ -9,35 +9,22 @@ axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 axios.defaults.withCredentials = true; // Enable sending cookies with requests
 
-// Add request interceptor to main axios for debugging
+// Add request interceptor to main axios
 axios.interceptors.request.use((config) => {
-    console.log('=== MAIN AXIOS REQUEST ===');
-    console.log('URL:', config.url);
-    console.log('Data instanceof FormData:', config.data instanceof FormData);
-    console.log('Headers:', config.headers);
-
-    // WARNING: If FormData reaches main axios, something is wrong
+    // Remove Content-Type for FormData so the browser sets the multipart boundary
     if (config.data instanceof FormData) {
-        console.error('🚨 ERROR: FormData detected in main axios! Should use formDataAxios instead!');
-        // Remove Content-Type to let browser set it
         delete config.headers['Content-Type'];
     }
 
     return config;
 }, (error) => {
-    console.error('Main axios request error:', error);
     return Promise.reject(error);
 });
 
-// Add response interceptor to main axios for debugging
+// Add response interceptor to main axios
 axios.interceptors.response.use((response) => {
-    console.log('=== MAIN AXIOS RESPONSE ===');
-    console.log('Status:', response.status);
     return response;
 }, (error) => {
-    console.error('=== MAIN AXIOS ERROR ===');
-    console.error('Status:', error.response?.status);
-    console.error('Data:', error.response?.data);
     return Promise.reject(error);
 });
 
@@ -51,38 +38,22 @@ const formDataAxios = axios.create({
     // Don't set Content-Type - let axios set it automatically for FormData
 });
 
-// Add request interceptor for debugging FormData requests
+// Add request interceptor for FormData requests
 formDataAxios.interceptors.request.use((config) => {
-    console.log('=== FORMDATA AXIOS REQUEST ===');
-    console.log('URL:', config.url);
-    console.log('Method:', config.method);
-    console.log('Data instanceof FormData:', config.data instanceof FormData);
-    console.log('WithCredentials:', config.withCredentials);
-    console.log('Headers:', config.headers);
-
     // Ensure Content-Type is not set for FormData (let browser set it with boundary)
     if (config.data instanceof FormData) {
         delete config.headers['Content-Type'];
-        console.log('Removed Content-Type header for FormData');
     }
 
     return config;
 }, (error) => {
-    console.error('FormData axios request error:', error);
     return Promise.reject(error);
 });
 
-// Add response interceptor for debugging
+// Add response interceptor for FormData requests
 formDataAxios.interceptors.response.use((response) => {
-    console.log('=== FORMDATA AXIOS RESPONSE ===');
-    console.log('Status:', response.status);
-    console.log('Data:', response.data);
     return response;
 }, (error) => {
-    console.error('=== FORMDATA AXIOS ERROR ===');
-    console.error('Status:', error.response?.status);
-    console.error('Data:', error.response?.data);
-    console.error('Headers sent:', error.config?.headers);
     return Promise.reject(error);
 });
 
@@ -90,99 +61,41 @@ formDataAxios.interceptors.response.use((response) => {
 export const api = {
     // GET request with query parameters
     get: async (endpoint, params = {}, config = {}) => {
-        try {
-            const queryString = new URLSearchParams(params).toString();
-            const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-            const response = await axios.get(url, config);
-            return response;
-        } catch (error) {
-            console.error('API GET error:', error.response?.status, error.response?.data);
-            throw error;
-        }
+        const queryString = new URLSearchParams(params).toString();
+        const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+        return await axios.get(url, config);
     },
 
     // POST request
     post: async (endpoint, data = {}, config = {}) => {
-        try {
-            console.log('=== API POST DEBUG ===');
-            console.log('Endpoint:', endpoint);
-            console.log('Data type:', typeof data);
-            console.log('Data instanceof FormData:', data instanceof FormData);
-            console.log('Data constructor:', data.constructor.name);
-
-            // Handle FormData - use separate axios instance
-            if (data instanceof FormData) {
-                console.log('✅ Detected FormData, using formDataAxios');
-                console.log('FormData entries:');
-                for (let [key, value] of data.entries()) {
-                    if (value instanceof File) {
-                        console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
-                    } else {
-                        console.log(`  ${key}: ${value}`);
-                    }
-                }
-
-                // Ensure no Content-Type is set in config for FormData
-                const formDataConfig = { ...config };
-                delete formDataConfig.headers?.['Content-Type'];
-                console.log('FormData config:', formDataConfig);
-
-                const response = await formDataAxios.post(endpoint, data, formDataConfig);
-                return response;
-            } else {
-                console.log('Using regular axios for non-FormData');
-                console.log('Data:', data);
-                const response = await axios.post(endpoint, data, config);
-                return response;
-            }
-        } catch (error) {
-            console.error('API POST error:', error.response?.status, error.response?.data);
-            console.error('Error config:', error.config);
-            throw error;
+        // Handle FormData - use separate axios instance
+        if (data instanceof FormData) {
+            const formDataConfig = { ...config };
+            delete formDataConfig.headers?.['Content-Type'];
+            return await formDataAxios.post(endpoint, data, formDataConfig);
         }
+        return await axios.post(endpoint, data, config);
     },
 
     // PUT request
     put: async (endpoint, data = {}, config = {}) => {
-        try {
-            // Handle FormData - use separate axios instance
-            if (data instanceof FormData) {
-                // Ensure no Content-Type is set in config for FormData
-                const formDataConfig = { ...config };
-                delete formDataConfig.headers?.['Content-Type'];
-
-                const response = await formDataAxios.put(endpoint, data, formDataConfig);
-                return response;
-            } else {
-                const response = await axios.put(endpoint, data, config);
-                return response;
-            }
-        } catch (error) {
-            console.error('API PUT error:', error.response?.status, error.response?.data);
-            throw error;
+        // Handle FormData - use separate axios instance
+        if (data instanceof FormData) {
+            const formDataConfig = { ...config };
+            delete formDataConfig.headers?.['Content-Type'];
+            return await formDataAxios.put(endpoint, data, formDataConfig);
         }
+        return await axios.put(endpoint, data, config);
     },
 
     // DELETE request
     delete: async (endpoint, data = {}) => {
-        try {
-            const response = await axios.delete(endpoint, { data });
-            return response;
-        } catch (error) {
-            console.error('API DELETE error:', error.response?.status, error.response?.data);
-            throw error;
-        }
+        return await axios.delete(endpoint, { data });
     },
 
     // PATCH request
     patch: async (endpoint, data = {}) => {
-        try {
-            const response = await axios.patch(endpoint, data);
-            return response;
-        } catch (error) {
-            console.error('API PATCH error:', error.response?.status, error.response?.data);
-            throw error;
-        }
+        return await axios.patch(endpoint, data);
     },
 };
 
@@ -230,20 +143,14 @@ export const authService = {
             await api.post('/auth/logout');
             // Backend will clear the HTTP-only cookie
         } catch (error) {
-            console.error('Logout error:', error);
             // Ignore logout errors, backend will still clear cookie
         }
     },
 
     async getProfile(isAuthInit = false) {
-        try {
-            const config = isAuthInit ? { _isAuthInit: true } : {};
-            const response = await api.get('/user/me', {}, config);
-            return response.data;
-        } catch (error) {
-            console.error('getProfile error:', error);
-            throw error;
-        }
+        const config = isAuthInit ? { _isAuthInit: true } : {};
+        const response = await api.get('/user/me', {}, config);
+        return response.data;
     },
 
     isAuthenticated() {

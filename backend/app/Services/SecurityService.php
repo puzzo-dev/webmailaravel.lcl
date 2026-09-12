@@ -173,7 +173,7 @@ class SecurityService
     /**
      * Validate API key
      */
-    public function validateApiKey(string $key, string $secret = null): ?ApiKey
+    public function validateApiKey(string $key, ?string $secret = null): ?ApiKey
     {
         $apiKey = ApiKey::where('key', $key)->first();
 
@@ -313,6 +313,25 @@ class SecurityService
             'user_id' => $user->id,
             'event' => $event,
             'metadata' => $metadata
+        ]);
+    }
+
+    /**
+     * Change a user's password after verifying the current one.
+     */
+    public function changePassword(User $user, string $currentPassword, string $newPassword): void
+    {
+        if (!Hash::check($currentPassword, $user->password)) {
+            throw new \InvalidArgumentException('Current password is incorrect');
+        }
+
+        $user->update([
+            'password' => Hash::make($newPassword),
+            'last_password_change' => now(),
+        ]);
+
+        $this->logSecurityEvent($user, 'password_changed', [
+            'ip' => request()->ip(),
         ]);
     }
 

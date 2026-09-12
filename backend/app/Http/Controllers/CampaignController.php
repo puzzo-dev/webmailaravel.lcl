@@ -53,7 +53,7 @@ class CampaignController extends Controller
                     $campaign->contents = $campaign->getContentVariations();
                     
                     // Calculate progress based on campaign status and stats
-                    $campaign->progress = $this->calculateCampaignProgress($campaign);
+                    $campaign->progress = $this->campaignService->calculateCampaignProgress($campaign);
                     
                     return $campaign;
                 });
@@ -70,7 +70,7 @@ class CampaignController extends Controller
                     $campaign->contents = $campaign->getContentVariations();
                     
                     // Calculate progress based on campaign status and stats
-                    $campaign->progress = $this->calculateCampaignProgress($campaign);
+                    $campaign->progress = $this->campaignService->calculateCampaignProgress($campaign);
                     
                     return $campaign;
                 });
@@ -99,80 +99,16 @@ class CampaignController extends Controller
                 'enable_click_tracking' => 'nullable|string',
                 'enable_unsubscribe_link' => 'nullable|string',
             ],
-            function () use ($request) {
-                $data = $request->input('validated_data');
-                
+            function ($data) use ($request) {
                 // Convert string boolean values to actual booleans for FormData compatibility
-                $booleanFields = [
+                $this->convertBooleanFields($data, [
                     'enable_open_tracking',
                     'enable_click_tracking',
-                    'enable_unsubscribe_link'
-                ];
-
-                foreach ($booleanFields as $field) {
-                    if (isset($data[$field])) {
-                        $data[$field] = in_array($data[$field], ['1', 'true', true], true);
-                    }
-                }
-                
-                // Handle file attachments using unified method
-                $attachmentPaths = [];
-                
-                // Debug attachment handling
-                \Log::debug('Single send attachment debugging', [
-                    'has_file_attachments' => $request->hasFile('attachments'),
-                    'all_files' => $request->allFiles(),
-                    'attachments_input' => $request->input('attachments'),
-                    'attachments_file' => $request->file('attachments')
+                    'enable_unsubscribe_link',
                 ]);
-                
-                if ($request->hasFile('attachments')) {
-                    $attachmentFiles = $request->file('attachments');
-                    
-                    \Log::debug('Processing attachments', [
-                        'attachment_files_type' => gettype($attachmentFiles),
-                        'attachment_files_count' => is_array($attachmentFiles) ? count($attachmentFiles) : 'not_array',
-                        'attachment_files_structure' => is_array($attachmentFiles) ? array_keys($attachmentFiles) : 'not_array'
-                    ]);
-                    
-                    foreach ($attachmentFiles as $index => $file) {
-                        \Log::debug('Processing attachment file', [
-                            'index' => $index,
-                            'file_is_null' => is_null($file),
-                            'file_type' => gettype($file),
-                            'file_class' => is_object($file) ? get_class($file) : 'not_object'
-                        ]);
-                        
-                        if ($file === null) {
-                            \Log::warning('Skipping null file in attachments array', ['index' => $index]);
-                            continue;
-                        }
-                        
-                        $uploadResult = $this->uploadFile($file, 'attachments', [
-                            'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
-                            'max_size' => 10240, // 10MB
-                            'generate_unique_name' => true,
-                            'preserve_original_name' => false
-                        ]);
-                        
-                        if ($uploadResult['success']) {
-                            // Get the full file path using the storage disk
-                            $fullPath = Storage::disk('local')->path($uploadResult['path']);
-                            
-                            $attachmentPaths[] = [
-                                'path' => $uploadResult['path'],
-                                'original_name' => $file->getClientOriginalName(),
-                                'name' => $uploadResult['filename'],
-                                'size' => $uploadResult['size'],
-                                'mime' => $uploadResult['mime_type'], // Change mime_type to mime for CampaignEmail
-                                'checksum' => file_exists($fullPath) ? hash_file('md5', $fullPath) : null
-                            ];
-                        } else {
-                            throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
-                        }
-                    }
-                }
-                $data['attachments'] = $attachmentPaths;
+
+                // Handle file attachments
+                $data['attachments'] = $this->processAttachments($request);
                 
                 // Send email directly without queue for immediate dispatch
                 $result = $this->campaignService->sendSingleEmailDirect($data);
@@ -253,25 +189,14 @@ class CampaignController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Debug request data first
-        \Log::info('Campaign store request debug:', [
-            'has_files' => $request->hasFile('attachments'),
-            'files_count' => $request->hasFile('attachments') ? count($request->file('attachments')) : 0,
-            'recipient_file' => $request->hasFile('recipient_file'),
-            'all_files' => $request->allFiles(),
-            'all_input' => $request->all(),
-            'content_type' => $request->header('Content-Type'),
-            'request_method' => $request->method(),
-            'is_multipart' => str_contains($request->header('Content-Type', ''), 'multipart/form-data'),
-            'raw_input' => $request->getContent()
-        ]);
-
         return $this->validateAndExecute(
             $request,
             [
                 'name' => 'required|string|max:255',
                 'subject' => 'nullable|string|max:255',
                 'content' => 'nullable|string',
+                'sender_ids' => 'nullable|array',
+                'sender_ids.*' => 'integer|exists:senders,id',
                 'recipient_file' => 'nullable|file|mimes:txt,csv,xlsx,xls|max:10240',
                 'attachments' => 'nullable|array',
                 'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,jpeg,jpg,png,gif,zip',
@@ -285,38 +210,17 @@ class CampaignController extends Controller
                 'recipient_field_mapping' => 'nullable|array',
                 'recipient_field_mapping.*' => 'string',
             ],
-            function () use ($request) {
-                // Debug request data
-                \Log::info('Campaign store request data:', [
-                    'has_files' => $request->hasFile('attachments'),
-                    'files_count' => $request->hasFile('attachments') ? count($request->file('attachments')) : 0,
-                    'recipient_file' => $request->hasFile('recipient_file'),
-                    'all_files' => $request->allFiles(),
-                    'all_input' => array_keys($request->all()),
-                    'content_type' => $request->header('Content-Type'),
-                    'request_method' => $request->method(),
-                    'is_multipart' => str_contains($request->header('Content-Type', ''), 'multipart/form-data')
-                ]);
-                
-                $data = $request->input('validated_data');
+            function ($data) use ($request) {
                 $data['user_id'] = Auth::id();
 
-
-
                 // Convert string boolean values to actual booleans
-                $booleanFields = [
+                $this->convertBooleanFields($data, [
                     'enable_content_switching',
-                    'enable_template_variables', 
+                    'enable_template_variables',
                     'enable_open_tracking',
                     'enable_click_tracking',
-                    'enable_unsubscribe_link'
-                ];
-
-                foreach ($booleanFields as $field) {
-                    if (isset($data[$field])) {
-                        $data[$field] = in_array($data[$field], ['1', 'true', true], true);
-                    }
-                }
+                    'enable_unsubscribe_link',
+                ]);
 
                 // Parse template_variables if it's a JSON string
                 if (isset($data['template_variables']) && is_string($data['template_variables'])) {
@@ -328,46 +232,10 @@ class CampaignController extends Controller
                     $data['content_variations'] = json_decode($data['content_variations'], true);
                 }
 
-                // Handle file attachments for full campaigns using FileProcessingTrait
-                $attachmentPaths = [];
-                if ($request->hasFile('attachments')) {
-                    foreach ($request->file('attachments') as $file) {
-                        $uploadResult = $this->uploadFile($file, 'attachments', [
-                            'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
-                            'max_size' => 10240, // 10MB
-                            'generate_unique_name' => true,
-                            'preserve_original_name' => false
-                        ]);
-                        
-                        if ($uploadResult['success']) {
-                            // Get the full file path using the storage disk
-                            $fullPath = Storage::disk('local')->path($uploadResult['path']);
-                            
-                            $attachmentPaths[] = [
-                                'path' => $uploadResult['path'],
-                                'original_name' => $file->getClientOriginalName(),
-                                'name' => $uploadResult['filename'],
-                                'size' => $uploadResult['size'],
-                                'mime_type' => $uploadResult['mime_type'],
-                                'checksum' => file_exists($fullPath) ? hash_file('md5', $fullPath) : null
-                            ];
-                        } else {
-                            throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
-                        }
-                    }
-                }
-                $data['attachments'] = $attachmentPaths;
+                // Handle file attachments
+                $data['attachments'] = $this->processAttachments($request);
 
                 $campaign = $this->campaignService->createCampaign($data, $request->file('recipient_file'));
-                
-                // Process webhook
-                $webhookResult = $this->processCampaignWebhook($campaign, 'created');
-                if (!$webhookResult['success']) {
-                    $this->logError('Campaign webhook failed', [
-                        'campaign_id' => $campaign->id,
-                        'error' => $webhookResult['error']
-                    ]);
-                }
 
                 // Load related data manually
                 $campaign->senders = $campaign->getSenders();
@@ -569,9 +437,9 @@ class CampaignController extends Controller
                 'click_rate' => $campaign->click_rate,
                 'bounce_rate' => $campaign->bounce_rate,
                 'complaint_rate' => $campaign->complaint_rate,
-                'geo_distribution' => $this->getGeoDistribution($campaign),
-                'device_distribution' => $this->getDeviceDistribution($campaign),
-                'hourly_activity' => $this->getHourlyActivity($campaign)
+                'geo_distribution' => $this->campaignService->getGeoDistribution($campaign),
+                'device_distribution' => $this->campaignService->getDeviceDistribution($campaign),
+                'hourly_activity' => $this->campaignService->getHourlyActivity($campaign)
             ];
 
             return $this->successResponse($stats, 'Campaign statistics retrieved successfully');
@@ -746,7 +614,7 @@ class CampaignController extends Controller
     /**
      * Download unsubscribe list
      */
-    public function downloadUnsubscribeList(Request $request, Campaign $campaign, string $format = null): JsonResponse
+    public function downloadUnsubscribeList(Request $request, Campaign $campaign, ?string $format = null): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request, $campaign, $format) {
             if (!$this->canAccessResource($campaign)) {
@@ -776,26 +644,6 @@ class CampaignController extends Controller
     }
 
     /**
-     * Process campaign webhook
-     */
-    private function processCampaignWebhook(Campaign $campaign, string $action): array
-    {
-        try {
-            $webhookData = [
-                'campaign_id' => $campaign->id,
-                'action' => $action,
-                'timestamp' => now()->toISOString(),
-                'user_id' => $campaign->user_id,
-                'campaign_name' => $campaign->name
-            ];
-            
-            return ['success' => true, 'data' => $webhookData];
-        } catch (\Exception $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
-        }
-    }
-
-    /**
      * Get content type for file format
      */
     private function getContentType(string $format): string
@@ -810,101 +658,56 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get geographic distribution
+     * Convert string boolean fields to actual booleans for FormData compatibility.
      */
-    private function getGeoDistribution(Campaign $campaign): array
+    private function convertBooleanFields(array &$data, array $fields): void
     {
-        // Implementation for geographic distribution
-        return [];
+        foreach ($fields as $field) {
+            if (isset($data[$field])) {
+                $data[$field] = in_array($data[$field], ['1', 'true', true], true);
+            }
+        }
     }
 
     /**
-     * Get device distribution
+     * Process uploaded attachment files and return structured attachment metadata.
      */
-    private function getDeviceDistribution(Campaign $campaign): array
+    private function processAttachments(Request $request): array
     {
-        // Implementation for device distribution
-        return [];
-    }
+        $attachmentPaths = [];
 
-    /**
-     * Get hourly activity
-     */
-    private function getHourlyActivity(Campaign $campaign): array
-    {
-        // Implementation for hourly activity
-        return [];
-    }
+        if (!$request->hasFile('attachments')) {
+            return $attachmentPaths;
+        }
 
-    /**
-     * Check if email is in suppression list
-     */
-    private function isEmailSuppressed(string $email): bool
-    {
-        return \App\Models\SuppressionList::where('email', $email)->exists();
-    }
-
-    /**
-     * Send Telegram notification using Http facade directly
-     */
-    private function sendTelegramNotification(string $message): void
-    {
-        try {
-            $botToken = config('services.telegram.bot_token');
-            $chatId = config('services.telegram.admin_chat_id');
-            
-            if (!$botToken || !$chatId) {
-                return; // Skip if not configured
+        foreach ($request->file('attachments') as $file) {
+            if ($file === null) {
+                continue;
             }
 
-            \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                'chat_id' => $chatId,
-                'text' => $message,
-                'parse_mode' => 'HTML'
+            $uploadResult = $this->uploadFile($file, 'attachments', [
+                'allowed_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'zip'],
+                'max_size' => 10240,
+                'generate_unique_name' => true,
+                'preserve_original_name' => false,
             ]);
-            
-        } catch (\Exception $e) {
-            // Log error but don't fail the main operation
-            $this->logError('Telegram notification failed', ['error' => $e->getMessage()]);
-        }
-    }
 
-    /**
-     * Calculate campaign progress based on status and statistics
-     */
-    private function calculateCampaignProgress($campaign): int
-    {
-        // If campaign is draft or scheduled, progress is 0%
-        if (in_array($campaign->status, ['draft', 'scheduled'])) {
-            return 0;
-        }
-        
-        // If campaign is completed, progress is 100%
-        if ($campaign->status === 'completed') {
-            return 100;
-        }
-        
-        // If campaign failed, progress is based on what was sent before failure
-        if ($campaign->status === 'failed') {
-            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
-                return min(100, round(($campaign->total_sent / $campaign->recipient_count) * 100));
+            if (!$uploadResult['success']) {
+                throw new \Exception('Failed to upload attachment: ' . $uploadResult['error']);
             }
-            return 0;
+
+            $fullPath = Storage::disk('local')->path($uploadResult['path']);
+
+            $attachmentPaths[] = [
+                'path' => $uploadResult['path'],
+                'original_name' => $file->getClientOriginalName(),
+                'name' => $uploadResult['filename'],
+                'size' => $uploadResult['size'],
+                'mime' => $uploadResult['mime_type'],
+                'checksum' => file_exists($fullPath) ? hash_file('md5', $fullPath) : null,
+            ];
         }
-        
-        // For sending/paused campaigns, calculate based on sent vs total recipients
-        if (in_array($campaign->status, ['sending', 'paused'])) {
-            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
-                return min(100, round(($campaign->total_sent / $campaign->recipient_count) * 100));
-            }
-            // If no recipient count but has total_sent, assume some progress
-            if ($campaign->total_sent > 0) {
-                return 50; // Assume 50% progress if we can't calculate exactly
-            }
-            return 10; // Campaign started but minimal progress
-        }
-        
-        // Default fallback
-        return 0;
+
+        return $attachmentPaths;
     }
 }

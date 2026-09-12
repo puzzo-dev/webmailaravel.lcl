@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\EmailTracking;
 use App\Models\ClickTracking;
+use App\Services\UserAgentParser;
 use App\Traits\GeoIPTrait;
 use App\Traits\SuppressionListTrait;
 use App\Traits\CloudflareIPTrait;
@@ -41,6 +42,9 @@ class TrackingController extends Controller
             // Get geo location using real IP
             $geoData = $this->getLocation($ipAddress);
 
+            // Parse user agent using the shared UserAgentParser service
+            $uaInfo = UserAgentParser::parse($userAgent);
+
             // Mark as opened
             $emailTracking->markAsOpened($ipAddress, $userAgent);
 
@@ -49,9 +53,9 @@ class TrackingController extends Controller
                 $emailTracking->update([
                     'country' => $geoData['country'] ?? null,
                     'city' => $geoData['city'] ?? null,
-                    'device_type' => $this->getDeviceType($userAgent),
-                    'browser' => $this->getBrowser($userAgent),
-                    'os' => $this->getOS($userAgent)
+                    'device_type' => $uaInfo['device'],
+                    'browser' => $uaInfo['browser'],
+                    'os' => $uaInfo['os']
                 ]);
             }
 
@@ -121,6 +125,9 @@ class TrackingController extends Controller
             // Get geo location using real IP
             $geoData = $this->getLocation($ipAddress);
 
+            // Parse user agent using the shared UserAgentParser service
+            $uaInfo = UserAgentParser::parse($userAgent);
+
             // Mark email as clicked
             $emailTracking->markAsClicked($ipAddress, $userAgent);
 
@@ -130,9 +137,9 @@ class TrackingController extends Controller
                 'user_agent' => $userAgent,
                 'country' => $geoData['success'] ? ($geoData['country'] ?? null) : null,
                 'city' => $geoData['success'] ? ($geoData['city'] ?? null) : null,
-                'device_type' => $this->getDeviceType($userAgent),
-                'browser' => $this->getBrowser($userAgent),
-                'os' => $this->getOS($userAgent),
+                'device_type' => $uaInfo['device'],
+                'browser' => $uaInfo['browser'],
+                'os' => $uaInfo['os'],
                 'clicked_at' => now()
             ]);
 
@@ -144,9 +151,17 @@ class TrackingController extends Controller
                 'ip_address' => $ipAddress
             ]);
 
-            // Redirect to original URL
+            // Redirect to original URL (validate to prevent open redirect)
             if ($clickTracking->original_url) {
-                return redirect($clickTracking->original_url);
+                $url = $clickTracking->original_url;
+                if (filter_var($url, FILTER_VALIDATE_URL) && preg_match('#^https?://#i', $url)) {
+                    return redirect($url);
+                }
+                Log::warning('Blocked invalid redirect URL in click tracking', [
+                    'email_id' => $emailId,
+                    'link_id' => $linkId,
+                    'url' => $url,
+                ]);
             }
 
             return response()->json(['success' => true]);
@@ -159,66 +174,6 @@ class TrackingController extends Controller
             ]);
 
             return response()->json(['error' => 'Tracking failed'], 500);
-        }
-    }
-
-    /**
-     * Get device type from user agent
-     */
-    private function getDeviceType(string $userAgent): string
-    {
-        $userAgent = strtolower($userAgent);
-        
-        if (strpos($userAgent, 'mobile') !== false) {
-            return 'mobile';
-        } elseif (strpos($userAgent, 'tablet') !== false) {
-            return 'tablet';
-        } else {
-            return 'desktop';
-        }
-    }
-
-    /**
-     * Get browser from user agent
-     */
-    private function getBrowser(string $userAgent): string
-    {
-        $userAgent = strtolower($userAgent);
-        
-        if (strpos($userAgent, 'chrome') !== false) {
-            return 'Chrome';
-        } elseif (strpos($userAgent, 'firefox') !== false) {
-            return 'Firefox';
-        } elseif (strpos($userAgent, 'safari') !== false) {
-            return 'Safari';
-        } elseif (strpos($userAgent, 'edge') !== false) {
-            return 'Edge';
-        } elseif (strpos($userAgent, 'opera') !== false) {
-            return 'Opera';
-        } else {
-            return 'Other';
-        }
-    }
-
-    /**
-     * Get OS from user agent
-     */
-    private function getOS(string $userAgent): string
-    {
-        $userAgent = strtolower($userAgent);
-        
-        if (strpos($userAgent, 'windows') !== false) {
-            return 'Windows';
-        } elseif (strpos($userAgent, 'mac') !== false) {
-            return 'macOS';
-        } elseif (strpos($userAgent, 'linux') !== false) {
-            return 'Linux';
-        } elseif (strpos($userAgent, 'android') !== false) {
-            return 'Android';
-        } elseif (strpos($userAgent, 'ios') !== false) {
-            return 'iOS';
-        } else {
-            return 'Other';
         }
     }
 
@@ -361,38 +316,40 @@ class TrackingController extends Controller
     }
 
     /**
-     * Decode unsubscribe token
+     * Decode unsubscribe token — O(1) database lookup
      */
     private function decodeUnsubscribeToken(string $token): ?array
     {
         try {
-            // The token should contain email and campaign_id encoded
-            // For now, we'll reverse engineer from the Campaign model method
-            // This is a simplified approach - in production you might want to use JWT or signed URLs
-            
-            // Try to find a campaign that would generate this token
-            $campaigns = \App\Models\Campaign::where('enable_unsubscribe_link', true)->get();
-            
-            foreach ($campaigns as $campaign) {
-                // Try different emails to see if we can match the token
-                // This is not efficient but works for our current token generation method
-                $emailTrackings = \App\Models\EmailTracking::where('campaign_id', $campaign->id)->get();
-                
-                foreach ($emailTrackings as $tracking) {
-                    $expectedToken = hash('sha256', $tracking->recipient_email . $campaign->id . config('app.key'));
-                    if ($expectedToken === $token) {
-                        return [
-                            'email' => $tracking->recipient_email,
-                            'campaign_id' => $campaign->id
-                        ];
-                    }
-                }
+            // Direct lookup by stored unsubscribe_token
+            $tracking = \App\Models\EmailTracking::where('unsubscribe_token', $token)->first();
+
+            if ($tracking) {
+                return [
+                    'email' => $tracking->recipient_email,
+                    'campaign_id' => $tracking->campaign_id,
+                ];
             }
-            
+
+            // Fallback: legacy tokens (pre-migration) — compute from email_tracking + app.key
+            // Only used for tokens generated before the unsubscribe_token column existed
+            $tracking = \App\Models\EmailTracking::whereRaw(
+                'SHA2(CONCAT(recipient_email, campaign_id, ?), 256) = ?',
+                [config('app.key'), $token]
+            )->first();
+
+            if ($tracking) {
+                // Backfill the token for future O(1) lookups
+                $tracking->update(['unsubscribe_token' => $token]);
+                return [
+                    'email' => $tracking->recipient_email,
+                    'campaign_id' => $tracking->campaign_id,
+                ];
+            }
+
             return null;
         } catch (\Exception $e) {
             Log::error('Failed to decode unsubscribe token', [
-                'token' => $token,
                 'error' => $e->getMessage()
             ]);
             return null;

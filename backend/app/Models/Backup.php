@@ -199,7 +199,7 @@ class Backup extends Model
     /**
      * Mark backup as failed
      */
-    public function markFailed(string $error = null): void
+    public function markFailed(?string $error = null): void
     {
         $this->update([
             'status' => 'failed',

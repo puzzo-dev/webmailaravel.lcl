@@ -107,30 +107,6 @@ trait ActivityLoggingTrait
     }
 
     /**
-     * Log domain activity
-     */
-    protected function logDomainActivity(string $action, $domain, array $metadata = []): ?UserActivity
-    {
-        $descriptions = [
-            'added' => "Added domain '{$domain->domain}'",
-            'verified' => "Verified domain '{$domain->domain}'",
-            'updated' => "Updated domain '{$domain->domain}'",
-            'deleted' => "Deleted domain '{$domain->domain}'"
-        ];
-
-        return $this->logUserActivity(
-            "domain_{$action}",
-            $descriptions[$action] ?? "Domain {$action}: {$domain->domain}",
-            'domain',
-            $domain->id,
-            array_merge($metadata, [
-                'domain_name' => $domain->domain,
-                'domain_status' => $domain->status
-            ])
-        );
-    }
-
-    /**
      * Log sender activity
      */
     protected function logSenderActivity(string $action, $sender, array $metadata = []): ?UserActivity

@@ -54,6 +54,17 @@ class JWTFromCookie
             if ($token) {
                 // Set the token for JWTAuth to use
                 $request->headers->set('Authorization', 'Bearer ' . $token);
+            } elseif (auth('web')->check()) {
+                // Fallback: user is authenticated via the web session (Inertia)
+                // but has no JWT cookie. Generate a JWT on the fly so the
+                // auth:api middleware accepts the request.
+                try {
+                    $token = JWTAuth::fromUser(auth('web')->user());
+                    $request->headers->set('Authorization', 'Bearer ' . $token);
+                } catch (\Exception $e) {
+                    // If JWT generation fails, the auth:api middleware
+                    // will return 401 as expected.
+                }
             }
         }
 
@@ -91,22 +102,18 @@ class JWTFromCookie
      */
     private function extractApiKey(Request $request): ?string
     {
-        // Check X-API-Key header
+        // Check X-API-Key header (preferred — not logged in access logs)
         $apiKeyHeader = $request->header('X-API-Key');
         if ($apiKeyHeader) {
             return $apiKeyHeader;
         }
 
-        // Check query parameter
-        $queryKey = $request->query('api_key');
-        if ($queryKey) {
-            return $queryKey;
-        }
-
-        // Check request body
-        $bodyKey = $request->input('api_key');
-        if ($bodyKey) {
-            return $bodyKey;
+        // Check request body (POST only — not logged in access logs)
+        if ($request->isMethod('POST')) {
+            $bodyKey = $request->input('api_key');
+            if ($bodyKey) {
+                return $bodyKey;
+            }
         }
 
         return null;

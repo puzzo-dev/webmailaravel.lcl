@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { api, handleApiError } from '../../services/api';
 import { serializeError } from '../../utils/errorHandler';
 
 // Async thunks

@@ -15,8 +15,8 @@ class Plan extends Model
         'price',
         'currency',
         'duration_days',
-        'max_domains',
-        'max_senders_per_domain',
+        
+        'max_senders',
         'max_total_campaigns',
         'max_live_campaigns',
         'daily_sending_limit',

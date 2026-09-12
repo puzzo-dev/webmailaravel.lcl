@@ -16,6 +16,10 @@ return new class extends Migration
             $table->string('email')->index();
             $table->string('token')->unique();
             $table->timestamp('expires_at');
+            $table->boolean('used')->default(false);
+            $table->timestamp('used_at')->nullable();
+            $table->string('ip_address')->nullable();
+            $table->string('user_agent')->nullable();
             $table->timestamps();
         });
     }

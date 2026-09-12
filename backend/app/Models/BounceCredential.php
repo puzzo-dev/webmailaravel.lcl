@@ -12,7 +12,6 @@ class BounceCredential extends Model
 
     protected $fillable = [
         'user_id',
-        'domain_id',
         'email',
         'protocol',
         'host',
@@ -50,11 +49,6 @@ class BounceCredential extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function domain()
-    {
-        return $this->belongsTo(Domain::class);
-    }
-
     /**
      * Bounce processing logs
      */
@@ -76,11 +70,6 @@ class BounceCredential extends Model
         return $query->where('user_id', $userId);
     }
 
-    public function scopeForDomain($query, $domainId)
-    {
-        return $query->where('domain_id', $domainId);
-    }
-
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);
@@ -94,27 +83,7 @@ class BounceCredential extends Model
         return static::forUser($userId)
             ->default()
             ->active()
-            ->whereNull('domain_id')
             ->first();
-    }
-
-    /**
-     * Get bounce credential for domain (fallback to user default)
-     */
-    public static function getForDomain(Domain $domain)
-    {
-        // First try domain-specific credential
-        $domainCredential = static::forUser($domain->user_id)
-            ->forDomain($domain->id)
-            ->active()
-            ->first();
-
-        if ($domainCredential) {
-            return $domainCredential;
-        }
-
-        // Fallback to user's default
-        return static::getUserDefault($domain->user_id);
     }
 
     /**

@@ -4,64 +4,39 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Services\AnalyticsService;
-use App\Traits\ResponseTrait;
-use App\Traits\LoggingTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class AnalyticsController extends Controller
 {
-    use ResponseTrait, LoggingTrait;
-
-    protected $analyticsService;
-
-    public function __construct(AnalyticsService $analyticsService)
-    {
-        $this->analyticsService = $analyticsService;
-    }
+    public function __construct(
+        protected AnalyticsService $analyticsService
+    ) {}
 
     /**
      * Get analytics overview (user or admin based on role)
      */
     public function index(Request $request): JsonResponse
     {
-        try {
-            $user = auth()->user();
-            
-            // Check if user is admin for enhanced analytics
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = $request->user();
+
             if ($user->hasRole('admin')) {
-                return $this->getAdminAnalytics($request);
+                return $this->getAdminAnalyticsData($request);
             }
-            
-            // Get user-specific analytics data (properly isolated)
-            $data = [
+
+            return [
                 'dashboard' => $this->analyticsService->getUserDashboardAnalytics($user),
-                'trending' => $this->analyticsService->getUserTrendingMetrics($user, 7), // Last 7 days
+                'trending' => $this->analyticsService->getUserTrendingMetrics($user, 7),
                 'summary' => [
                     'total_campaigns' => $user->campaigns()->count(),
                     'active_campaigns' => $user->campaigns()->where('status', 'active')->count(),
                     'total_emails_sent' => $user->campaigns()->sum('total_sent'),
                     'total_opens' => $user->campaigns()->sum('opens'),
                     'total_clicks' => $user->campaigns()->sum('clicks'),
-                ]
+                ],
             ];
-
-            $this->logInfo('analytics.index.accessed', [
-                'user_id' => $user->id,
-                'ip' => request()->ip()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get analytics overview',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'analytics_overview');
     }
 
     /**
@@ -69,32 +44,15 @@ class AnalyticsController extends Controller
      */
     public function getDashboard(Request $request): JsonResponse
     {
-        try {
-            $user = auth()->user();
-            
-            // Use user-specific analytics for regular users, system-wide for admins
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = $request->user();
+
             if ($user->hasRole('admin')) {
-                $data = $this->analyticsService->getDashboardAnalytics();
-            } else {
-                $data = $this->analyticsService->getUserDashboardAnalytics($user);
+                return $this->analyticsService->getDashboardAnalytics();
             }
 
-            $this->logInfo('analytics.dashboard.accessed', [
-                'user_id' => $user->id,
-                'ip' => request()->ip()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get analytics data',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $this->analyticsService->getUserDashboardAnalytics($user);
+        }, 'analytics_dashboard');
     }
 
     /**
@@ -102,26 +60,15 @@ class AnalyticsController extends Controller
      */
     public function getCampaignAnalytics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $analytics = $this->analyticsService->getCampaignAnalytics(
+            return $this->analyticsService->getCampaignAnalytics(
                 $endDate ? now()->parse($endDate) : now(),
                 $startDate ? now()->parse($startDate) : now()->subMonth()
             );
-
-            return response()->json([
-                'success' => true,
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get campaign analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'campaign_analytics');
     }
 
     /**
@@ -129,26 +76,15 @@ class AnalyticsController extends Controller
      */
     public function getUserAnalytics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $analytics = $this->analyticsService->getUserAnalytics(
+            return $this->analyticsService->getUserAnalytics(
                 $endDate ? now()->parse($endDate) : now(),
                 $startDate ? now()->parse($startDate) : now()->subMonth()
             );
-
-            return response()->json([
-                'success' => true,
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get user analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'user_analytics');
     }
 
     /**
@@ -156,26 +92,15 @@ class AnalyticsController extends Controller
      */
     public function getRevenueAnalytics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $analytics = $this->analyticsService->getRevenueAnalytics(
+            return $this->analyticsService->getRevenueAnalytics(
                 $endDate ? now()->parse($endDate) : now(),
                 $startDate ? now()->parse($startDate) : now()->subMonth()
             );
-
-            return response()->json([
-                'success' => true,
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get revenue analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'revenue_analytics');
     }
 
     /**
@@ -183,26 +108,15 @@ class AnalyticsController extends Controller
      */
     public function getDeliverabilityAnalytics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $analytics = $this->analyticsService->getDeliverabilityAnalytics(
+            return $this->analyticsService->getDeliverabilityAnalytics(
                 $endDate ? now()->parse($endDate) : now(),
                 $startDate ? now()->parse($startDate) : now()->subWeek()
             );
-
-            return response()->json([
-                'success' => true,
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get deliverability analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'deliverability_analytics');
     }
 
     /**
@@ -210,26 +124,15 @@ class AnalyticsController extends Controller
      */
     public function getReputationAnalytics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $analytics = $this->analyticsService->getReputationAnalytics(
+            return $this->analyticsService->getReputationAnalytics(
                 $endDate ? now()->parse($endDate) : now(),
                 $startDate ? now()->parse($startDate) : now()->subWeek()
             );
-
-            return response()->json([
-                'success' => true,
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get reputation analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        }, 'reputation_analytics');
     }
 
     /**
@@ -237,21 +140,10 @@ class AnalyticsController extends Controller
      */
     public function getTrendingMetrics(Request $request): JsonResponse
     {
-        try {
+        return $this->executeWithErrorHandling(function () use ($request) {
             $days = (int) $request->input('days', 30);
-            $metrics = $this->analyticsService->getTrendingMetrics($days);
-
-            return response()->json([
-                'success' => true,
-                'data' => $metrics
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get trending metrics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $this->analyticsService->getTrendingMetrics($days);
+        }, 'trending_metrics');
     }
 
     /**
@@ -259,20 +151,9 @@ class AnalyticsController extends Controller
      */
     public function getCampaignPerformance(Request $request, int $campaignId): JsonResponse
     {
-        try {
-            $report = $this->analyticsService->getCampaignPerformanceReport($campaignId);
-
-            return response()->json([
-                'success' => true,
-                'data' => $report
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get campaign performance report',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return $this->executeWithErrorHandling(function () use ($campaignId) {
+            return $this->analyticsService->getCampaignPerformanceReport($campaignId);
+        }, 'campaign_performance');
     }
 
     /**
@@ -280,91 +161,67 @@ class AnalyticsController extends Controller
      */
     public function getAdminAnalytics(Request $request): JsonResponse
     {
-        try {
-            $timeRange = $request->get('timeRange', '30d');
-            $period = $request->get('period', 'monthly');
-            $limit = (int) $request->get('limit', 12);
-            
-            $analytics = [
-                'user_growth' => $this->analyticsService->getUserGrowth($period, $limit),
-                'campaign_performance' => $this->analyticsService->getCampaignPerformance([
-                    'period' => $period,
-                    'limit' => $limit
-                ]),
-                'deliverability_stats' => $this->analyticsService->getDeliverabilityAnalytics(),
-                'revenue_metrics' => $this->analyticsService->getRevenueAnalytics(),
-            ];
-
-            $this->logInfo('admin_analytics.accessed', [
-                'user_id' => auth()->id(),
-                'time_range' => $timeRange,
-                'period' => $period
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Admin analytics data retrieved successfully',
-                'data' => $analytics
-            ]);
-        } catch (\Exception $e) {
-            $this->logError('admin_analytics.error', [
-                'error' => $e->getMessage(),
-                'user_id' => auth()->id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fetch admin analytics',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            return $this->getAdminAnalyticsData($request);
+        }, 'admin_analytics');
     }
-    
+
+    /**
+     * Shared admin analytics data builder.
+     */
+    private function getAdminAnalyticsData(Request $request): array
+    {
+        $period = $request->get('period', 'monthly');
+        $limit = (int) $request->get('limit', 12);
+
+        return [
+            'user_growth' => $this->analyticsService->getUserGrowth($period, $limit),
+            'campaign_performance' => $this->analyticsService->getCampaignPerformance([
+                'period' => $period,
+                'limit' => $limit,
+            ]),
+            'deliverability_stats' => $this->analyticsService->getDeliverabilityAnalytics(),
+            'revenue_metrics' => $this->analyticsService->getRevenueAnalytics(),
+        ];
+    }
+
     /**
      * Get campaign hourly statistics
      */
     public function getCampaignHourlyStats(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            $stats = $this->analyticsService->getHourlyStats($campaign);
-            return $this->successResponse($stats, 'Campaign hourly statistics retrieved successfully');
+            return $this->analyticsService->getHourlyStats($campaign);
         }, 'get_campaign_hourly_stats');
     }
-    
+
     /**
      * Get campaign daily statistics
      */
     public function getCampaignDailyStats(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            $stats = $this->analyticsService->getDailyStats($campaign);
-            return $this->successResponse($stats, 'Campaign daily statistics retrieved successfully');
+            return $this->analyticsService->getDailyStats($campaign);
         }, 'get_campaign_daily_stats');
     }
-    
+
     /**
      * Get campaign domain performance
      */
     public function getCampaignDomainPerformance(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            $performance = $this->analyticsService->getDomainPerformance($campaign);
-            return $this->successResponse($performance, 'Campaign domain performance retrieved successfully');
+            return $this->analyticsService->getDomainPerformance($campaign);
         }, 'get_campaign_domain_performance');
     }
-    
+
     /**
      * Get campaign sender performance
      */
     public function getCampaignSenderPerformance(Campaign $campaign): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($campaign) {
-            $performance = $this->analyticsService->getSenderPerformance($campaign);
-            return $this->successResponse($performance, 'Campaign sender performance retrieved successfully');
+            return $this->analyticsService->getSenderPerformance($campaign);
         }, 'get_campaign_sender_performance');
     }
 }
-
-
-
-

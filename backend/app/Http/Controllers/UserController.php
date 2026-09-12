@@ -2,29 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Device;
-use App\Models\UserActivity;
-use App\Traits\GeoIPTrait;
-use App\Traits\LoggingTrait;
-use App\Traits\ValidationTrait;
-use App\Traits\ResponseTrait;
+use App\Models\User;
+use App\Services\SecurityService;
+use App\Services\UserService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
-    use LoggingTrait,
-        GeoIPTrait,
-        ValidationTrait,
-        ResponseTrait;
-
     public function __construct(
-        // private GeoIPService $geoIPService
+        private SecurityService $securityService,
+        private UserService $userService
     ) {}
 
     /**
@@ -36,13 +27,14 @@ class UserController extends Controller
             if (!Auth::user()->hasRole('admin')) {
                 return $this->forbiddenResponse('Admin access required');
             }
-            
-            $perPage = $request->input('per_page', 15);
+
+            $perPage = min((int) $request->input('per_page', 15), 100);
             $page = $request->input('page', 1);
-            
-            $query = User::with(['devices', 'campaigns']);
-            $results = $query->orderBy('created_at', 'desc')->paginate($perPage, ['*'], 'page', $page);
-            
+
+            $results = User::with(['devices', 'campaigns'])
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
             return $this->paginatedResponse($results, 'Users retrieved successfully');
         }, 'list_users');
     }
@@ -59,36 +51,17 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+            return $this->validationErrorResponse($validator->errors());
         }
 
-        $userData = $validator->validated();
-        $userData['password'] = Hash::make($userData['password']);
-        
-        // Get location from IP
-        $location = $this->geoIPService->getLocation($request->ip());
-        $userData['country'] = $location['country'] ?? null;
-        $userData['city'] = $location['city'] ?? null;
-        
-        $user = User::create($userData);
-        
-        Log::info('User registered', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'ip' => $request->ip(),
-            'country' => $user->country,
-            'city' => $user->city
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'User registered successfully',
-            'data' => $user
-        ], 201);
+        return $this->executeWithErrorHandling(function () use ($request, $validator) {
+            $user = $this->userService->createUser(
+                $validator->validated(),
+                $request->ip()
+            );
+
+            return $this->createdResponse($user, 'User registered successfully');
+        }, 'register_user');
     }
 
     /**
@@ -96,15 +69,13 @@ class UserController extends Controller
      */
     public function show(string $id): JsonResponse
     {
-        $user = User::with(['devices', 'campaigns'])->findOrFail($id);
-        
-        $this->authorize('view', $user);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'User retrieved successfully',
-            'data' => $user
-        ]);
+        return $this->executeWithErrorHandling(function () use ($id) {
+            $user = User::with(['devices', 'campaigns'])->findOrFail($id);
+
+            $this->authorize('view', $user);
+
+            return $user;
+        }, 'view_user');
     }
 
     /**
@@ -114,39 +85,21 @@ class UserController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($request, $id) {
             $user = User::findOrFail($id);
-            
-            // Admin can update any user, regular users can only update themselves
-            if (!Auth::user()->hasRole('admin') && $user->id !== Auth::id()) {
-                return $this->forbiddenResponse('Access denied');
-            }
-            
+
+            $this->authorize('update', $user);
+
             $validator = Validator::make($request->all(), [
                 'name' => 'sometimes|string|max:255',
                 'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
                 'password' => 'sometimes|string|min:8|confirmed',
-                'status' => 'sometimes|string|in:active,inactive,suspended'
+                'status' => 'sometimes|string|in:active,inactive,suspended',
             ]);
-            
+
             if ($validator->fails()) {
                 return $this->validationErrorResponse($validator->errors());
             }
-            
-            $userData = $validator->validated();
-            
-            if (isset($userData['password'])) {
-                $userData['password'] = Hash::make($userData['password']);
-            }
-            
-            $user->update($userData);
-            
-            Log::info('User updated', [
-                'updated_by' => Auth::id(),
-                'user_id' => $user->id,
-                'updated_fields' => array_keys($userData),
-                'ip' => $request->ip()
-            ]);
-            
-            return $this->successResponse($user, 'User updated successfully');
+
+            return $this->userService->updateUser($user, $validator->validated());
         }, 'update_user');
     }
 
@@ -157,27 +110,63 @@ class UserController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($id) {
             $user = User::findOrFail($id);
-            
-            // Admin can delete any user, regular users can only delete themselves
-            if (!Auth::user()->hasRole('admin') && $user->id !== Auth::id()) {
-                return $this->forbiddenResponse('Access denied');
-            }
-            
-            // Prevent admin from deleting themselves
-            if (Auth::user()->hasRole('admin') && $user->id === Auth::id()) {
-                return $this->errorResponse('Cannot delete your own account');
-            }
-            
-            $user->delete();
-            
-            Log::info('User deleted', [
-                'deleted_by' => Auth::id(),
-                'deleted_user_id' => $user->id,
-                'ip' => request()->ip()
-            ]);
-            
-            return $this->successResponse(null, 'User deleted successfully');
+
+            $this->authorize('delete', $user);
+
+            $this->userService->deleteUser($user);
+
+            return null;
         }, 'delete_user');
+    }
+
+    /**
+     * Ban a user (admin only). Banned users can login but cannot send email.
+     */
+    public function ban(Request $request, User $user): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request, $user) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            if ($user->hasRole('admin')) {
+                return $this->errorResponse('Cannot ban an admin user', 400);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'reason' => 'nullable|string|max:1000',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+
+            $user->ban(Auth::user(), $validator->validated()['reason'] ?? null);
+
+            return $this->successResponse(
+                $user->fresh(),
+                'User banned successfully. They can still login but cannot send email.'
+            );
+        }, 'ban_user');
+    }
+
+    /**
+     * Unban a user (admin only).
+     */
+    public function unban(User $user): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($user) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $user->unban();
+
+            return $this->successResponse(
+                $user->fresh(),
+                'User unbanned successfully. They can now send email again.'
+            );
+        }, 'unban_user');
     }
 
     /**
@@ -185,45 +174,21 @@ class UserController extends Controller
      */
     public function addDevice(Request $request, User $user): JsonResponse
     {
-        $this->authorize('update', $user);
-        
-        $validator = Validator::make($request->all(), [
-            'device_name' => 'required|string|max:255',
-            'device_type' => 'required|string|in:mobile,tablet,desktop',
-            'device_id' => 'required|string|max:255',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request, $user) {
+            $this->authorize('update', $user);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            $validator = Validator::make($request->all(), [
+                'device_name' => 'required|string|max:255',
+                'device_type' => 'required|string|in:mobile,tablet,desktop',
+                'device_id' => 'required|string|max:255',
+            ]);
 
-        // Check device limit (max 2 devices)
-        if ($user->devices()->count() >= 2) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Maximum device limit reached (2 devices)',
-                'data' => 'Device limit exceeded'
-            ], 400);
-        }
-        
-        $device = $user->devices()->create($validator->validated());
-        
-        Log::info('Device added', [
-            'user_id' => $user->id,
-            'device_id' => $device->id,
-            'device_name' => $device->device_name,
-            'ip' => $request->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Device added successfully',
-            'data' => $device
-        ], 201);
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+
+            return $this->userService->addDevice($user, $validator->validated());
+        }, 'add_device');
     }
 
     /**
@@ -231,27 +196,13 @@ class UserController extends Controller
      */
     public function removeDevice(User $user, Device $device): JsonResponse
     {
-        $this->authorize('update', $user);
-        
-        if ($device->user_id !== $user->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied to device'
-            ], 403);
-        }
-        
-        $device->delete();
-        
-        Log::info('Device removed', [
-            'user_id' => $user->id,
-            'device_id' => $device->id,
-            'ip' => request()->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Device removed successfully'
-        ]);
+        return $this->executeWithErrorHandling(function () use ($user, $device) {
+            $this->authorize('update', $user);
+
+            $this->userService->removeDevice($user, $device);
+
+            return null;
+        }, 'remove_device');
     }
 
     /**
@@ -259,18 +210,14 @@ class UserController extends Controller
      */
     public function sessions(User $user): JsonResponse
     {
-        $this->authorize('view', $user);
-        
-        $sessions = $user->sessions()
-            ->where('last_active', '>', now()->subMinutes(5))
-            ->orderBy('last_active', 'desc')
-            ->get();
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'User sessions retrieved successfully',
-            'data' => $sessions
-        ]);
+        return $this->executeWithErrorHandling(function () use ($user) {
+            $this->authorize('view', $user);
+
+            return $user->sessions()
+                ->where('last_active', '>', now()->subMinutes(5))
+                ->orderBy('last_active', 'desc')
+                ->get();
+        }, 'view_user_sessions');
     }
 
     /**
@@ -278,29 +225,19 @@ class UserController extends Controller
      */
     public function terminateSession(User $user, $sessionId): JsonResponse
     {
-        $this->authorize('update', $user);
-        
-        $session = $user->sessions()->where('session_id', $sessionId)->first();
-        
-        if (!$session) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Session not found'
-            ], 404);
-        }
-        
-        $session->delete();
-        
-        Log::info('Session terminated', [
-            'user_id' => $user->id,
-            'session_id' => $sessionId,
-            'ip' => request()->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Session terminated successfully'
-        ]);
+        return $this->executeWithErrorHandling(function () use ($user, $sessionId) {
+            $this->authorize('update', $user);
+
+            $session = $user->sessions()->where('session_id', $sessionId)->first();
+
+            if (!$session) {
+                return $this->errorResponse('Session not found', 404);
+            }
+
+            $session->delete();
+
+            return null;
+        }, 'terminate_session');
     }
 
     /**
@@ -308,13 +245,9 @@ class UserController extends Controller
      */
     public function getProfile(): JsonResponse
     {
-        $user = Auth::user()->load(['devices', 'sessions']);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile retrieved successfully',
-            'data' => $user
-        ]);
+        return $this->executeWithErrorHandling(function () {
+            return Auth::user()->load(['devices', 'sessions']);
+        }, 'get_profile');
     }
 
     /**
@@ -322,37 +255,23 @@ class UserController extends Controller
      */
     public function updateProfile(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
-            'phone' => 'sometimes|string|max:20',
-            'timezone' => 'sometimes|string|max:50',
-            'language' => 'sometimes|string|max:10',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|string|email|max:255|unique:users,email,' . $user->id,
+                'phone' => 'sometimes|string|max:20',
+                'timezone' => 'sometimes|string|max:50',
+                'language' => 'sometimes|string|max:10',
+            ]);
 
-        $user->update($validator->validated());
-        
-        Log::info('Profile updated', [
-            'user_id' => $user->id,
-            'updated_fields' => array_keys($validator->validated()),
-            'ip' => $request->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'data' => $user
-        ]);
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
+
+            return $this->userService->updateUser($user, $validator->validated());
+        }, 'update_profile');
     }
 
     /**
@@ -360,42 +279,22 @@ class UserController extends Controller
      */
     public function changePassword(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'current_password' => 'required|string',
             'new_password' => 'required|string|min:8|confirmed',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        try {
+            $this->securityService->changePassword(
+                Auth::user(),
+                $validated['current_password'],
+                $validated['new_password']
+            );
 
-        if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Current password is incorrect',
-                'data' => 'Password change failed'
-            ], 400);
+            return $this->successResponse(null, 'Password changed successfully');
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), 400);
         }
-        
-        $user->update([
-            'password' => Hash::make($request->new_password)
-        ]);
-        
-        Log::info('Password changed', [
-            'user_id' => $user->id,
-            'ip' => $request->ip()
-        ]);
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Password changed successfully'
-        ]);
     }
 
     /**
@@ -403,13 +302,9 @@ class UserController extends Controller
      */
     public function getDevices(): JsonResponse
     {
-        $devices = Auth::user()->devices;
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Devices retrieved successfully',
-            'data' => $devices
-        ]);
+        return $this->executeWithErrorHandling(function () {
+            return Auth::user()->devices;
+        }, 'get_devices');
     }
 
     /**
@@ -417,13 +312,9 @@ class UserController extends Controller
      */
     public function getSessions(): JsonResponse
     {
-        $sessions = Auth::user()->sessions;
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Sessions retrieved successfully',
-            'data' => $sessions
-        ]);
+        return $this->executeWithErrorHandling(function () {
+            return Auth::user()->sessions;
+        }, 'get_sessions');
     }
 
     /**
@@ -431,33 +322,9 @@ class UserController extends Controller
      */
     public function getSettings(): JsonResponse
     {
-        $user = Auth::user();
-        
-        $settings = [
-            'general' => [
-                'name' => $user->name,
-                'email' => $user->email,
-                'username' => $user->username,
-                'country' => $user->country,
-                'city' => $user->city,
-            ],
-            'notifications' => [
-                'telegram_notifications_enabled' => $user->telegram_notifications_enabled,
-            ],
-            'security' => [
-                'two_factor_enabled' => $user->two_factor_enabled,
-            ],
-            'telegram' => [
-                'telegram_chat_id' => $user->telegram_chat_id,
-                'telegram_verified_at' => $user->telegram_verified_at,
-            ]
-        ];
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Settings retrieved successfully',
-            'data' => $settings
-        ]);
+        return $this->executeWithErrorHandling(function () {
+            return $this->userService->getSettings(Auth::user());
+        }, 'get_settings');
     }
 
     /**
@@ -465,30 +332,22 @@ class UserController extends Controller
      */
     public function updateGeneralSettings(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:255',
-            'username' => 'sometimes|string|max:255|unique:users,username,' . $user->id,
-            'country' => 'sometimes|string|max:255',
-            'city' => 'sometimes|string|max:255',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            $validator = Validator::make($request->all(), [
+                'name' => 'sometimes|string|max:255',
+                'username' => 'sometimes|string|max:255|unique:users,username,' . $user->id,
+                'country' => 'sometimes|string|max:255',
+                'city' => 'sometimes|string|max:255',
+            ]);
 
-        $user->update($validator->validated());
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'General settings updated successfully',
-            'data' => $user->fresh()
-        ]);
+            return $this->userService->updateGeneralSettings($user, $validator->validated());
+        }, 'update_general_settings');
     }
 
     /**
@@ -498,7 +357,7 @@ class UserController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($request) {
             $user = Auth::user();
-            
+
             $validator = Validator::make($request->all(), [
                 'email_notifications_enabled' => 'sometimes|boolean',
                 'telegram_notifications_enabled' => 'sometimes|boolean',
@@ -512,66 +371,8 @@ class UserController extends Controller
                 return $this->validationErrorResponse($validator->errors());
             }
 
-            $data = $validator->validated();
-            
-            // Update basic notification settings
-            if (isset($data['email_notifications_enabled'])) {
-                $user->email_notifications_enabled = $data['email_notifications_enabled'];
-            }
-            
-            if (isset($data['telegram_notifications_enabled'])) {
-                $user->telegram_notifications_enabled = $data['telegram_notifications_enabled'];
-            }
-            
-            if (isset($data['telegram_chat_id'])) {
-                $user->telegram_chat_id = $data['telegram_chat_id'];
-            }
-            
-            // Update granular notification preferences
-            if (isset($data['notification_preferences'])) {
-                $currentPreferences = $user->notification_preferences ?? [];
-                $newPreferences = array_merge($currentPreferences, $data['notification_preferences']);
-                $user->notification_preferences = $newPreferences;
-            }
-            
-            $user->save();
-
-            Log::info('User notification settings updated', [
-                'user_id' => $user->id,
-                'email_enabled' => $user->email_notifications_enabled,
-                'telegram_enabled' => $user->telegram_notifications_enabled,
-                'has_telegram_chat_id' => !empty($user->telegram_chat_id),
-                'preferences_count' => count($user->notification_preferences ?? [])
-            ]);
-
-            return $this->successResponse([
-                'user' => $user->fresh()
-            ], 'Notification settings updated successfully');
+            return $this->userService->updateNotificationSettings($user, $validator->validated());
         }, 'update_notification_settings');
-    }
-
-    /**
-     * Update security settings
-     */
-    public function updateSecuritySettings(Request $request): JsonResponse
-    {
-        // This method delegates to SecurityController for security-related operations
-        return response()->json([
-            'success' => false,
-            'message' => 'Use /security/settings endpoint for security settings'
-        ], 302);
-    }
-
-    /**
-     * Update API settings
-     */
-    public function updateApiSettings(Request $request): JsonResponse
-    {
-        // This method delegates to SecurityController for API key management
-        return response()->json([
-            'success' => false,
-            'message' => 'Use /security/api-keys endpoint for API settings'
-        ], 302);
     }
 
     /**
@@ -579,39 +380,19 @@ class UserController extends Controller
      */
     public function updateTelegramSettings(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        $validator = Validator::make($request->all(), [
-            'telegram_chat_id' => 'sometimes|string|max:255',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+            $validator = Validator::make($request->all(), [
+                'telegram_chat_id' => 'sometimes|string|max:255',
+            ]);
 
-        $user->update($validator->validated());
+            if ($validator->fails()) {
+                return $this->validationErrorResponse($validator->errors());
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Telegram settings updated successfully',
-            'data' => $user->fresh()
-        ]);
-    }
-
-    /**
-     * Generate API key
-     */
-    public function generateApiKey(): JsonResponse
-    {
-        // This method delegates to SecurityController for API key generation
-        return response()->json([
-            'success' => false,
-            'message' => 'Use /security/api-keys endpoint to generate API keys'
-        ], 302);
+            return $this->userService->updateTelegramSettings($user, $validator->validated());
+        }, 'update_telegram_settings');
     }
 
     /**
@@ -622,24 +403,17 @@ class UserController extends Controller
         return $this->executeWithErrorHandling(function () use ($request) {
             $validator = Validator::make($request->all(), [
                 'chat_id' => 'required|string',
-                'message' => 'nullable|string'
+                'message' => 'nullable|string',
             ]);
 
             if ($validator->fails()) {
                 return $this->validationErrorResponse($validator->errors());
             }
 
-            $chatId = $request->input('chat_id');
-            $message = $request->input('message', 'Test message from WebMail system');
-
-            try {
-                // Test Telegram notification
-                $this->sendTelegramNotification($message);
-                
-                return $this->successResponse(null, 'Telegram test message sent successfully');
-            } catch (\Exception $e) {
-                return $this->errorResponse('Failed to send Telegram test message: ' . $e->getMessage());
-            }
+            return $this->userService->testTelegram(
+                $request->input('chat_id'),
+                $request->input('message', 'Test message from WebMail system')
+            );
         }, 'test_telegram');
     }
 
@@ -649,24 +423,8 @@ class UserController extends Controller
     public function getActivities(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            $limit = $request->input('limit', 50);
-            $user = Auth::user();
-            
-            $activities = UserActivity::where('user_id', $user->id)
-                ->orderBy('created_at', 'desc')
-                ->limit($limit)
-                ->get()
-                ->map(function ($activity) {
-                    return [
-                        'id' => $activity->id,
-                        'type' => $activity->activity_type,
-                        'description' => $activity->activity_description,
-                        'metadata' => $activity->metadata ?? [],
-                        'created_at' => $activity->created_at->toISOString(),
-                    ];
-                });
-            
-            return $this->successResponse($activities, 'Activities retrieved successfully');
+            $limit = min((int) $request->input('limit', 50), 200);
+            return $this->userService->getActivities(Auth::user(), $limit);
         }, 'get_activities');
     }
 
@@ -676,25 +434,13 @@ class UserController extends Controller
     public function getActivity(Request $request, $id): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($id) {
-            $user = Auth::user();
-            
-            $activity = UserActivity::where('user_id', $user->id)
-                ->where('id', $id)
-                ->first();
-                
+            $activity = $this->userService->getActivity(Auth::user(), (int) $id);
+
             if (!$activity) {
                 return $this->errorResponse('Activity not found', 404);
             }
-            
-            $activityData = [
-                'id' => $activity->id,
-                'type' => $activity->activity_type,
-                'description' => $activity->activity_description,
-                'metadata' => $activity->metadata ?? [],
-                'created_at' => $activity->created_at->toISOString(),
-            ];
-            
-            return $this->successResponse($activityData, 'Activity retrieved successfully');
+
+            return $activity;
         }, 'get_activity');
     }
 
@@ -705,7 +451,7 @@ class UserController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($request) {
             $validator = Validator::make($request->all(), [
-                'type' => 'required|string|max:255',
+                'type' => 'required|string|max:255|in:login,logout,profile_update,password_change,settings_update,campaign_created,campaign_sent',
                 'description' => 'required|string|max:500',
                 'metadata' => 'nullable|array',
             ]);
@@ -714,22 +460,20 @@ class UserController extends Controller
                 return $this->validationErrorResponse($validator->errors());
             }
 
-            $activity = UserActivity::logActivity(
-                Auth::id(),
-                $request->type,
-                $request->description,
-                null,
-                null,
-                $request->metadata ?? []
+            $activity = $this->userService->createActivity(
+                Auth::user(),
+                $validator->validated()['type'],
+                $validator->validated()['description'],
+                $validator->validated()['metadata'] ?? null
             );
 
-            return $this->createdResponse([
+            return [
                 'id' => $activity->id,
                 'type' => $activity->activity_type,
                 'description' => $activity->activity_description,
                 'metadata' => $activity->metadata ?? [],
                 'created_at' => $activity->created_at->toISOString(),
-            ], 'Activity logged successfully');
+            ];
         }, 'create_activity');
     }
 
@@ -738,36 +482,8 @@ class UserController extends Controller
      */
     public function getActivityStats(Request $request): JsonResponse
     {
-        return $this->executeWithErrorHandling(function () use ($request) {
-            $user = Auth::user();
-            
-            $totalActivities = UserActivity::where('user_id', $user->id)->count();
-            $activitiesThisWeek = UserActivity::where('user_id', $user->id)
-                ->where('created_at', '>=', now()->subWeek())
-                ->count();
-            $activitiesThisMonth = UserActivity::where('user_id', $user->id)
-                ->where('created_at', '>=', now()->subMonth())
-                ->count();
-                
-            $activityTypes = UserActivity::where('user_id', $user->id)
-                ->selectRaw('activity_type, COUNT(*) as count')
-                ->groupBy('activity_type')
-                ->pluck('count', 'activity_type')
-                ->toArray();
-                
-            $mostFrequentType = array_keys($activityTypes, max($activityTypes))[0] ?? null;
-            
-            $stats = [
-                'total_activities' => $totalActivities,
-                'activities_this_week' => $activitiesThisWeek,
-                'activities_this_month' => $activitiesThisMonth,
-                'most_frequent_type' => $mostFrequentType,
-                'activity_types' => $activityTypes,
-            ];
-            
-            return $this->successResponse($stats, 'Activity stats retrieved successfully');
+        return $this->executeWithErrorHandling(function () {
+            return $this->userService->getActivityStats(Auth::user());
         }, 'get_activity_stats');
     }
-
-
 }

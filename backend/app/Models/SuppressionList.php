@@ -35,7 +35,7 @@ class SuppressionList extends Model
     /**
      * Add email to suppression list
      */
-    public static function addEmail(string $email, string $type = 'unsubscribe', string $source = null, string $reason = null, array $metadata = []): self
+    public static function addEmail(string $email, string $type = 'unsubscribe', ?string $source = null, ?string $reason = null, array $metadata = []): self
     {
         return static::updateOrCreate(
             ['email' => strtolower(trim($email))],
@@ -68,7 +68,7 @@ class SuppressionList extends Model
     /**
      * Export suppression list to file
      */
-    public static function exportToFile(string $filename = null): string
+    public static function exportToFile(?string $filename = null): string
     {
         $filename = $filename ?: 'suppression_list_' . date('Y-m-d_H-i-s') . '.txt';
         $filepath = 'suppression_lists/' . $filename;
@@ -84,7 +84,7 @@ class SuppressionList extends Model
     /**
      * Import suppression list from file
      */
-    public static function importFromFile(string $filepath, string $type = 'manual', string $source = null): array
+    public static function importFromFile(string $filepath, string $type = 'manual', ?string $source = null): array
     {
         if (!Storage::disk('local')->exists($filepath)) {
             throw new \Exception('File not found: ' . $filepath);

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Services\PowerMTAService;
+use App\Services\PmtaMonitoringService;
+use App\Services\CloudflareDnsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use App\Models\Domain;
 use App\Traits\ResponseTrait;
 use App\Traits\LoggingTrait;
+use Carbon\Carbon;
 
 class PowerMTAController extends Controller
 {
@@ -15,15 +17,21 @@ class PowerMTAController extends Controller
     protected $powerMTAService;
     protected $unifiedTrainingService;
     protected $bounceProcessingService;
+    protected $pmtaMonitoringService;
+    protected $cloudflareDnsService;
 
     public function __construct(
-        PowerMTAService $powerMTAService, 
+        PowerMTAService $powerMTAService,
         \App\Services\UnifiedTrainingService $unifiedTrainingService,
-        \App\Services\BounceProcessingService $bounceProcessingService
+        \App\Services\BounceProcessingService $bounceProcessingService,
+        PmtaMonitoringService $pmtaMonitoringService,
+        CloudflareDnsService $cloudflareDnsService
     ) {
         $this->powerMTAService = $powerMTAService;
         $this->unifiedTrainingService = $unifiedTrainingService;
         $this->bounceProcessingService = $bounceProcessingService;
+        $this->pmtaMonitoringService = $pmtaMonitoringService;
+        $this->cloudflareDnsService = $cloudflareDnsService;
     }
 
     /**
@@ -36,6 +44,71 @@ class PowerMTAController extends Controller
             return $this->successResponse($status, 'PowerMTA status retrieved successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to retrieve PowerMTA status: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get PMTA domains (real-time from management API)
+     */
+    public function getDomains(): JsonResponse
+    {
+        try {
+            $result = $this->powerMTAService->getDomains();
+            return $this->successResponse($result, 'PMTA domains retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve domains: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get PMTA queues (real-time from management API)
+     */
+    public function getQueues(): JsonResponse
+    {
+        try {
+            $result = $this->powerMTAService->getQueues();
+            return $this->successResponse($result, 'PMTA queues retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve queues: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get PMTA VMTAs (real-time from management API)
+     */
+    public function getVmtas(): JsonResponse
+    {
+        try {
+            $result = $this->powerMTAService->getVmtas();
+            return $this->successResponse($result, 'PMTA VMTAs retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve VMTAs: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get PMTA jobs (real-time from management API)
+     */
+    public function getJobs(): JsonResponse
+    {
+        try {
+            $result = $this->powerMTAService->getJobs();
+            return $this->successResponse($result, 'PMTA jobs retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve jobs: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get PMTA log files (real-time from management API)
+     */
+    public function getLogFiles(Request $request): JsonResponse
+    {
+        try {
+            $result = $this->powerMTAService->getLogFiles();
+            return $this->successResponse($result, 'PMTA log files retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve log files: ' . $e->getMessage(), 500);
         }
     }
 
@@ -80,7 +153,7 @@ class PowerMTAController extends Controller
     }
 
     /**
-     * Analyze PowerMTA reputation for a specific domain
+     * Analyze PowerMTA reputation for a specific sender domain
      */
     public function analyzeSenderReputation(Request $request): JsonResponse
     {
@@ -89,9 +162,9 @@ class PowerMTAController extends Controller
             if (!$domain) {
                 return $this->errorResponse('Domain parameter is required', 400);
             }
-            
+
             $analysis = $this->powerMTAService->analyzeSenderReputation($domain);
-            return $this->successResponse($analysis, 'Domain reputation analyzed successfully');
+            return $this->successResponse($analysis, 'Sender reputation analyzed successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to analyze reputation: ' . $e->getMessage(), 500);
         }
@@ -107,7 +180,7 @@ class PowerMTAController extends Controller
             if (!$filename) {
                 return $this->errorResponse('Filename parameter is required', 400);
             }
-            
+
             $parsed = $this->powerMTAService->parseDiagnosticFile($filename);
             return $this->successResponse($parsed, 'Diagnostic file parsed successfully');
         } catch (\Exception $e) {
@@ -121,22 +194,18 @@ class PowerMTAController extends Controller
     public function downloadDiagnosticFile(Request $request, $filename): JsonResponse
     {
         try {
-            // For now, return file info - actual file download would need different implementation
             $fileInfo = $this->powerMTAService->getDiagnosticFiles();
             $file = collect($fileInfo['files'] ?? [])->firstWhere('name', $filename);
-            
+
             if (!$file) {
                 return $this->errorResponse('File not found', 404);
             }
-            
+
             return $this->successResponse($file, 'File information retrieved successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to download diagnostic file: ' . $e->getMessage(), 500);
         }
     }
-
-    // PowerMTA configuration is handled by AdminController at /admin/system-config/powermta
-    // Removed duplicate getConfig() and updateConfig() methods to avoid redundancy
 
     /**
      * Process bounce files from PowerMTA
@@ -144,8 +213,7 @@ class PowerMTAController extends Controller
     public function processBounceFiles(Request $request): JsonResponse
     {
         try {
-            // Use the bounce processing service that's already injected
-            $result = $this->bounceProcessingService->processBounceFiles();
+            $result = $this->bounceProcessingService->processPowerMTAFiles();
             return $this->successResponse($result, 'Bounce files processed successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to process bounce files: ' . $e->getMessage(), 500);
@@ -153,100 +221,29 @@ class PowerMTAController extends Controller
     }
 
     /**
-     * Get domain analytics from PowerMTA files
+     * Get training statistics
      */
-    public function getDomainAnalytics(Request $request, $domainId): JsonResponse
+    public function getTrainingStatistics(): JsonResponse
     {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'hours' => 'nullable|integer|min:1|max:168',
-            ],
-            function () use ($request, $domainId) {
-                $domain = Domain::where('id', $domainId)
-                    ->where('user_id', auth()->id())
-                    ->firstOrFail();
-
-                $hours = $request->input('validated_data.hours', 24);
-                $analytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->name, $hours);
-
-                return $this->successResponse($analytics, 'Domain analytics retrieved successfully');
-            },
-            'get_domain_analytics'
-        );
+        try {
+            $stats = $this->powerMTAService->getTrainingStatistics();
+            return $this->successResponse($stats, 'Training statistics retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to retrieve training statistics: ' . $e->getMessage(), 500);
+        }
     }
 
     /**
-     * Get accounting metrics for domain
+     * Run training
      */
-    public function getAccountingMetrics(Request $request, $domainId): JsonResponse
+    public function runTraining(Request $request): JsonResponse
     {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'hours' => 'nullable|integer|min:1|max:168',
-            ],
-            function () use ($request, $domainId) {
-                $domain = Domain::where('id', $domainId)
-                    ->where('user_id', auth()->id())
-                    ->firstOrFail();
-
-                $hours = $request->input('validated_data.hours', 24);
-                $metrics = $this->powerMTAService->parseAccountingFiles($domain->name, $hours);
-
-                return $this->successResponse($metrics, 'Accounting metrics retrieved successfully');
-            },
-            'get_accounting_metrics'
-        );
-    }
-
-    // Removed getFBLData() - redundant with getFBLAccounts()
-    // Domain-specific FBL data can be retrieved via getFBLAccounts() with domain filtering
-
-    /**
-     * Apply training configuration to domain
-     */
-    public function applyTrainingConfig(Request $request, $domainId): JsonResponse
-    {
-        return $this->validateAndExecute(
-            $request,
-            [],
-            function () use ($domainId) {
-                $domain = Domain::where('id', $domainId)
-                    ->where('user_id', auth()->id())
-                    ->firstOrFail();
-
-                $result = $this->powerMTAService->applyTrainingConfig($domainId);
-
-                if ($result['success']) {
-                    return $this->successResponse($result, 'Training configuration applied successfully');
-                } else {
-                    return $this->errorResponse($result['error'], 'Failed to apply training configuration');
-                }
-            },
-            'apply_training_config'
-        );
-    }
-
-    /**
-     * Get domain status
-     */
-    public function getDomainStatus(Request $request, $domainId): JsonResponse
-    {
-        return $this->validateAndExecute(
-            $request,
-            [],
-            function () use ($domainId) {
-                $domain = Domain::where('id', $domainId)
-                    ->where('user_id', auth()->id())
-                    ->firstOrFail();
-
-                $status = $this->powerMTAService->getDomainStatus($domainId);
-
-                return $this->successResponse($status, 'Domain status retrieved successfully');
-            },
-            'get_domain_status'
-        );
+        try {
+            $result = $this->unifiedTrainingService->runTraining();
+            return $this->successResponse($result, 'Training completed successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to run training: ' . $e->getMessage(), 500);
+        }
     }
 
     /**
@@ -256,99 +253,6 @@ class PowerMTAController extends Controller
     {
         $config = $this->powerMTAService->getTrainingConfig();
         return $this->successResponse($config, 'Training configuration retrieved successfully');
-    }
-
-    /**
-     * Update domain configuration
-     */
-    public function updateDomainConfig(Request $request, $domainId): JsonResponse
-    {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'max_msg_rate' => 'required|integer|min:1|max:10000',
-            ],
-            function () use ($request, $domainId) {
-                $domain = Domain::where('id', $domainId)
-                    ->where('user_id', auth()->id())
-                    ->firstOrFail();
-
-                $maxMsgRate = $request->input('validated_data.max_msg_rate');
-                $result = $this->powerMTAService->updateDomainConfig($domain->name, $maxMsgRate);
-
-                if ($result) {
-                    // Update database
-                    $domain->update(['max_msg_rate' => $maxMsgRate]);
-                    
-                    return $this->successResponse([
-                        'domain' => $domain->name,
-                        'max_msg_rate' => $maxMsgRate
-                    ], 'Domain configuration updated successfully');
-                } else {
-                    return $this->errorResponse('Failed to update PowerMTA configuration', 'Configuration update failed');
-                }
-            },
-            'update_domain_config'
-        );
-    }
-
-    /**
-     * Get all domains analytics summary
-     */
-    public function getAllDomainsAnalytics(Request $request): JsonResponse
-    {
-        return $this->validateAndExecute(
-            $request,
-            [
-                'hours' => 'nullable|integer|min:1|max:168',
-            ],
-            function () use ($request) {
-                $hours = $request->input('validated_data.hours', 24);
-                $domains = Domain::where('user_id', auth()->id())->get();
-
-                $analytics = [];
-                foreach ($domains as $domain) {
-                    $domainAnalytics = $this->powerMTAService->getComprehensiveDomainAnalytics($domain->name, $hours);
-                    $analytics[] = [
-                        'domain_id' => $domain->id,
-                        'domain' => $domain->name,
-                        'provider' => $domain->provider,
-                        'max_msg_rate' => $domain->max_msg_rate,
-                        'analytics' => $domainAnalytics
-                    ];
-                }
-
-                return $this->successResponse($analytics, 'All domains analytics retrieved successfully');
-            },
-            'get_all_domains_analytics'
-        );
-    }
-
-    /**
-     * Manual training check for all domains
-     */
-    public function manualTrainingCheck(Request $request): JsonResponse
-    {
-        return $this->validateAndExecute(
-            $request,
-            [],
-            function () {
-                $domains = Domain::where('user_id', auth()->id())->get();
-                $results = [];
-
-                foreach ($domains as $domain) {
-                    $result = $this->powerMTAService->applyTrainingConfig($domain->id);
-                    $results[] = [
-                        'domain_id' => $domain->id,
-                        'domain' => $domain->name,
-                        'result' => $result
-                    ];
-                }
-
-                return $this->successResponse($results, 'Manual training check completed for all domains');
-            },
-            'manual_training_check'
-        );
     }
 
     /**
@@ -379,5 +283,185 @@ class PowerMTAController extends Controller
         }
     }
 
-    // Training methods moved to TrainingController for consolidation
+    // ==================== PMTA FILE MONITORING ====================
+
+    public function getPmtaOverview(): JsonResponse
+    {
+        try {
+            return $this->successResponse($this->pmtaMonitoringService->getSystemOverview(), 'PMTA overview retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get PMTA overview: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getDailySummary(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            return $this->successResponse($this->pmtaMonitoringService->getDailySummary($date), 'Daily summary retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get daily summary: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getDeliveryRateByCampaign(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            return $this->successResponse($this->pmtaMonitoringService->getDeliveryRateByCampaign($date), 'Delivery rate by campaign retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get delivery rate by campaign: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getDeliveryRateByUser(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            return $this->successResponse($this->pmtaMonitoringService->getDeliveryRateByUser($date), 'Delivery rate by user retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get delivery rate by user: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getSenderReputationByUser(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            return $this->successResponse($this->pmtaMonitoringService->getSenderReputationByUser($date), 'Sender reputation by user retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get sender reputation: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getSenderHealth(Request $request): JsonResponse
+    {
+        try {
+            $sender = $request->input('sender');
+            if (!$sender) return $this->errorResponse('Sender email is required', 400);
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            return $this->successResponse([
+                'sender_email' => $sender,
+                'date' => $date->format('Y-m-d'),
+                'health_score' => $this->pmtaMonitoringService->calculateSenderHealthScore($sender, $date),
+            ], 'Sender health retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get sender health: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get health + trend for ALL senders at once (for auto-loaded charts).
+     */
+    public function getAllSendersHealth(Request $request): JsonResponse
+    {
+        try {
+            $date = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::now();
+            $days = min(max((int)$request->input('days', 7), 1), 90);
+
+            $senders = \App\Models\Sender::with('smtpConfig')->get();
+            $results = [];
+
+            foreach ($senders as $sender) {
+                $health = $this->pmtaMonitoringService->calculateSenderHealthScore($sender->email, $date);
+                $trend = $this->pmtaMonitoringService->getSenderTrendAnalysis($sender->email, $days);
+
+                $results[] = [
+                    'id' => $sender->id,
+                    'email' => $sender->email,
+                    'name' => $sender->name,
+                    'smtp_config' => $sender->smtpConfig ? "{$sender->smtpConfig->host}:{$sender->smtpConfig->port}" : 'N/A',
+                    'banned' => $sender->banned_at !== null,
+                    'health_score' => $health['health_score'] ?? 0,
+                    'total_sent' => $health['total_sent'] ?? 0,
+                    'delivered' => $health['delivered'] ?? 0,
+                    'bounced' => $health['bounced'] ?? 0,
+                    'deferred' => $health['deferred'] ?? 0,
+                    'complaints' => $health['complaints'] ?? 0,
+                    'delivery_rate' => $health['delivery_rate'] ?? 0,
+                    'bounce_rate' => $health['bounce_rate'] ?? 0,
+                    'complaint_rate' => $health['complaint_rate'] ?? 0,
+                    'trend' => $trend['trend'] ?? 'no_data',
+                    'trend_direction' => $trend['trend'] ?? 'no_data',
+                    'daily_stats' => $trend['daily_stats'] ?? [],
+                    'averages' => $trend['averages'] ?? [],
+                    'recommendations' => $trend['recommendations'] ?? [],
+                ];
+            }
+
+            return $this->successResponse([
+                'senders' => $results,
+                'date' => $date->format('Y-m-d'),
+                'days' => $days,
+            ], 'All senders health retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get senders health: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getSenderTrend(Request $request): JsonResponse
+    {
+        try {
+            $sender = $request->input('sender');
+            if (!$sender) return $this->errorResponse('Sender email is required', 400);
+            $days = min(max((int)$request->input('days', 7), 1), 90);
+            return $this->successResponse($this->pmtaMonitoringService->getSenderTrendAnalysis($sender, $days), 'Sender trend retrieved');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to get sender trend: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function triggerScan(): JsonResponse
+    {
+        try {
+            return $this->successResponse($this->pmtaMonitoringService->triggerScan(), 'PMTA scan triggered');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to trigger scan: ' . $e->getMessage(), 500);
+        }
+    }
+
+    // ==================== CLOUDFLARE DNS AUTOMATION ====================
+
+    public function verifyCloudflareZone(): JsonResponse
+    {
+        try {
+            return $this->successResponse($this->cloudflareDnsService->verifyZone(), 'Cloudflare zone verified');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to verify zone: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function setupSenderDns(Request $request): JsonResponse
+    {
+        try {
+            $senderId = $request->input('sender_id');
+            $sender = \App\Models\Sender::findOrFail($senderId);
+            if ($sender->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+                return $this->errorResponse('Access denied', 403);
+            }
+            $result = $this->cloudflareDnsService->setupSenderDns($sender);
+            return $this->successResponse($result, $result['success'] ? 'DNS records created successfully' : 'DNS setup completed with errors');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to setup DNS: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function checkSenderDns(Request $request): JsonResponse
+    {
+        try {
+            $senderId = $request->input('sender_id');
+            $sender = \App\Models\Sender::findOrFail($senderId);
+            if ($sender->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+                return $this->errorResponse('Access denied', 403);
+            }
+            $result = $this->cloudflareDnsService->checkSenderDns($sender);
+            if ($result['success'] && $result['all_configured']) {
+                $sender->dns_verified_at = now();
+                $sender->save();
+            }
+            return $this->successResponse($result, 'DNS status checked');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to check DNS: ' . $e->getMessage(), 500);
+        }
+    }
 }

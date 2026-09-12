@@ -78,25 +78,23 @@ class TrainingCheckMiddleware
                 }
                 
             } elseif ($trainingMode === 'automatic') {
-                // Run automatic training for user's domains if needed
-                // Note: This is a simplified check - in production you might want more sophisticated timing
-                $userDomains = $user->domains()->get();
-                
-                foreach ($userDomains as $domain) {
-                    // Check if domain training is due (you can customize this logic)
-                    $lastTraining = $domain->trainingConfigs()
-                        ->where('user_id', $user->id)
+                // Run automatic training for user's senders if needed
+                $userSenders = $user->senders()->where('is_active', true)->get();
+
+                foreach ($userSenders as $sender) {
+                    // Check if sender training is due
+                    $lastTraining = \App\Models\TrainingConfig::where('user_id', $user->id)
+                        ->where('sender_id', $sender->id)
                         ->latest('last_analysis')
                         ->first();
-                        
+
                     if (!$lastTraining || $lastTraining->last_analysis < now()->subHours(24)) {
-                        Log::info('Training middleware: Running automatic training for domain', [
+                        Log::info('Training middleware: Running automatic training for sender', [
                             'user_id' => $user->id,
-                            'domain_id' => $domain->id
+                            'sender_id' => $sender->id
                         ]);
-                        
-                        // Run automatic training for this specific domain
-                        $this->unifiedTrainingService->runTraining(null, $domain->id);
+
+                        $this->unifiedTrainingService->runTraining($user);
                     }
                 }
             }

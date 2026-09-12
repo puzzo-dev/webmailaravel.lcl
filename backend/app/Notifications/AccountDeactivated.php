@@ -17,7 +17,7 @@ class AccountDeactivated extends Notification implements ShouldQueue
     /**
      * Create a new notification instance.
      */
-    public function __construct(string $reason = null, $reactivationDate = null)
+    public function __construct(?string $reason = null, $reactivationDate = null)
     {
         $this->reason = $reason;
         $this->reactivationDate = $reactivationDate;
@@ -28,8 +28,24 @@ class AccountDeactivated extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return [\App\Channels\TelegramChannel::class];
     }
+
+    public function toTelegram(object $notifiable): array
+    {
+        $reason = $this->reason ?? 'No reason provided';
+        $reactivation = $this->reactivationDate ? $this->reactivationDate->format('Y-m-d') : 'Not specified';
+
+        return [
+            'text' => "⚠️ <b>Account Deactivated</b>\n\n" .
+                     "Reason: {$reason}\n" .
+                     "Reactivation Date: <b>{$reactivation}</b>\n\n" .
+                     "Contact support if you believe this is an error.",
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => true,
+        ];
+    }
+
 
     /**
      * Get the mail representation of the notification.

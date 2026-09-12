@@ -126,7 +126,7 @@ trait BillingTrait
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'status' => 'pending',
-                'expiry' => now()->addDays($plan->duration_days ?? 30),
+                'ends_at' => now()->addDays($plan->duration_days ?? 30),
             ]);
 
             // Create BTCPay invoice directly
@@ -230,10 +230,10 @@ trait BillingTrait
                 'payment_reference' => $paymentDetails['payment_reference'],
                 'payment_amount' => $paymentDetails['amount_paid'],
                 'payment_currency' => $paymentDetails['currency'] ?? 'USD',
-                'paid_at' => now(),
-                'expiry' => now()->addDays($plan->duration_days ?? 30),
-                'notes' => $paymentDetails['notes'] ?? null,
-                'processed_by' => auth()->id() ?? null
+                'payment_date' => now(),
+                'ends_at' => now()->addDays($plan->duration_days ?? 30),
+                'manual_payment_notes' => $paymentDetails['manual_payment_notes'] ?? null,
+                'admin_user_id' => auth()->id() ?? null
             ]);
 
             // Update user billing status
@@ -254,7 +254,7 @@ trait BillingTrait
                 'subscription_id' => $subscription->id,
                 'payment_method' => $paymentDetails['payment_method'],
                 'amount_paid' => $paymentDetails['amount_paid'],
-                'processed_by' => auth()->id()
+                'admin_user_id' => auth()->id()
             ]);
 
             $result = [
@@ -283,7 +283,7 @@ trait BillingTrait
     /**
      * Process manual payment for existing subscription
      */
-    protected function processManualPayment(Subscription $subscription, array $paymentDetails): array
+    protected function processSubscriptionManualPayment(Subscription $subscription, array $paymentDetails): array
     {
         $this->logMethodEntry(__METHOD__, [
             'subscription_id' => $subscription->id,
@@ -314,10 +314,10 @@ trait BillingTrait
                 'payment_reference' => $paymentDetails['payment_reference'],
                 'payment_amount' => $paymentDetails['amount_paid'],
                 'payment_currency' => $paymentDetails['currency'] ?? 'USD',
-                'paid_at' => now(),
-                'expiry' => now()->addDays($subscription->plan->duration_days ?? 30),
-                'notes' => $paymentDetails['notes'] ?? null,
-                'processed_by' => auth()->id() ?? null
+                'payment_date' => now(),
+                'ends_at' => now()->addDays($subscription->plan->duration_days ?? 30),
+                'manual_payment_notes' => $paymentDetails['manual_payment_notes'] ?? null,
+                'admin_user_id' => auth()->id() ?? null
             ]);
 
             // Update user billing status
@@ -336,7 +336,7 @@ trait BillingTrait
                 'subscription_id' => $subscription->id,
                 'payment_method' => $paymentDetails['payment_method'],
                 'amount_paid' => $paymentDetails['amount_paid'],
-                'processed_by' => auth()->id()
+                'admin_user_id' => auth()->id()
             ]);
 
             $result = [
@@ -443,14 +443,14 @@ trait BillingTrait
             return [
                 'has_active_subscription' => false,
                 'limits' => [
-                    'max_domains' => 1,
-                    'max_senders_per_domain' => 2,
+                    'max_senders' => 2,
+                    
                     'max_total_campaigns' => 10,
                     'max_live_campaigns' => 1,
                     'daily_sending_limit' => 1000,
                 ],
                 'usage' => [
-                    'domains_count' => 0,
+                    'senders_count' => 0,
                     'campaigns_count' => 0,
                     'live_campaigns_count' => 0,
                     'emails_sent_today' => 0,
@@ -465,17 +465,16 @@ trait BillingTrait
             'has_active_subscription' => true,
             'subscription_id' => $subscription->id,
             'plan_name' => $subscription->plan->name,
-            'expiry' => $subscription->expiry,
+            'ends_at' => $subscription->ends_at,
             'limits' => [
-                'max_domains' => $subscription->plan->max_domains ?? 20,
-                'max_senders_per_domain' => $subscription->plan->max_senders_per_domain ?? 5,
+                'max_senders' => $subscription->plan->max_senders ?? 20,
                 'max_total_campaigns' => $subscription->plan->max_total_campaigns ?? 100,
                 'max_live_campaigns' => $subscription->plan->max_live_campaigns ?? 10,
                 'daily_sending_limit' => $subscription->plan->daily_sending_limit ?? 10000,
             ],
             'usage' => $usage,
             'percentage_used' => [
-                'domains' => $this->calculatePercentage($usage['domains_count'], $subscription->plan->max_domains),
+                'senders' => $this->calculatePercentage($usage['senders_count'], $subscription->plan->max_senders),
                 'campaigns' => $this->calculatePercentage($usage['campaigns_count'], $subscription->plan->max_total_campaigns),
                 'live_campaigns' => $this->calculatePercentage($usage['live_campaigns_count'], $subscription->plan->max_live_campaigns),
                 'daily_sending' => $this->calculatePercentage($usage['emails_sent_today'], $subscription->plan->daily_sending_limit),
@@ -489,8 +488,8 @@ trait BillingTrait
     protected function getUserUsage(User $user): array
     {
         try {
-            // Get domains count
-            $domainsCount = DB::table('domains')->where('user_id', $user->id)->count();
+            // Get senders count
+            $sendersCount = DB::table('senders')->where('user_id', $user->id)->count();
 
             // Get campaigns count
             $campaignsCount = DB::table('campaigns')->where('user_id', $user->id)->count();
@@ -509,7 +508,7 @@ trait BillingTrait
                 ->count();
 
             return [
-                'domains_count' => $domainsCount,
+                'senders_count' => $sendersCount,
                 'campaigns_count' => $campaignsCount,
                 'live_campaigns_count' => $liveCampaignsCount,
                 'emails_sent_today' => $emailsSentToday,
@@ -522,7 +521,7 @@ trait BillingTrait
             ]);
 
             return [
-                'domains_count' => 0,
+                'senders_count' => 0,
                 'campaigns_count' => 0,
                 'live_campaigns_count' => 0,
                 'emails_sent_today' => 0,
@@ -557,13 +556,13 @@ trait BillingTrait
         }
 
         switch ($action) {
-            case 'create_domain':
-                $allowed = $limits['usage']['domains_count'] < $limits['limits']['max_domains'];
+            case 'create_sender':
+                $allowed = $limits['usage']['senders_count'] < $limits['limits']['max_senders'];
                 return [
                     'allowed' => $allowed,
-                    'reason' => $allowed ? null : 'Domain limit reached',
-                    'current' => $limits['usage']['domains_count'],
-                    'limit' => $limits['limits']['max_domains']
+                    'reason' => $allowed ? null : 'Sender limit reached',
+                    'current' => $limits['usage']['senders_count'],
+                    'limit' => $limits['limits']['max_senders']
                 ];
 
             case 'create_campaign':
@@ -627,8 +626,8 @@ trait BillingTrait
                     'payment_reference' => $subscription->payment_reference,
                     'date' => $subscription->created_at,
                     'created_at' => $subscription->created_at,
-                    'paid_at' => $subscription->paid_at,
-                    'expiry' => $subscription->expiry
+                    'payment_date' => $subscription->payment_date,
+                    'ends_at' => $subscription->ends_at
                 ];
             }
 
@@ -903,8 +902,8 @@ trait BillingTrait
                 if ($confirmationCount >= $requiredConfirmations) {
                     $subscription->update([
                         'status' => 'active',
-                        'paid_at' => now(),
-                        'expiry' => now()->addDays($subscription->plan->duration_days ?? 30)
+                        'payment_date' => now(),
+                        'ends_at' => now()->addDays($subscription->plan->duration_days ?? 30)
                     ]);
                     
                     // Update user billing status
@@ -969,8 +968,8 @@ trait BillingTrait
                 case 'complete':
                     $subscription->update([
                         'status' => 'active',
-                        'paid_at' => now(),
-                        'expiry' => now()->addDays($subscription->plan->duration_days ?? 30)
+                        'payment_date' => now(),
+                        'ends_at' => now()->addDays($subscription->plan->duration_days ?? 30)
                     ]);
                     
                     $subscription->user->update([
@@ -1146,7 +1145,7 @@ trait BillingTrait
             // Update subscription status to cancelled
             $subscription->update([
                 'status' => 'cancelled',
-                'notes' => 'Cancelled by user'
+                'manual_payment_notes' => 'Cancelled by user'
             ]);
 
             // Update user billing status if this was their active subscription

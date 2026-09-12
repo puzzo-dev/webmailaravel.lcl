@@ -23,8 +23,29 @@ class SubscriptionExpiryReminder extends Notification implements ShouldQueue
 
     public function via($notifiable)
     {
-        return ['mail'];
+        return [\App\Channels\TelegramChannel::class];
     }
+    public function toTelegram($notifiable): array
+    {
+        $planName = $this->subscription->plan->name ?? 'Current';
+        $expiry = $this->subscription->ends_at ? $this->subscription->ends_at->format('Y-m-d') : 'N/A';
+        $reminderText = match($this->reminderType) {
+            '7_days' => 'expires in 7 days',
+            '3_days' => 'expires in 3 days',
+            '1_day' => 'expires tomorrow',
+            'expired' => 'has expired',
+            default => 'is expiring soon'
+        };
+        return [
+            'text' => "⏰ <b>Subscription Reminder</b>\n\n" .
+                     "Your <b>{$planName}</b> subscription {$reminderText}.\n" .
+                     "Expiry: <b>{$expiry}</b>\n\n" .
+                     "Renew: " . url('/billing'),
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => true,
+        ];
+    }
+
 
     public function toMail($notifiable)
     {
@@ -36,7 +57,7 @@ class SubscriptionExpiryReminder extends Notification implements ShouldQueue
             ->subject("Subscription Renewal Reminder - {$planName}")
             ->greeting("Hi {$notifiable->name},")
             ->line($urgencyText)
-            ->line("Your **{$planName}** subscription will expire on **{$this->subscription->expiry->format('F j, Y')}**.")
+            ->line("Your **{$planName}** subscription will expire on **{$this->subscription->ends_at->format('F j, Y')}**.")
             ->line("To continue enjoying uninterrupted access to all features, please renew your subscription before it expires.")
             ->action('Renew Subscription', url('/billing'))
             ->line('If you have any questions or need assistance, please don\'t hesitate to contact our support team.')
@@ -46,7 +67,7 @@ class SubscriptionExpiryReminder extends Notification implements ShouldQueue
 
     private function getDaysUntilExpiry(): int
     {
-        return now()->diffInDays($this->subscription->expiry, false);
+        return now()->diffInDays($this->subscription->ends_at, false);
     }
 
     private function getUrgencyText(): string
@@ -77,7 +98,7 @@ class SubscriptionExpiryReminder extends Notification implements ShouldQueue
             'type' => 'subscription_expiry_reminder',
             'subscription_id' => $this->subscription->id,
             'reminder_type' => $this->reminderType,
-            'expires_at' => $this->subscription->expiry,
+            'expires_at' => $this->subscription->ends_at,
             'plan_name' => $this->subscription->plan->name ?? $this->subscription->plan_name,
             'days_until_expiry' => $days,
             'urgency_level' => $urgencyLevel,

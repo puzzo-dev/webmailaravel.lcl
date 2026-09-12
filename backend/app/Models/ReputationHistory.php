@@ -11,7 +11,7 @@ class ReputationHistory extends Model
     use HasFactory;
 
     protected $fillable = [
-        'domain_id',
+        'sender_id',
         'date',
         'reputation_score',
         'risk_level',
@@ -35,63 +35,40 @@ class ReputationHistory extends Model
         'diagnostic_data' => 'array'
     ];
 
-    /**
-     * Get the domain that owns the reputation history.
-     */
-    public function domain(): BelongsTo
+    public function sender(): BelongsTo
     {
-        return $this->belongsTo(Domain::class);
+        return $this->belongsTo(Sender::class);
     }
 
-    /**
-     * Scope to filter by date range
-     */
     public function scopeDateRange($query, $startDate, $endDate)
     {
         return $query->whereBetween('date', [$startDate, $endDate]);
     }
 
-    /**
-     * Scope to filter by risk level
-     */
     public function scopeRiskLevel($query, $riskLevel)
     {
         return $query->where('risk_level', $riskLevel);
     }
 
-    /**
-     * Scope to filter by minimum reputation score
-     */
     public function scopeMinReputationScore($query, $score)
     {
         return $query->where('reputation_score', '>=', $score);
     }
 
-    /**
-     * Get the average reputation score for a domain over a date range
-     */
-    public static function getAverageReputationScore($domainId, $startDate, $endDate)
+    public static function getAverageReputationScore($senderId, $startDate, $endDate)
     {
-        return self::where('domain_id', $domainId)
+        return self::where('sender_id', $senderId)
             ->dateRange($startDate, $endDate)
             ->avg('reputation_score');
     }
 
-    /**
-     * Get reputation trends for a domain
-     */
-    public static function getReputationTrends($domainId, $days = 30)
+    public static function getReputationTrends($senderId, $days = 30)
     {
         $startDate = now()->subDays($days);
-        
-        return self::where('domain_id', $domainId)
+
+        return self::where('sender_id', $senderId)
             ->where('date', '>=', $startDate)
             ->orderBy('date')
             ->get(['date', 'reputation_score', 'risk_level', 'bounce_rate', 'complaint_rate']);
     }
-} 
- 
- 
- 
- 
- 
+}

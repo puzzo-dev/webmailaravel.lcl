@@ -8,7 +8,6 @@ use App\Models\Session;
 use App\Models\SystemConfig;
 use App\Models\TrainingConfig;
 use App\Models\Campaign;
-use App\Models\Domain;
 use App\Models\Sender;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
@@ -17,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use App\Traits\FileProcessingTrait;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
@@ -40,13 +40,9 @@ class AdminService
             ],
             'campaigns' => [
                 'total' => Campaign::count(),
-                'active' => Campaign::where('status', 'RUNNING')->count(),
-                'completed' => Campaign::where('status', 'COMPLETED')->count(),
-                'draft' => Campaign::where('status', 'DRAFT')->count()
-            ],
-            'domains' => [
-                'total' => Domain::count(),
-                'active' => Domain::where('is_active', true)->count()
+                'active' => Campaign::where('status', 'running')->count(),
+                'completed' => Campaign::where('status', 'completed')->count(),
+                'draft' => Campaign::where('status', 'draft')->count()
             ],
             'senders' => [
                 'total' => Sender::count(),
@@ -326,7 +322,7 @@ class AdminService
     /**
      * Update system configuration
      */
-    public function updateSystemConfig(string $key, string $value, string $description = null): array
+    public function updateSystemConfig(string $key, string $value, ?string $description = null): array
     {
         try {
             SystemConfig::setValue($key, $value, $description);
@@ -501,6 +497,223 @@ class AdminService
             
             // Don't throw exception, just log the error
             // The user creation should still succeed even if permissions fail
+        }
+    }
+
+    /**
+     * Get comprehensive system status.
+     */
+    public function getSystemStatus(): array
+    {
+        return [
+            'database' => $this->checkDatabaseStatus(),
+            'cache' => $this->checkCacheStatus(),
+            'queue' => $this->checkQueueStatus(),
+            'storage' => $this->checkStorageStatus(),
+            'backup' => $this->getBackupStatus(),
+            'memory' => $this->getMemoryUsage(),
+            'disk' => $this->getDiskUsage(),
+            'system' => $this->getSystemInfo(),
+            'uptime' => $this->getServerUptime(),
+            'cpu' => $this->getCpuUsage(),
+        ];
+    }
+
+    private function checkDatabaseStatus(): array
+    {
+        try {
+            DB::connection()->getPdo();
+            return ['status' => 'connected', 'message' => 'Database connection successful'];
+        } catch (\Exception $e) {
+            return ['status' => 'error', 'message' => 'Database connection failed'];
+        }
+    }
+
+    private function checkCacheStatus(): array
+    {
+        try {
+            Cache::store()->has('test');
+            return ['status' => 'connected', 'message' => 'Cache connection successful'];
+        } catch (\Exception $e) {
+            return ['status' => 'error', 'message' => 'Cache connection failed'];
+        }
+    }
+
+    private function checkQueueStatus(): array
+    {
+        try {
+            $failedJobs = DB::table('failed_jobs')->count();
+            $pendingJobs = DB::table('jobs')->count();
+            $recentlyProcessed = DB::table('jobs')
+                ->where('created_at', '>=', now()->subMinutes(5))
+                ->count();
+
+            $status = 'healthy';
+            $message = 'Queue workers are running normally';
+
+            if ($failedJobs > 50) {
+                $status = 'warning';
+                $message = "High number of failed jobs: {$failedJobs}";
+            }
+
+            if ($pendingJobs > 1000) {
+                $status = 'warning';
+                $message = "High queue backlog: {$pendingJobs} pending jobs";
+            }
+
+            if ($pendingJobs > 0 && $recentlyProcessed === 0) {
+                $status = 'error';
+                $message = 'Queue workers appear to be stuck or not running';
+            }
+
+            return [
+                'status' => $status,
+                'message' => $message,
+                'details' => [
+                    'failed_jobs' => $failedJobs,
+                    'pending_jobs' => $pendingJobs,
+                    'recently_processed' => $recentlyProcessed,
+                    'last_check' => now()->toISOString(),
+                ],
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Failed to check queue status',
+                'details' => [],
+            ];
+        }
+    }
+
+    private function checkStorageStatus(): array
+    {
+        $disk = storage_path();
+        $freeSpace = disk_free_space($disk);
+        $totalSpace = disk_total_space($disk);
+        $usedSpace = $totalSpace - $freeSpace;
+        $usagePercent = ($usedSpace / $totalSpace) * 100;
+
+        return [
+            'status' => $usagePercent < 90 ? 'ok' : 'warning',
+            'usage_percent' => round($usagePercent, 2),
+            'free_space' => $this->formatBytes($freeSpace),
+            'total_space' => $this->formatBytes($totalSpace),
+        ];
+    }
+
+    private function getBackupStatus(): array
+    {
+        try {
+            $latestBackup = \App\Models\Backup::where('status', 'completed')
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            return [
+                'status' => $latestBackup ? 'ok' : 'warning',
+                'last_backup' => $latestBackup ? $latestBackup->created_at : null,
+                'last_backup_size' => $latestBackup ? $latestBackup->human_size : null,
+                'message' => $latestBackup
+                    ? 'Backups are available'
+                    : 'No backups found - consider creating a backup',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Failed to check backup status',
+                'last_backup' => null,
+                'last_backup_size' => null,
+            ];
+        }
+    }
+
+    private function getSystemInfo(): array
+    {
+        return [
+            'version' => config('app.version', '1.0.0'),
+            'environment' => config('app.env'),
+            'debug' => config('app.debug'),
+            'timezone' => config('app.timezone'),
+            'php_version' => phpversion(),
+            'laravel_version' => app()->version(),
+        ];
+    }
+
+    private function getServerUptime(): string
+    {
+        try {
+            if (function_exists('sys_getloadavg') && file_exists('/proc/uptime')) {
+                $uptime = file_get_contents('/proc/uptime');
+                $uptimeSeconds = (float) explode(' ', $uptime)[0];
+                return $this->formatUptime($uptimeSeconds);
+            }
+
+            $startTime = $_SERVER['REQUEST_TIME'] ?? time();
+            $uptimeSeconds = time() - $startTime;
+            return $this->formatUptime($uptimeSeconds);
+        } catch (\Exception $e) {
+            return 'Unknown';
+        }
+    }
+
+    private function formatUptime($seconds): string
+    {
+        $days = floor($seconds / 86400);
+        $hours = floor(($seconds % 86400) / 3600);
+        $minutes = floor(($seconds % 3600) / 60);
+
+        if ($days > 0) {
+            return sprintf('%d days, %d hours', $days, $hours);
+        } elseif ($hours > 0) {
+            return sprintf('%d hours, %d minutes', $hours, $minutes);
+        } else {
+            return sprintf('%d minutes', $minutes);
+        }
+    }
+
+    private function getCpuUsage(): array
+    {
+        try {
+            if (file_exists('/proc/loadavg')) {
+                $load = file_get_contents('/proc/loadavg');
+                $loadArray = explode(' ', $load);
+                $cpuLoad = (float) $loadArray[0];
+                $cpuCores = $this->getCpuCores();
+                $cpuUsage = min(100, ($cpuLoad / $cpuCores) * 100);
+
+                return [
+                    'usage_percent' => round($cpuUsage, 2),
+                    'load_average' => $cpuLoad,
+                    'cores' => $cpuCores,
+                ];
+            }
+
+            return [
+                'usage_percent' => 0,
+                'load_average' => 0,
+                'cores' => 1,
+                'message' => 'CPU monitoring not available on this system',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'usage_percent' => 0,
+                'load_average' => 0,
+                'cores' => 1,
+                'message' => 'Error retrieving CPU usage',
+            ];
+        }
+    }
+
+    private function getCpuCores(): int
+    {
+        try {
+            if (file_exists('/proc/cpuinfo')) {
+                $cpuinfo = file_get_contents('/proc/cpuinfo');
+                $cores = substr_count($cpuinfo, 'processor');
+                return max(1, $cores);
+            }
+            return 1;
+        } catch (\Exception $e) {
+            return 1;
         }
     }
 } 

@@ -18,8 +18,7 @@ return new class extends Migration
             $table->decimal('price', 10, 2);
             $table->string('currency', 3)->default('USD');
             $table->integer('duration_days');
-            $table->integer('max_domains')->default(1);
-            $table->integer('max_senders_per_domain')->default(2);
+            $table->integer('max_senders')->default(5);
             $table->integer('max_total_campaigns')->default(10);
             $table->integer('max_live_campaigns')->default(1);
             $table->integer('daily_sending_limit')->default(1000);

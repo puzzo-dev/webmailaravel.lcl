@@ -15,8 +15,10 @@ class EmailTracking extends Model
 
     protected $fillable = [
         'campaign_id',
+        'sender_id',
         'recipient_email',
         'email_id',
+        'unsubscribe_token',
         'sent_at',
         'opened_at',
         'clicked_at',
@@ -75,6 +77,11 @@ class EmailTracking extends Model
         return $this->belongsTo(Campaign::class);
     }
 
+    public function sender(): BelongsTo
+    {
+        return $this->belongsTo(Sender::class);
+    }
+
     public function clicks(): HasMany
     {
         return $this->hasMany(ClickTracking::class);
@@ -83,7 +90,7 @@ class EmailTracking extends Model
     /**
      * Mark email as opened
      */
-    public function markAsOpened(string $ipAddress = null, string $userAgent = null): void
+    public function markAsOpened(?string $ipAddress = null, ?string $userAgent = null): void
     {
         if (!$this->opened_at) {
             $this->update([
@@ -101,7 +108,7 @@ class EmailTracking extends Model
     /**
      * Mark email as clicked
      */
-    public function markAsClicked(string $ipAddress = null, string $userAgent = null): void
+    public function markAsClicked(?string $ipAddress = null, ?string $userAgent = null): void
     {
         if (!$this->clicked_at) {
             $this->update([

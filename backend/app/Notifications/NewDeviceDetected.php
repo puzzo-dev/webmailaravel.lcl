@@ -29,7 +29,7 @@ class NewDeviceDetected extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail', 'database', 'broadcast', \App\Channels\TelegramChannel::class];
+        return [\App\Channels\TelegramChannel::class];
     }
 
     /**

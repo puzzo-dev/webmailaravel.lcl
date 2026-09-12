@@ -17,19 +17,28 @@ class CheckActiveSubscription
     public function handle(Request $request, Closure $next): Response
     {
         $user = Auth::guard('api')->user();
-        
+
         if (!$user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
-        
+
         // Admin users bypass subscription checks
         if ($user->hasRole('admin')) {
             return $next($request);
         }
-        
+
+        // Banned users can login but cannot use sending features
+        if ($user->isBanned()) {
+            return response()->json([
+                'message' => 'Your account has been banned. You can still login but cannot send email. Contact support for assistance.',
+                'error' => 'user_banned',
+                'ban_reason' => $user->ban_reason,
+            ], 403);
+        }
+
         // Check if user has an active subscription
         $activeSubscription = $user->activeSubscription;
-        
+
         if (!$activeSubscription || !$activeSubscription->isActive()) {
             return response()->json([
                 'message' => 'Active subscription required for this feature',
@@ -37,7 +46,7 @@ class CheckActiveSubscription
                 'subscription_status' => $activeSubscription ? $activeSubscription->status : 'none'
             ], 403);
         }
-        
+
         return $next($request);
     }
 } 

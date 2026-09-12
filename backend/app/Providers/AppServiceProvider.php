@@ -19,6 +19,10 @@ use App\Services\AdminService;
 use App\Services\UnifiedTrainingService;
 use App\Services\UnifiedEmailSendingService;
 use App\Services\SuppressionListService;
+use App\Services\LogService;
+use App\Services\UserService;
+use App\Services\SenderService;
+use App\Services\BillingService;
 use App\Traits\CacheManagementTrait;
 use App\Traits\LoggingTrait;
 use App\Traits\ValidationTrait;
@@ -49,6 +53,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(UnifiedTrainingService::class);
         $this->app->singleton(UnifiedEmailSendingService::class);
         $this->app->singleton(SuppressionListService::class);
+        $this->app->singleton(LogService::class);
+        $this->app->singleton(UserService::class);
+        $this->app->singleton(SenderService::class);
+        $this->app->singleton(BillingService::class);
 
         // Register CampaignService (no dependencies needed, uses traits)
         $this->app->singleton(CampaignService::class);

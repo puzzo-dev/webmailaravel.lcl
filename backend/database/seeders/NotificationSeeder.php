@@ -27,10 +27,10 @@ class NotificationSeeder extends Seeder
                 ],
             ],
             [
-                'type' => 'App\Notifications\DomainReputationAlert',
+                'type' => 'App\Notifications\TrainingAnalysisCompleted',
                 'data' => [
-                    'title' => 'Domain Reputation Alert',
-                    'message' => 'Domain "example.com" reputation dropped to 85%. Consider reviewing your sending practices.',
+                    'title' => 'Training Analysis Completed',
+                    'message' => 'Training analysis completed. Review the results to optimize your email delivery performance.',
                     'type' => 'warning',
                     'domain' => 'example.com',
                     'reputation' => 85,

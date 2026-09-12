@@ -17,6 +17,24 @@ use Illuminate\Http\Request;
 class AuthService
 {
     use CloudflareIPTrait;
+
+    /**
+     * Build request context (IP, device, browser, OS) for notifications.
+     */
+    private function buildRequestContext(Request $request): array
+    {
+        $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
+        $realIP = $this->getRealClientIP($request);
+
+        return [
+            'ip' => $realIP,
+            'device' => $deviceInfo['combined'],
+            'browser' => $deviceInfo['browser'],
+            'os' => $deviceInfo['os'],
+            'time' => now()->format('Y-m-d H:i:s'),
+        ];
+    }
+
     /**
      * Request password reset
      */
@@ -38,7 +56,6 @@ class AuthService
 
         // Create new password reset token
         $token = Str::random(64);
-        $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
         $realIP = $this->getRealClientIP($request);
         
         $passwordReset = PasswordReset::create([
@@ -50,13 +67,7 @@ class AuthService
         ]);
 
         // Prepare reset data for notification
-        $resetData = [
-            'ip' => $realIP,
-            'device' => $deviceInfo['combined'],
-            'browser' => $deviceInfo['browser'],
-            'os' => $deviceInfo['os'],
-            'time' => now()->format('Y-m-d H:i:s')
-        ];
+        $resetData = $this->buildRequestContext($request);
 
         // Send notification
         $user->notify(new PasswordResetRequested($passwordReset, $resetData));
@@ -105,15 +116,7 @@ class AuthService
         $passwordReset->markAsUsed();
 
         // Prepare reset completion data
-        $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
-        $realIP = $this->getRealClientIP($request);
-        $resetData = [
-            'ip' => $realIP,
-            'device' => $deviceInfo['combined'],
-            'browser' => $deviceInfo['browser'],
-            'os' => $deviceInfo['os'],
-            'time' => now()->format('Y-m-d H:i:s')
-        ];
+        $resetData = $this->buildRequestContext($request);
 
         // Send completion notification
         $user->notify(new PasswordResetCompleted($resetData));
@@ -147,7 +150,6 @@ class AuthService
 
         // Create new verification token
         $token = Str::random(64);
-        $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
         $realIP = $this->getRealClientIP($request);
         
         $verificationToken = EmailVerificationToken::create([
@@ -160,13 +162,7 @@ class AuthService
         ]);
 
         // Prepare verification data for notification
-        $verificationData = [
-            'ip' => $realIP,
-            'device' => $deviceInfo['combined'],
-            'browser' => $deviceInfo['browser'],
-            'os' => $deviceInfo['os'],
-            'time' => now()->format('Y-m-d H:i:s')
-        ];
+        $verificationData = $this->buildRequestContext($request);
 
         // Send notification
         $user->notify(new EmailVerificationRequested($verificationToken, $verificationData));
@@ -222,15 +218,7 @@ class AuthService
         $verificationToken->markAsUsed();
 
         // Prepare verification completion data
-        $deviceInfo = UserAgentParser::parse($request->header('User-Agent'));
-        $realIP = $this->getRealClientIP($request);
-        $verificationData = [
-            'ip' => $realIP,
-            'device' => $deviceInfo['combined'],
-            'browser' => $deviceInfo['browser'],
-            'os' => $deviceInfo['os'],
-            'time' => now()->format('Y-m-d H:i:s')
-        ];
+        $verificationData = $this->buildRequestContext($request);
 
         // Send completion notification
         $user->notify(new EmailVerified($verificationData));

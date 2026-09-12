@@ -43,6 +43,11 @@ class User extends Authenticatable implements JWTSubject
         'training_mode',
         'manual_training_percentage',
         'last_manual_training_at',
+        'email_notifications_enabled',
+        'notification_preferences',
+        'banned_at',
+        'banned_by',
+        'ban_reason',
     ];
 
     /**
@@ -65,12 +70,10 @@ class User extends Authenticatable implements JWTSubject
     // Relationships
     public function campaigns() { return $this->hasMany(Campaign::class); }
     public function senders() { return $this->hasMany(Sender::class); }
-    public function domains() { return $this->hasMany(Domain::class); }
     public function contents() { return $this->hasMany(Content::class); }
     public function devices() { return $this->hasMany(Device::class); }
     public function trustedDevices() { return $this->hasMany(Device::class)->where('trusted', true); }
     public function sessions() { return $this->hasMany(Session::class); }
-    public function logs() { return $this->hasMany(Log::class); }
     public function subscriptions() { return $this->hasMany(Subscription::class); }
     public function activeSubscription() { return $this->hasOne(Subscription::class)->where('status', 'active'); }
     public function trainingConfigs() { return $this->hasMany(TrainingConfig::class); }
@@ -79,7 +82,7 @@ class User extends Authenticatable implements JWTSubject
     public function apiKeys() { return $this->hasMany(ApiKey::class); }
     public function securityLogs() { return $this->hasMany(SecurityLog::class); }
     public function bounceCredentials() { return $this->hasMany(BounceCredential::class); }
-    public function defaultBounceCredential() { return $this->hasOne(BounceCredential::class)->where('is_default', true)->whereNull('domain_id'); }
+    public function defaultBounceCredential() { return $this->hasOne(BounceCredential::class)->where('is_default', true); }
 
     /**
      * Get current plan limits
@@ -89,8 +92,7 @@ class User extends Authenticatable implements JWTSubject
         $subscription = $this->activeSubscription;
         if (!$subscription || !$subscription->plan) {
             return [
-                'max_domains' => 1,
-                'max_senders_per_domain' => 2,
+                'max_senders' => 5,
                 'max_total_campaigns' => 10,
                 'max_live_campaigns' => 1,
                 'daily_sending_limit' => 1000,
@@ -98,8 +100,7 @@ class User extends Authenticatable implements JWTSubject
         }
 
         return [
-            'max_domains' => $subscription->plan->max_domains ?? 20,
-            'max_senders_per_domain' => $subscription->plan->max_senders_per_domain ?? 5,
+            'max_senders' => $subscription->plan->max_senders ?? 20,
             'max_total_campaigns' => $subscription->plan->max_total_campaigns ?? 100,
             'max_live_campaigns' => $subscription->plan->max_live_campaigns ?? 10,
             'daily_sending_limit' => $subscription->plan->daily_sending_limit ?? 10000,
@@ -107,12 +108,12 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Check if user can create more domains
+     * Check if user can create more senders
      */
-    public function canCreateDomain(): bool
+    public function canCreateSender(): bool
     {
         $limits = $this->getPlanLimits();
-        return $this->domains()->count() < $limits['max_domains'];
+        return $this->senders()->count() < $limits['max_senders'];
     }
 
     /**
@@ -134,15 +135,6 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Check if domain can have more senders
-     */
-    public function canAddSenderToDomain(Domain $domain): bool
-    {
-        $limits = $this->getPlanLimits();
-        return $domain->senders()->count() < $limits['max_senders_per_domain'];
-    }
-
-    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
@@ -153,6 +145,8 @@ class User extends Authenticatable implements JWTSubject
         'two_factor_secret',
         'backup_codes',
     ];
+
+    protected $appends = ['banned'];
 
     /**
      * Get the attributes that should be cast.
@@ -165,6 +159,8 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'telegram_verified_at' => 'datetime',
             'telegram_notifications_enabled' => 'boolean',
+            'email_notifications_enabled' => 'boolean',
+            'notification_preferences' => 'array',
             'two_factor_enabled' => 'boolean',
             'two_factor_enabled_at' => 'datetime',
             'backup_codes' => 'array',
@@ -174,6 +170,7 @@ class User extends Authenticatable implements JWTSubject
             'training_enabled' => 'boolean',
             'manual_training_percentage' => 'decimal:2',
             'last_manual_training_at' => 'datetime',
+            'banned_at' => 'datetime',
         ];
     }
 
@@ -223,6 +220,54 @@ class User extends Authenticatable implements JWTSubject
     public function hasActiveBilling(): bool
     {
         return $this->billing_status === 'active';
+    }
+
+    /**
+     * Banned accessor — included in JSON responses.
+     */
+    public function getBannedAttribute(): bool
+    {
+        return $this->banned_at !== null;
+    }
+
+    /**
+     * Relationship: admin who banned this user.
+     */
+    public function bannedBy()
+    {
+        return $this->belongsTo(User::class, 'banned_by');
+    }
+
+    /**
+     * Ban this user.
+     */
+    public function ban(self $bannedBy, ?string $reason = null): void
+    {
+        $this->update([
+            'banned_at' => now(),
+            'banned_by' => $bannedBy->id,
+            'ban_reason' => $reason,
+        ]);
+    }
+
+    /**
+     * Unban this user.
+     */
+    public function unban(): void
+    {
+        $this->update([
+            'banned_at' => null,
+            'banned_by' => null,
+            'ban_reason' => null,
+        ]);
+    }
+
+    /**
+     * Check if user is banned.
+     */
+    public function isBanned(): bool
+    {
+        return $this->banned_at !== null;
     }
 
     /**
@@ -318,6 +363,6 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->campaigns()
             ->whereDate('created_at', today())
-            ->sum('total_recipients') ?: 0;
+            ->sum('recipient_count') ?: 0;
     }
 }

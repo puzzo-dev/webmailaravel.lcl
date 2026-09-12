@@ -17,7 +17,7 @@ trait SuppressionListTrait
     /**
      * Process FBL CSV file and add to suppression list
      */
-    protected function processFBLFile(string $filepath, string $source = 'fbl'): array
+    protected function processFBLFileData(string $filepath, string $source = 'fbl'): array
     {
         $this->logMethodEntry(__METHOD__, ['filepath' => $filepath, 'source' => $source]);
 
@@ -188,7 +188,7 @@ trait SuppressionListTrait
     /**
      * Check if email should be suppressed during campaign sending
      */
-    protected function shouldSuppressEmail(string $email, int $campaignId = null): bool
+    protected function shouldSuppressEmail(string $email, ?int $campaignId = null): bool
     {
         $cacheKey = "suppression_check_" . md5($email);
         
@@ -230,7 +230,7 @@ trait SuppressionListTrait
     /**
      * Export suppression list to file
      */
-    protected function exportSuppressionList(string $filename = null): string
+    protected function exportSuppressionList(?string $filename = null): string
     {
         $filename = $filename ?: 'suppression_list_' . date('Y-m-d_H-i-s') . '.csv';
         $filepath = 'suppression_lists/' . $filename;
@@ -252,7 +252,7 @@ trait SuppressionListTrait
     /**
      * Import suppression list from file
      */
-    protected function importSuppressionList(string $filepath, string $type = 'manual', string $source = null): array
+    protected function importSuppressionList(string $filepath, string $type = 'manual', ?string $source = null): array
     {
         try {
             if (!Storage::disk('local')->exists($filepath)) {

@@ -12,22 +12,37 @@ class Subscription extends Model
     protected $fillable = [
         'user_id',
         'plan_id',
+        'plan_name',
         'status',
-        'expiry',
+        'starts_at',
+        'ends_at',
         'payment_id',
         'payment_method',
         'payment_reference',
         'payment_amount',
         'payment_currency',
-        'paid_at',
-        'notes',
-        'processed_by'
+        'payment_date',
+        'payment_url',
+        'invoice',
+        'cancelled_at',
+        'confirmation_count',
+        'payment_data',
+        'reminder_data',
+        'manual_payment_notes',
+        'admin_user_id',
+        'last_extension_at',
+        'last_extension_by',
     ];
 
     protected $casts = [
-        'expiry' => 'datetime',
-        'paid_at' => 'datetime',
-        'payment_amount' => 'decimal:2'
+        'starts_at' => 'datetime',
+        'ends_at' => 'datetime',
+        'payment_amount' => 'decimal:2',
+        'payment_date' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'last_extension_at' => 'datetime',
+        'payment_data' => 'array',
+        'reminder_data' => 'array',
     ];
 
     // Relationships
@@ -41,9 +56,14 @@ class Subscription extends Model
         return $this->belongsTo(Plan::class);
     }
 
-    public function processedBy()
+    public function adminUser()
     {
-        return $this->belongsTo(User::class, 'processed_by');
+        return $this->belongsTo(User::class, 'admin_user_id');
+    }
+
+    public function lastExtensionByUser()
+    {
+        return $this->belongsTo(User::class, 'last_extension_by');
     }
 
     /**
@@ -51,7 +71,7 @@ class Subscription extends Model
      */
     public function isActive(): bool
     {
-        return $this->status === 'active' && $this->expiry && $this->expiry->isFuture();
+        return $this->status === 'active' && $this->ends_at && $this->ends_at->isFuture();
     }
 
     /**
@@ -59,7 +79,7 @@ class Subscription extends Model
      */
     public function isExpired(): bool
     {
-        return $this->status === 'expired' || ($this->expiry && $this->expiry->isPast());
+        return $this->status === 'expired' || ($this->ends_at && $this->ends_at->isPast());
     }
 
     /**
@@ -92,7 +112,7 @@ class Subscription extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'active')
-                    ->where('expiry', '>', now());
+                    ->where('ends_at', '>', now());
     }
 
     /**

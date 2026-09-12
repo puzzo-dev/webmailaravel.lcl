@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Campaign;
 use App\Models\User;
-use App\Models\Domain;
 use App\Models\Subscription;
 use App\Models\EmailTracking;
 use App\Models\ClickTracking;
@@ -408,7 +407,6 @@ class AnalyticsService
         
         $hourlyStats = $this->getHourlyStats($campaign);
         $dailyStats = $this->getDailyStats($campaign);
-        $domainPerformance = $this->getDomainPerformance($campaign);
         $senderPerformance = $this->getSenderPerformance($campaign);
 
         return [
@@ -544,49 +542,6 @@ class AnalyticsService
     }
 
     /**
-     * Get domain performance
-     */
-    public function getDomainPerformance(Campaign $campaign): array
-    {
-        // Get domain performance stats from email tracking
-        $domains = DB::table('email_tracking')
-            ->join('senders', 'senders.id', '=', 'email_tracking.sender_id')
-            ->join('domains', 'domains.id', '=', 'senders.domain_id')
-            ->where('email_tracking.campaign_id', $campaign->id)
-            ->select(
-                'domains.name as domain_name',
-                'domains.id as domain_id',
-                DB::raw('COUNT(*) as total_sent'),
-                DB::raw('SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) as total_opened'),
-                DB::raw('SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END) as total_clicked'),
-                DB::raw('SUM(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END) as total_bounced'),
-                DB::raw('SUM(CASE WHEN complained_at IS NOT NULL THEN 1 ELSE 0 END) as total_complained')
-            )
-            ->groupBy('domains.id', 'domains.name')
-            ->get()
-            ->map(function ($domain) {
-                $sent = $domain->total_sent;
-                return [
-                    'domain_id' => $domain->domain_id,
-                    'domain_name' => $domain->domain_name,
-                    'sent' => $sent,
-                    'opened' => $domain->total_opened,
-                    'clicked' => $domain->total_clicked,
-                    'bounced' => $domain->total_bounced,
-                    'complained' => $domain->total_complained,
-                    'open_rate' => $sent > 0 ? round(($domain->total_opened / $sent) * 100, 2) : 0,
-                    'click_rate' => $sent > 0 ? round(($domain->total_clicked / $sent) * 100, 2) : 0,
-                    'bounce_rate' => $sent > 0 ? round(($domain->total_bounced / $sent) * 100, 2) : 0,
-                    'complaint_rate' => $sent > 0 ? round(($domain->total_complained / $sent) * 100, 2) : 0,
-                    'reputation_score' => $this->calculateDomainReputation($domain),
-                ];
-            })
-            ->toArray();
-        
-        return $domains;
-    }
-
-    /**
      * Get sender performance
      */
     public function getSenderPerformance(Campaign $campaign): array
@@ -674,24 +629,6 @@ class AnalyticsService
     }
 
     /**
-     * Calculate domain reputation score
-     */
-    private function calculateDomainReputation($domain): int
-    {
-        $bounceRate = $domain->total_sent > 0 ? ($domain->total_bounced / $domain->total_sent) * 100 : 0;
-        $complaintRate = $domain->total_sent > 0 ? ($domain->total_complained / $domain->total_sent) * 100 : 0;
-        $openRate = $domain->total_sent > 0 ? ($domain->total_opened / $domain->total_sent) * 100 : 0;
-        
-        // Calculate reputation score (0-100)
-        $score = 100;
-        $score -= ($bounceRate * 2); // Bounce rate penalty
-        $score -= ($complaintRate * 5); // Complaint rate penalty
-        $score += ($openRate * 0.5); // Open rate bonus
-        
-        return max(0, min(100, round($score)));
-    }
-    
-    /**
      * Calculate sender reputation score
      */
     private function calculateSenderReputation($sender): int
@@ -765,7 +702,7 @@ class AnalyticsService
     /**
      * Get user analytics
      */
-    public function getUserAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    public function getUserAnalytics(?Carbon $endDate = null, ?Carbon $startDate = null): array
     {
         $endDate = $endDate ?? now();
         $startDate = $startDate ?? now()->subMonth();
@@ -798,7 +735,7 @@ class AnalyticsService
     /**
      * Get revenue analytics
      */
-    public function getRevenueAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    public function getRevenueAnalytics(?Carbon $endDate = null, ?Carbon $startDate = null): array
     {
         $endDate = $endDate ?? now();
         $startDate = $startDate ?? now()->subMonth();
@@ -807,11 +744,11 @@ class AnalyticsService
             ->sum('payment_amount');
 
         $monthlyRevenue = Subscription::where('status', 'active')
-            ->whereBetween('paid_at', [$startDate, $endDate])
+            ->whereBetween('payment_date', [$startDate, $endDate])
             ->sum('payment_amount');
 
         $weeklyRevenue = Subscription::where('status', 'active')
-            ->whereBetween('paid_at', [$endDate->copy()->subWeek(), $endDate])
+            ->whereBetween('payment_date', [$endDate->copy()->subWeek(), $endDate])
             ->sum('payment_amount');
 
         $activeSubscriptions = Subscription::where('status', 'active')->count();
@@ -819,7 +756,7 @@ class AnalyticsService
 
         $revenueGrowth = $this->calculateGrowthRate(
             Subscription::where('status', 'active')
-                ->whereBetween('paid_at', [$startDate->copy()->subMonth(), $startDate])
+                ->whereBetween('payment_date', [$startDate->copy()->subMonth(), $startDate])
                 ->sum('payment_amount'),
             $monthlyRevenue
         );
@@ -838,7 +775,7 @@ class AnalyticsService
     /**
      * Get deliverability analytics
      */
-    public function getDeliverabilityAnalytics(Carbon $endDate = null, Carbon $startDate = null): array
+    public function getDeliverabilityAnalytics(?Carbon $endDate = null, ?Carbon $startDate = null): array
     {
         $endDate = $endDate ?? now();
         $startDate = $startDate ?? now()->subWeek();
@@ -870,30 +807,14 @@ class AnalyticsService
      */
     public function getReputationAnalytics(): array
     {
-        $domains = Domain::all();
-        $totalDomains = $domains->count();
-        
-        $lowRiskDomains = $domains->where('risk_level', 'low')->count();
-        $mediumRiskDomains = $domains->where('risk_level', 'medium')->count();
-        $highRiskDomains = $domains->where('risk_level', 'high')->count();
+        $senders = Sender::all();
+        $totalSenders = $senders->count();
 
-        $averageReputationScore = $domains->avg('reputation_score') ?? 0;
-        $averageBounceRate = $domains->avg('bounce_rate') ?? 0;
-        $averageComplaintRate = $domains->avg('complaint_rate') ?? 0;
+        $averageReputationScore = $senders->avg('reputation_score') ?? 0;
 
         return [
-            'total_domains' => $totalDomains,
-            'low_risk' => $lowRiskDomains,
-            'medium_risk' => $mediumRiskDomains,
-            'high_risk' => $highRiskDomains,
+            'total_senders' => $totalSenders,
             'average_reputation_score' => round($averageReputationScore, 2),
-            'average_bounce_rate' => round($averageBounceRate, 2),
-            'average_complaint_rate' => round($averageComplaintRate, 2),
-            'risk_distribution' => [
-                'low' => $totalDomains > 0 ? ($lowRiskDomains / $totalDomains) * 100 : 0,
-                'medium' => $totalDomains > 0 ? ($mediumRiskDomains / $totalDomains) * 100 : 0,
-                'high' => $totalDomains > 0 ? ($highRiskDomains / $totalDomains) * 100 : 0
-            ]
         ];
     }
 
@@ -1149,9 +1070,9 @@ class AnalyticsService
         
         // Calculate performance metrics
         $totalCampaigns = $campaigns->count();
-        $activeCampaigns = $campaigns->where('status', 'RUNNING')->count();
-        $completedCampaigns = $campaigns->where('status', 'COMPLETED')->count();
-        $failedCampaigns = $campaigns->where('status', 'FAILED')->count();
+        $activeCampaigns = $campaigns->where('status', 'running')->count();
+        $completedCampaigns = $campaigns->where('status', 'completed')->count();
+        $failedCampaigns = $campaigns->where('status', 'failed')->count();
         
         $totalEmailsSent = $campaigns->sum('total_sent');
         $totalEmailsDelivered = $campaigns->sum('total_sent') - $campaigns->sum('total_failed');

@@ -46,7 +46,7 @@ class SubscriptionUpdated implements ShouldBroadcast
             'subscription_id' => $this->subscription->id,
             'plan_name' => $this->subscription->plan->name,
             'status' => $this->subscription->status,
-            'expiry' => $this->subscription->expiry,
+            'expiry' => $this->subscription->ends_at,
             'updated_at' => $this->subscription->updated_at,
         ];
     }

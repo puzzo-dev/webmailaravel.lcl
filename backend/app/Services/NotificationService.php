@@ -88,7 +88,7 @@ class NotificationService
     /**
      * Send subscription cancelled notification (convenience method)
      */
-    public function sendSubscriptionCancelledNotification(Subscription $subscription, string $reason = null): void
+    public function sendSubscriptionCancelledNotification(Subscription $subscription, ?string $reason = null): void
     {
         $context = $reason ? ['reason' => $reason] : [];
         $this->sendSubscriptionStatusNotification($subscription, 'active', 'cancelled', $context);
@@ -97,7 +97,7 @@ class NotificationService
     /**
      * Send subscription renewed notification (convenience method)
      */
-    public function sendSubscriptionRenewedNotification(Subscription $subscription, float $paymentAmount = null): void
+    public function sendSubscriptionRenewedNotification(Subscription $subscription, ?float $paymentAmount = null): void
     {
         $context = $paymentAmount ? ['amount' => $paymentAmount] : [];
         $this->sendSubscriptionStatusNotification($subscription, 'expired', 'renewed', $context);
@@ -106,7 +106,7 @@ class NotificationService
     /**
      * Send account deactivated notification
      */
-    public function sendAccountDeactivatedNotification(User $user, string $reason = null, $reactivationDate = null): void
+    public function sendAccountDeactivatedNotification(User $user, ?string $reason = null, $reactivationDate = null): void
     {
         try {
             $user->notify(new AccountDeactivated($reason, $reactivationDate));

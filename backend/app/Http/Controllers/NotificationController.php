@@ -3,108 +3,71 @@
 namespace App\Http\Controllers;
 
 use App\Models\Notification;
+use App\Models\User;
 use Illuminate\Http\Request;
-use App\Traits\ResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class NotificationController extends Controller
 {
-    use ResponseTrait;
+    /**
+     * Transform a notification into a flat array for API responses.
+     */
+    private function transformNotification($notification, bool $includeUser = false): array
+    {
+        $data = [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'title' => $notification->data['title'] ?? 'Notification',
+            'message' => $notification->data['message'] ?? '',
+            'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
+            'read_at' => $notification->read_at,
+            'created_at' => $notification->created_at,
+            'updated_at' => $notification->updated_at,
+        ];
+
+        if ($includeUser) {
+            $data['user_id'] = $notification->notifiable_id;
+            $data['user_email'] = $notification->notifiable->email ?? 'Unknown';
+        }
+
+        // Include optional fields from notification data
+        foreach (['ip_address', 'location', 'device', 'login_time', 'action_url'] as $field) {
+            if (isset($notification->data[$field])) {
+                $data[$field] = $notification->data[$field];
+            }
+        }
+
+        return $data;
+    }
+
     /**
      * Display a listing of notifications
      */
     public function index(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            // Check if user is admin
-            if (Auth::user()->hasRole('admin')) {
-                // Admin sees all notifications
+            $isAdmin = Auth::user()->hasRole('admin');
+            $includeUser = $isAdmin;
+
+            if ($isAdmin) {
                 $notifications = Notification::orderBy('created_at', 'desc')
                     ->paginate($request->get('limit', 20));
-                
-                // Transform notifications to include computed fields
-                $transformedNotifications = $notifications->getCollection()->map(function ($notification) {
-                    $data = [
-                        'id' => $notification->id,
-                        'type' => $notification->type,
-                        'title' => $notification->data['title'] ?? 'Notification',
-                        'message' => $notification->data['message'] ?? '',
-                        'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
-                        'read_at' => $notification->read_at,
-                        'created_at' => $notification->created_at,
-                        'updated_at' => $notification->updated_at,
-                        'user_id' => $notification->notifiable_id,
-                        'user_email' => $notification->notifiable->email ?? 'Unknown',
-                    ];
-                    
-                    // Include additional fields from notification data (for login notifications, etc.)
-                    if (isset($notification->data['ip_address'])) {
-                        $data['ip_address'] = $notification->data['ip_address'];
-                    }
-                    if (isset($notification->data['location'])) {
-                        $data['location'] = $notification->data['location'];
-                    }
-                    if (isset($notification->data['device'])) {
-                        $data['device'] = $notification->data['device'];
-                    }
-                    if (isset($notification->data['login_time'])) {
-                        $data['login_time'] = $notification->data['login_time'];
-                    }
-                    if (isset($notification->data['action_url'])) {
-                        $data['action_url'] = $notification->data['action_url'];
-                    }
-                    
-                    return $data;
-                });
-                
-                $notifications->setCollection($transformedNotifications);
-                
-                return $this->successResponse($notifications, 'All notifications retrieved successfully');
             } else {
-                // Regular users see only their notifications
                 $notifications = Auth::user()->notifications()
                     ->orderBy('created_at', 'desc')
                     ->paginate($request->get('limit', 20));
-                
-                // Transform notifications to include computed fields
-                $transformedNotifications = $notifications->getCollection()->map(function ($notification) {
-                    $data = [
-                        'id' => $notification->id,
-                        'type' => $notification->type,
-                        'title' => $notification->data['title'] ?? 'Notification',
-                        'message' => $notification->data['message'] ?? '',
-                        'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
-                        'read_at' => $notification->read_at,
-                        'created_at' => $notification->created_at,
-                        'updated_at' => $notification->updated_at,
-                    ];
-                    
-                    // Include additional fields from notification data (for login notifications, etc.)
-                    if (isset($notification->data['ip_address'])) {
-                        $data['ip_address'] = $notification->data['ip_address'];
-                    }
-                    if (isset($notification->data['location'])) {
-                        $data['location'] = $notification->data['location'];
-                    }
-                    if (isset($notification->data['device'])) {
-                        $data['device'] = $notification->data['device'];
-                    }
-                    if (isset($notification->data['login_time'])) {
-                        $data['login_time'] = $notification->data['login_time'];
-                    }
-                    if (isset($notification->data['action_url'])) {
-                        $data['action_url'] = $notification->data['action_url'];
-                    }
-                    
-                    return $data;
-                });
-                
-                $notifications->setCollection($transformedNotifications);
-                
-                return $this->successResponse($notifications, 'Notifications retrieved successfully');
             }
+
+            $transformed = $notifications->getCollection()->map(
+                fn ($n) => $this->transformNotification($n, $includeUser)
+            );
+            $notifications->setCollection($transformed);
+
+            return $this->successResponse(
+                $notifications,
+                $isAdmin ? 'All notifications retrieved successfully' : 'Notifications retrieved successfully'
+            );
         }, 'view_notifications');
     }
 
@@ -115,40 +78,15 @@ class NotificationController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($id) {
             $notification = Auth::user()->notifications()->where('id', $id)->first();
-            
+
             if (!$notification) {
                 return $this->errorResponse('Notification not found', 404);
             }
-            
-            $transformedNotification = [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'title' => $notification->data['title'] ?? 'Notification',
-                'message' => $notification->data['message'] ?? '',
-                'notification_type' => $notification->data['notification_type'] ?? $notification->data['type'] ?? 'info',
-                'read_at' => $notification->read_at,
-                'created_at' => $notification->created_at,
-                'updated_at' => $notification->updated_at,
-            ];
-            
-            // Include additional fields from notification data (for login notifications, etc.)
-            if (isset($notification->data['ip_address'])) {
-                $transformedNotification['ip_address'] = $notification->data['ip_address'];
-            }
-            if (isset($notification->data['location'])) {
-                $transformedNotification['location'] = $notification->data['location'];
-            }
-            if (isset($notification->data['device'])) {
-                $transformedNotification['device'] = $notification->data['device'];
-            }
-            if (isset($notification->data['login_time'])) {
-                $transformedNotification['login_time'] = $notification->data['login_time'];
-            }
-            if (isset($notification->data['action_url'])) {
-                $transformedNotification['action_url'] = $notification->data['action_url'];
-            }
-            
-            return $this->successResponse($transformedNotification, 'Notification retrieved successfully');
+
+            return $this->successResponse(
+                $this->transformNotification($notification),
+                'Notification retrieved successfully'
+            );
         }, 'view_notification');
     }
 
@@ -159,25 +97,17 @@ class NotificationController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($id) {
             $notification = Auth::user()->notifications()->where('id', $id)->first();
-            
+
             if (!$notification) {
                 return $this->errorResponse('Notification not found', 404);
             }
-            
+
             $notification->markAsRead();
-            
-            $transformedNotification = [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'title' => $notification->data['title'] ?? 'Notification',
-                'message' => $notification->data['message'] ?? '',
-                'notification_type' => $notification->data['type'] ?? 'info',
-                'read_at' => $notification->read_at,
-                'created_at' => $notification->created_at,
-                'updated_at' => $notification->updated_at,
-            ];
-            
-            return $this->successResponse($transformedNotification, 'Notification marked as read');
+
+            return $this->successResponse(
+                $this->transformNotification($notification),
+                'Notification marked as read'
+            );
         }, 'mark_notification_read');
     }
 
@@ -188,7 +118,7 @@ class NotificationController extends Controller
     {
         return $this->executeWithErrorHandling(function () {
             Auth::user()->unreadNotifications->markAsRead();
-            
+
             return $this->successResponse(null, 'All notifications marked as read');
         }, 'mark_all_notifications_read');
     }
@@ -200,13 +130,13 @@ class NotificationController extends Controller
     {
         return $this->executeWithErrorHandling(function () use ($id) {
             $notification = Auth::user()->notifications()->where('id', $id)->first();
-            
+
             if (!$notification) {
                 return $this->errorResponse('Notification not found', 404);
             }
-            
+
             $notification->delete();
-            
+
             return $this->successResponse(null, 'Notification deleted successfully');
         }, 'delete_notification');
     }
@@ -218,7 +148,7 @@ class NotificationController extends Controller
     {
         return $this->executeWithErrorHandling(function () {
             Auth::user()->notifications()->delete();
-            
+
             return $this->successResponse(null, 'All notifications deleted successfully');
         }, 'delete_all_notifications');
     }
@@ -229,7 +159,6 @@ class NotificationController extends Controller
     public function store(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            // Check if user is admin
             if (!Auth::user()->hasRole('admin')) {
                 return $this->errorResponse('Admin access required', 403);
             }
@@ -246,50 +175,13 @@ class NotificationController extends Controller
                 'channels.*' => 'string|in:email,telegram,database',
             ]);
 
-            // Determine target users
-            $users = collect();
-            
-            if ($request->send_to_all) {
-                $users = \App\Models\User::all();
-            } elseif ($request->user_ids) {
-                $users = \App\Models\User::whereIn('id', $request->user_ids)->get();
-            } elseif ($request->user_id) {
-                $users = \App\Models\User::where('id', $request->user_id)->get();
-            } else {
-                return $this->errorResponse('No target users specified', 400);
-            }
+            $users = $this->resolveNotificationTargets($request);
 
             if ($users->isEmpty()) {
                 return $this->errorResponse('No valid users found', 404);
             }
 
-            $sentCount = 0;
-            $errors = [];
-
-            foreach ($users as $user) {
-                try {
-                    // Send notification using Laravel's notification system
-                    $user->notify(new \App\Notifications\AdminNotification(
-                        $request->title,
-                        $request->message,
-                        $request->type ?? 'info'
-                    ));
-                    $sentCount++;
-                } catch (\Exception $e) {
-                    $errors[] = "Failed to send to {$user->email}: " . $e->getMessage();
-                }
-            }
-
-            $responseMessage = "Notification sent to {$sentCount} user(s)";
-            if (!empty($errors)) {
-                $responseMessage .= ". Errors: " . implode(', ', $errors);
-            }
-
-            return $this->successResponse([
-                'sent_count' => $sentCount,
-                'total_users' => $users->count(),
-                'errors' => $errors
-            ], $responseMessage);
+            return $this->sendNotifications($users, $request->title, $request->message, $request->type ?? 'info');
         }, 'create_notification');
     }
 
@@ -299,7 +191,6 @@ class NotificationController extends Controller
     public function sendBulk(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            // Check if user is admin
             if (!Auth::user()->hasRole('admin')) {
                 return $this->errorResponse('Admin access required', 403);
             }
@@ -314,52 +205,86 @@ class NotificationController extends Controller
                 'type' => 'nullable|string|in:info,warning,error,success',
             ]);
 
-            // Build query based on recipient type
-            $query = \App\Models\User::query();
-            
-            switch ($request->recipient_type) {
-                case 'all':
-                    // No additional filters
-                    break;
-                case 'active':
-                    $query->where('email_verified_at', '!=', null);
-                    break;
-                case 'role':
-                    $query->where('role', $request->role);
-                    break;
-                case 'specific':
-                    $query->whereIn('id', $request->user_ids ?? []);
-                    break;
-            }
-
-            $users = $query->get();
+            $users = $this->resolveBulkTargets($request);
 
             if ($users->isEmpty()) {
                 return $this->errorResponse('No users found matching criteria', 404);
             }
 
-            $sentCount = 0;
-            $errors = [];
-
-            foreach ($users as $user) {
-                try {
-                    $user->notify(new \App\Notifications\AdminNotification(
-                        $request->title,
-                        $request->message,
-                        $request->type ?? 'info'
-                    ));
-                    $sentCount++;
-                } catch (\Exception $e) {
-                    $errors[] = "Failed to send to {$user->email}: " . $e->getMessage();
-                }
-            }
-
-            return $this->successResponse([
-                'sent_count' => $sentCount,
-                'total_users' => $users->count(),
-                'recipient_type' => $request->recipient_type,
-                'errors' => $errors
-            ], "Bulk notification sent to {$sentCount} user(s)");
+            return $this->sendNotifications($users, $request->title, $request->message, $request->type ?? 'info', $request->recipient_type);
         }, 'send_bulk_notification');
     }
-} 
+
+    /**
+     * Resolve target users for single notification store().
+     */
+    private function resolveNotificationTargets(Request $request)
+    {
+        if ($request->boolean('send_to_all')) {
+            return User::all();
+        }
+        if ($request->has('user_ids')) {
+            return User::whereIn('id', $request->user_ids)->get();
+        }
+        if ($request->has('user_id')) {
+            return User::where('id', $request->user_id)->get();
+        }
+        return collect();
+    }
+
+    /**
+     * Resolve target users for bulk send().
+     */
+    private function resolveBulkTargets(Request $request)
+    {
+        $query = User::query();
+
+        switch ($request->recipient_type) {
+            case 'active':
+                $query->whereNotNull('email_verified_at');
+                break;
+            case 'role':
+                $query->where('role', $request->role);
+                break;
+            case 'specific':
+                $query->whereIn('id', $request->user_ids ?? []);
+                break;
+        }
+
+        return $query->get();
+    }
+
+    /**
+     * Send notifications to a collection of users and return a summary response.
+     */
+    private function sendNotifications($users, string $title, string $message, string $type, ?string $recipientType = null): JsonResponse
+    {
+        $sentCount = 0;
+        $errors = [];
+
+        foreach ($users as $user) {
+            try {
+                $user->notify(new \App\Notifications\AdminNotification($title, $message, $type));
+                $sentCount++;
+            } catch (\Exception $e) {
+                $errors[] = "Failed to send to {$user->email}: " . $e->getMessage();
+            }
+        }
+
+        $data = [
+            'sent_count' => $sentCount,
+            'total_users' => $users->count(),
+            'errors' => $errors,
+        ];
+        if ($recipientType) {
+            $data['recipient_type'] = $recipientType;
+        }
+
+        $msg = "Notification sent to {$sentCount} user(s)";
+        if (!empty($errors)) {
+            $msg .= ". Errors: " . implode(', ', $errors);
+        }
+
+        return $this->successResponse($data, $msg);
+    }
+}

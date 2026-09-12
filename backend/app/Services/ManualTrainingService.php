@@ -51,7 +51,7 @@ class ManualTrainingService
                 $newLimit = min($maxLimit, (int) $newLimit);
 
                 $oldLimit = $sender->daily_limit;
-                $newLimit = min(500, $oldLimit + $increase); // Cap at 500 per user/domain
+                $increase = max(0, $newLimit - $oldLimit);
 
                 $sender->update([
                     'daily_limit' => $newLimit,
@@ -61,7 +61,7 @@ class ManualTrainingService
                         'old_limit' => $oldLimit,
                         'new_limit' => $newLimit,
                         'increase' => $increase,
-                        'percentage' => $percentage,
+                        'percentage' => $increasePercentage,
                         'updated_at' => now()->toISOString()
                     ]
                 ]);
@@ -74,7 +74,7 @@ class ManualTrainingService
                     'old_limit' => $oldLimit,
                     'new_limit' => $newLimit,
                     'increase' => $increase,
-                    'percentage' => $percentage
+                    'percentage' => $increasePercentage
                 ]);
 
             } catch (\Exception $e) {
@@ -100,7 +100,7 @@ class ManualTrainingService
             'message' => "Manual training completed successfully",
             'senders_updated' => $sendersUpdated,
             'errors' => $errors,
-            'percentage_applied' => $percentage
+            'percentage_applied' => $increasePercentage
         ];
     }
 

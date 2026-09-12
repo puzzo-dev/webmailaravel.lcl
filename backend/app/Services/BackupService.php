@@ -73,24 +73,36 @@ class BackupService
         $dbConfig = config('database.connections.' . config('database.default'));
         $filename = 'database_' . now()->format('Y-m-d_H-i-s') . '.sql';
         $filePath = "{$backupDir}/{$filename}";
-        
-        // Generate mysqldump command
-        $command = sprintf(
-            'mysqldump --host=%s --user=%s --password=%s %s > %s',
-            $dbConfig['host'],
-            $dbConfig['username'],
-            $dbConfig['password'],
-            $dbConfig['database'],
-            storage_path("app/{$filePath}")
-        );
-        
-        exec($command, $output, $returnCode);
-        
-        if ($returnCode !== 0) {
-            throw new \Exception('Database backup failed');
+
+        // Use a temporary MySQL options file to avoid exposing the password in the process list
+        $tempCredsFile = tempnam(sys_get_temp_dir(), 'mysql_backup_');
+        file_put_contents($tempCredsFile, sprintf(
+            "[client]\nhost=%s\nuser=%s\npassword=%s\n",
+            escapeshellarg($dbConfig['host']),
+            escapeshellarg($dbConfig['username']),
+            $dbConfig['password']
+        ));
+        chmod($tempCredsFile, 0600);
+
+        try {
+            $command = sprintf(
+                'mysqldump --defaults-extra-file=%s %s > %s',
+                escapeshellarg($tempCredsFile),
+                escapeshellarg($dbConfig['database']),
+                escapeshellarg(storage_path("app/{$filePath}"))
+            );
+
+            exec($command, $output, $returnCode);
+
+            if ($returnCode !== 0) {
+                throw new \Exception('Database backup failed');
+            }
+
+            return $filePath;
+        } finally {
+            // Always remove the temporary credentials file
+            @unlink($tempCredsFile);
         }
-        
-        return $filePath;
     }
     
     /**

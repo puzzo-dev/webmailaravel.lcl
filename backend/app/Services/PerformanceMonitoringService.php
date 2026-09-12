@@ -184,7 +184,7 @@ class PerformanceMonitoringService
     /**
      * Monitor billing performance
      */
-    public function monitorBillingPerformance(string $operation, string $paymentMethod = null): array
+    public function monitorBillingPerformance(string $operation, ?string $paymentMethod = null): array
     {
         $timing = $this->startTiming('billing_refined');
         
@@ -229,7 +229,7 @@ class PerformanceMonitoringService
     private function getDatabaseConnectionCount(): int
     {
         try {
-            return count(DB::getConnections());
+            return 1; // Single connection per request in default Laravel setup
         } catch (\Exception $e) {
             return 0;
         }

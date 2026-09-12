@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\Content;
 use App\Models\Sender;
 use App\Models\EmailTracking;
+use App\Models\SystemConfig;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -33,13 +34,6 @@ class CampaignEmail extends Mailable
      */
     public function __construct(Campaign $campaign, Content $content, Sender $sender, string $recipient, array $recipientData = [], array $attachments = [])
     {
-        // Debug attachment data structure
-        \Log::debug('CampaignEmail constructor received attachments', [
-            'attachments_count' => count($attachments),
-            'attachments_structure' => $attachments,
-            'attachment_keys' => !empty($attachments) ? array_keys($attachments[0] ?? []) : [],
-        ]);
-
         $this->campaign = $campaign;
         $this->content = $content;
         $this->sender = $sender;
@@ -55,11 +49,16 @@ class CampaignEmail extends Mailable
                 ->first();
             
             if (!$existingTracking) {
+                $unsubscribeToken = $this->campaign->enable_unsubscribe_link
+                    ? hash('sha256', $recipient . $campaign->id . config('app.key'))
+                    : null;
+
                 $this->emailTracking = EmailTracking::create([
                     'campaign_id' => $campaign->id,
                     'recipient_email' => $recipient,
                     'sender_id' => $sender->id,
                     'email_id' => EmailTracking::generateEmailId(),
+                    'unsubscribe_token' => $unsubscribeToken,
                     // Don't set sent_at yet - will be set after successful sending
                 ]);
             } else {
@@ -88,11 +87,25 @@ class CampaignEmail extends Mailable
      */
     public function headers(): Headers
     {
+        // Project identifier — distinguishes this project's emails from other
+        // projects (e.g. EmailMarketingSaaS) sharing the same PMTA engine.
+        // PMTA config must include header_X-Project-ID in record-fields.
+        // Configurable via SystemConfig 'pmta_project_id' or env PMTA_PROJECT_ID.
+        $projectId = SystemConfig::get('pmta_project_id', config('app.pmta_project_id', 'webmailaravel'));
+
         $headers = [
+            // Custom tracking headers — PMTA accounting config records these via
+            // record-fields d *,header_X-User-ID, header_X-Campaign-ID,
+            // header_X-SMTP-Config-ID, header_X-Sender-ID, header_X-Project-ID
+            // This lets the monitoring service attribute PMTA accounting/FBL/diag
+            // records back to THIS project's users, campaigns, senders, and SMTP configs.
+            'X-Project-ID' => $projectId,
+            'X-User-ID' => $this->campaign->user_id,
             'X-Campaign-ID' => $this->campaign->id,
             'X-Sender-ID' => $this->sender->id,
+            'X-SMTP-Config-ID' => $this->sender->smtp_config_id ?? '',
             'Precedence' => 'bulk',
-            'X-Mailer' => 'Laravel Campaign System'
+            'X-Mailer' => 'Laravel Campaign System',
         ];
 
         // Add tracking headers only if tracking is enabled
@@ -118,16 +131,6 @@ class CampaignEmail extends Mailable
      */
     public function content(): MailContent
     {
-        // Log content state for debugging
-        \Log::debug('CampaignEmail content processing', [
-            'campaign_id' => $this->campaign->id,
-            'content_id' => $this->content->id ?? 'null',
-            'has_html_body' => !empty($this->content->html_body),
-            'has_text_body' => !empty($this->content->text_body),
-            'html_body_length' => $this->content->html_body ? strlen($this->content->html_body) : 0,
-            'text_body_length' => $this->content->text_body ? strlen($this->content->text_body) : 0,
-        ]);
-
         $htmlContent = $this->processTemplateVariables($this->content->html_body);
         $textContent = $this->processTemplateVariables($this->content->text_body);
 
@@ -377,7 +380,7 @@ class CampaignEmail extends Mailable
     /**
      * Mark email as failed
      */
-    public function markAsFailed(string $reason = null): void
+    public function markAsFailed(?string $reason = null): void
     {
         if ($this->emailTracking && !$this->emailTracking->failed_at) {
             $this->emailTracking->update([

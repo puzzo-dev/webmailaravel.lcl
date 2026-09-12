@@ -20,6 +20,7 @@ class TelegramChannel
             $message = $notification->toArray($notifiable);
         }
 
+        // Send to the user's Telegram chat if they have it configured
         if ($notifiable->telegram_notifications_enabled && $notifiable->telegram_chat_id) {
             $this->sendTelegramMessage($notifiable->telegram_chat_id, $message);
         }
@@ -31,8 +32,10 @@ class TelegramChannel
     protected function sendTelegramMessage(string $chatId, array $messageData): bool
     {
         try {
-            $botToken = config('services.telegram.bot_token');
-            
+            // Read bot token from SystemConfig first, fall back to env config
+            $botToken = \App\Models\SystemConfig::get('TELEGRAM_BOT_TOKEN')
+                ?: config('services.telegram.bot_token');
+
             if (!$botToken) {
                 Log::error('Telegram bot token not configured');
                 return false;

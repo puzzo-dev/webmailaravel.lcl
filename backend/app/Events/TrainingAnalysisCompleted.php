@@ -45,7 +45,6 @@ class TrainingAnalysisCompleted implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'domain_name' => $this->trainingConfig->domain->name,
             'daily_limit' => $this->trainingConfig->daily_limit,
             'last_analysis' => $this->trainingConfig->last_analysis,
             'analysis_data' => $this->analysisData,

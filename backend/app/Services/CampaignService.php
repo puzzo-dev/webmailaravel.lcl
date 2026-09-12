@@ -53,13 +53,31 @@ class CampaignService
             // Check user's campaign limits
             $this->checkUserCampaignLimits(auth()->id());
 
-            // Get user's senders and contents
+            // Get user's senders and contents (exclude banned senders)
             $user = User::find(auth()->id());
-            $userSenders = $user->senders()->where('is_active', true)->get();
+
+            // Banned users cannot create campaigns
+            if ($user->isBanned()) {
+                throw new \Exception('Your account has been banned. You cannot create or send campaigns. Reason: ' . ($user->ban_reason ?? 'Not specified'));
+            }
+
+            $userSenders = $user->senders()->where('is_active', true)->whereNull('banned_at')->get();
             $userContents = $user->contents()->where('is_active', true)->get();
 
             if ($userSenders->isEmpty()) {
-                throw new \Exception('No active senders found for this user');
+                throw new \Exception('No active senders found for this user. Senders may be banned or inactive.');
+            }
+
+            // Filter to only the senders selected by the user (if provided)
+            $selectedSenderIds = $data['sender_ids'] ?? [];
+            if (!empty($selectedSenderIds)) {
+                $userSenders = $userSenders->filter(function ($sender) use ($selectedSenderIds) {
+                    return in_array($sender->id, $selectedSenderIds);
+                });
+
+                if ($userSenders->isEmpty()) {
+                    throw new \Exception('None of the selected senders are available. They may be banned or inactive.');
+                }
             }
 
             // Process content variations if content switching is enabled
@@ -359,7 +377,6 @@ class CampaignService
                 'id' => $sender->id,
                 'name' => $sender->name,
                 'email' => $sender->email,
-                'domain_id' => $sender->domain_id,
             ];
         })->toArray();
 
@@ -477,7 +494,9 @@ class CampaignService
         if ($cachedData && is_array($cachedData['senders']) && isset($cachedData['senders'][0]['id'])) {
             $cachedData['senders'] = collect($cachedData['senders'])->map(function($senderData) {
                 return \App\Models\Sender::find($senderData['id']);
-            })->filter();
+            })->filter(function($sender) {
+                return $sender && !$sender->banned;
+            });
         }
         
         if ($cachedData && is_array($cachedData['contents']) && isset($cachedData['contents'][0]['id'])) {
@@ -558,6 +577,12 @@ class CampaignService
 
             // Check live campaign limits before starting
             $user = $campaign->user;
+
+            // Banned users cannot start campaigns
+            if ($user->isBanned()) {
+                throw new \Exception('Your account has been banned. You cannot start campaigns. Reason: ' . ($user->ban_reason ?? 'Not specified'));
+            }
+
             if (! $user->canCreateLiveCampaign()) {
                 $limits = $user->getPlanLimits();
                 throw new \Exception('Live campaign limit reached. Your plan allows '.$limits['max_live_campaigns'].' live campaigns maximum.');
@@ -706,13 +731,16 @@ class CampaignService
         $this->logMethodEntry(__METHOD__, ['recipient' => $data['to']]);
 
         try {
-            \Log::debug('Step 1: Getting sender and validating');
-            // Get sender and validate
+                        // Get sender and validate
             $sender = \App\Models\Sender::findOrFail($data['sender_id']);
             $user = Auth::user();
 
-            \Log::debug('Step 2: Checking user limits');
-            // Check user limits
+            // Check if sender is banned
+            if ($sender->banned) {
+                throw new \Exception('This sender has been banned and cannot be used for sending.');
+            }
+
+                        // Check user limits
             $userLimits = $user->getPlanLimits();
             $userDailySent = $user->getDailySentCount();
             
@@ -720,14 +748,12 @@ class CampaignService
                 throw new \Exception('Daily sending limit reached for your plan');
             }
 
-            \Log::debug('Step 3: Checking sender limits');
-            // Check sender limits
+                        // Check sender limits
             if (!$sender->canSendToday()) {
                 throw new \Exception('Sender daily limit reached');
             }
 
-            \Log::debug('Step 4: Creating content object');
-            // Create content object for email
+                        // Create content object for email
             $content = new \App\Models\Content([
                 'subject' => $data['subject'],
                 'html_body' => $data['content'],
@@ -735,17 +761,8 @@ class CampaignService
                 'type' => 'html'
             ]);
 
-            \Log::debug('CampaignEmail content processing', [
-                'campaign_id' => 'pending_creation',
-                'content_id' => 'null',
-                'has_html_body' => !empty($data['content']),
-                'has_text_body' => !empty(strip_tags($data['content'])),
-                'html_body_length' => strlen($data['content']),
-                'text_body_length' => strlen(strip_tags($data['content']))
-            ]);
-
-            \Log::debug('Step 5: Creating campaign record');
-            // Create campaign record for tracking
+            
+                        // Create campaign record for tracking
             $campaign = Campaign::create([
                 'user_id' => $user->id,
                 'name' => 'Single Email: ' . $data['subject'],
@@ -764,29 +781,18 @@ class CampaignService
                 'started_at' => now(),
             ]);
 
-            \Log::debug('CampaignEmail content processing', [
-                'campaign_id' => $campaign->id,
-                'content_id' => 'null',
-                'has_html_body' => !empty($data['content']),
-                'has_text_body' => !empty(strip_tags($data['content'])),
-                'html_body_length' => strlen($data['content']),
-                'text_body_length' => strlen(strip_tags($data['content']))
-            ]);
-
-            \Log::debug('Step 6: Configuring mail for sender');
-            // Configure mail settings for sender
+            
+                        // Configure mail settings for sender
             $this->configureMailForSender($sender);
 
-            \Log::debug('Step 7: About to send email, creating CampaignEmail object');
-            // Send email directly using Mail facade
+                        // Send email directly using Mail facade
             \Illuminate\Support\Facades\Mail::to($data['to'])
                 ->when(!empty($data['bcc']), function ($mail) use ($data) {
                     return $mail->bcc($data['bcc']);
                 })
                 ->send(new \App\Mail\CampaignEmail($campaign, $content, $sender, $data['to'], [], $data['attachments'] ?? []));
 
-            \Log::debug('Step 8: Email sent successfully, updating campaign');
-            // Update campaign and sender stats
+                        // Update campaign and sender stats
             $campaign->update([
                 'status' => 'completed',
                 'total_sent' => 1,
@@ -827,13 +833,15 @@ class CampaignService
     }
 
     /**
-     * Configure mail settings for sender
+     * Configure mail settings for sender.
+     *
+     * Uses the sender's SMTP config.
      */
     private function configureMailForSender(\App\Models\Sender $sender): void
     {
-        if ($sender->domain && $sender->domain->smtp_config) {
-            $config = $sender->domain->smtp_config;
-            
+        $config = $sender->smtpConfig;
+
+        if ($config) {
             config([
                 'mail.mailers.smtp.host' => $config['host'],
                 'mail.mailers.smtp.port' => $config['port'],
@@ -948,12 +956,12 @@ class CampaignService
                 throw new \Exception('Cannot duplicate campaign: Original recipient list file not found. Please ensure the original campaign has a valid recipient list.');
             }
 
-            // Get current user's senders to use for the duplicate
+            // Get current user's senders to use for the duplicate (exclude banned)
             $user = User::find(Auth::id());
-            $userSenders = $user->senders()->where('is_active', true)->get();
+            $userSenders = $user->senders()->where('is_active', true)->whereNull('banned_at')->get();
 
             if ($userSenders->isEmpty()) {
-                throw new \Exception('No active senders found for user. Cannot duplicate campaign.');
+                throw new \Exception('No active senders found for user. Senders may be banned or inactive. Cannot duplicate campaign.');
             }
 
             // Create new campaign with duplicated data
@@ -1029,7 +1037,7 @@ class CampaignService
 
         try {
             // Check if campaign can be deleted
-            if (in_array($campaign->status, ['RUNNING', 'SCHEDULED'])) {
+            if (in_array($campaign->status, ['running', 'scheduled'])) {
                 throw new \Exception('Cannot delete campaign while it is running or scheduled');
             }
 
@@ -1227,9 +1235,20 @@ class CampaignService
             // Always dispatch jobs to queue for bulk campaigns
             if (!empty($jobs)) {
                 // Use queue for batch processing - this ensures user refresh doesn't affect sending
-                \Illuminate\Support\Facades\Bus::batch($jobs)
+                $batch = \Illuminate\Support\Facades\Bus::batch($jobs)
                     ->name("Campaign {$campaign->id} Batch")
                     ->dispatch();
+
+                // Store the batch ID on the campaign for later cancellation
+                try {
+                    $campaign->update(['job_id' => $batch->id]);
+                } catch (\Exception $e) {
+                    $this->logWarning('Could not store batch ID on campaign', [
+                        'campaign_id' => $campaign->id,
+                        'batch_id' => $batch->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
                     
                 $this->logInfo('Batch email jobs dispatched to queue', [
                     'campaign_id' => $campaign->id,
@@ -1522,7 +1541,7 @@ class CampaignService
     }
 
     /**
-     * Cancel campaign jobs
+     * Cancel campaign jobs — uses batch cancellation + queue cleanup
      */
     private function cancelCampaignJobs(int $campaignId): void
     {
@@ -1532,44 +1551,47 @@ class CampaignService
                 return;
             }
 
-            // Check if job_id column exists and has a value
-            if (! isset($campaign->job_id) || ! $campaign->job_id) {
-                $this->logInfo('No job to cancel for campaign', ['campaign_id' => $campaignId]);
-
-                return;
-            }
-
-            // Get the queue connection
-            $queue = app('queue');
-
-            // Try to cancel the specific job
-            try {
-                // This is a simplified approach - in production you would implement proper job cancellation
-                // Laravel doesn't have built-in job cancellation, so you'd need to:
-                // 1. Store job IDs in the database
-                // 2. Implement a custom job cancellation mechanism
-                // 3. Use job tags or custom job handling
-
-                $this->logInfo('Attempting to cancel job for campaign', [
-                    'campaign_id' => $campaignId,
-                    'job_id' => $campaign->job_id,
-                ]);
-
-                // Clear the job ID from the campaign
+            // 1. Cancel the batch if we have a batch ID stored
+            if ($campaign->job_id) {
                 try {
-                    $campaign->update(['job_id' => null]);
+                    $batch = \Illuminate\Support\Facades\Bus::findBatch($campaign->job_id);
+                    if ($batch) {
+                        $batch->cancel();
+                        $this->logInfo('Campaign batch cancelled', [
+                            'campaign_id' => $campaignId,
+                            'batch_id' => $campaign->job_id,
+                        ]);
+                    }
                 } catch (\Exception $e) {
-                    // If job_id column doesnt exist yet, just log it
-                    $this->logWarning('job_id column not available for update', [
+                    $this->logWarning('Could not cancel batch', [
                         'campaign_id' => $campaignId,
-                        'job_id' => $campaign->job_id,
+                        'batch_id' => $campaign->job_id,
+                        'error' => $e->getMessage(),
                     ]);
                 }
 
+                $campaign->update(['job_id' => null]);
+            }
+
+            // 2. Also delete any remaining queued jobs for this campaign from the jobs table
+            try {
+                $deleted = \DB::table('jobs')
+                    ->where('payload', 'LIKE', '%SendEmailJob%')
+                    ->where(function ($q) use ($campaignId) {
+                        $q->where('payload', 'LIKE', '%"campaignId":' . $campaignId . '%')
+                          ->orWhere('payload', 'LIKE', '%"campaign_id":' . $campaignId . '%');
+                    })
+                    ->delete();
+
+                if ($deleted > 0) {
+                    $this->logInfo('Deleted pending campaign jobs from queue', [
+                        'campaign_id' => $campaignId,
+                        'jobs_deleted' => $deleted,
+                    ]);
+                }
             } catch (\Exception $e) {
-                $this->logError('Failed to cancel specific job', [
+                $this->logWarning('Could not delete pending jobs from queue', [
                     'campaign_id' => $campaignId,
-                    'job_id' => $campaign->job_id,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -1736,9 +1758,82 @@ class CampaignService
             
         } catch (\Exception $e) {
             $this->logError('Failed to update sender statistics', [
-                'campaign_id' => $campaign->id,
+                'sender_id' => $senderId,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Calculate campaign progress percentage based on status and statistics.
+     */
+    public function calculateCampaignProgress(Campaign $campaign): int
+    {
+        if (in_array($campaign->status, ['draft', 'scheduled'])) {
+            return 0;
+        }
+
+        if ($campaign->status === 'completed') {
+            return 100;
+        }
+
+        if ($campaign->status === 'failed') {
+            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
+                return min(100, (int) round(($campaign->total_sent / $campaign->recipient_count) * 100));
+            }
+            return 0;
+        }
+
+        if (in_array($campaign->status, ['sending', 'paused'])) {
+            if ($campaign->recipient_count > 0 && $campaign->total_sent > 0) {
+                return min(100, (int) round(($campaign->total_sent / $campaign->recipient_count) * 100));
+            }
+            if ($campaign->total_sent > 0) {
+                return 50;
+            }
+            return 10;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Get geographic distribution for a campaign.
+     */
+    public function getGeoDistribution(Campaign $campaign): array
+    {
+        return \App\Models\EmailTracking::where('campaign_id', $campaign->id)
+            ->whereNotNull('country')
+            ->selectRaw('country, COUNT(*) as count')
+            ->groupBy('country')
+            ->pluck('count', 'country')
+            ->toArray();
+    }
+
+    /**
+     * Get device distribution for a campaign.
+     */
+    public function getDeviceDistribution(Campaign $campaign): array
+    {
+        return \App\Models\EmailTracking::where('campaign_id', $campaign->id)
+            ->whereNotNull('device_type')
+            ->selectRaw('device_type, COUNT(*) as count')
+            ->groupBy('device_type')
+            ->pluck('count', 'device_type')
+            ->toArray();
+    }
+
+    /**
+     * Get hourly activity for a campaign.
+     */
+    public function getHourlyActivity(Campaign $campaign): array
+    {
+        return \App\Models\EmailTracking::where('campaign_id', $campaign->id)
+            ->whereNotNull('sent_at')
+            ->selectRaw('HOUR(sent_at) as hour, COUNT(*) as count')
+            ->groupBy('hour')
+            ->orderBy('hour')
+            ->pluck('count', 'hour')
+            ->toArray();
     }
 }

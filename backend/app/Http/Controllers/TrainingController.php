@@ -168,31 +168,6 @@ class TrainingController extends Controller
     }
 
     /**
-     * Run training for specific domain (admin only)
-     */
-    public function runDomainTraining(string $domainId): JsonResponse
-    {
-        try {
-            if (!Auth::user()->hasRole('admin')) {
-                return $this->forbiddenResponse('Access denied');
-            }
-
-            $results = $this->trainingService->runTrainingForDomain($domainId);
-            
-            $this->logInfo('Domain training completed by admin', [
-                'admin_id' => Auth::id(),
-                'domain_id' => $domainId,
-                'results' => $results
-            ]);
-
-            return $this->successResponse($results, "Training completed for domain: {$domainId}");
-        } catch (\Exception $e) {
-            $this->logError('Domain training failed', ['error' => $e->getMessage(), 'domain_id' => $domainId]);
-            return $this->errorResponse('Training failed: ' . $e->getMessage(), 500);
-        }
-    }
-
-    /**
      * Get training statistics (admin only)
      */
     public function getTrainingStatistics(): JsonResponse

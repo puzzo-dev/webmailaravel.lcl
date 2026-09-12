@@ -11,7 +11,7 @@ class TrainingConfig extends Model
     use HasFactory;
 
     protected $fillable = [
-        'domain_id',
+        'sender_id',
         'user_id',
         'daily_limit',
         'warmup_days',
@@ -45,65 +45,46 @@ class TrainingConfig extends Model
         'adjustment_factor' => 'float'
     ];
 
-    /**
-     * Get the domain that owns the training config
-     */
-    public function domain(): BelongsTo
+    public function sender(): BelongsTo
     {
-        return $this->belongsTo(Domain::class);
+        return $this->belongsTo(Sender::class);
     }
 
-    /**
-     * Get the user that owns the training config
-     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Scope for active training configs
-     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-    /**
-     * Scope for configs that need analysis
-     */
-    public function scopeNeedsAnalysis($query)
+    public function scopeNeedsAnalysis($query, int $defaultFrequency = 24)
     {
         return $query->where('is_active', true)
-            ->where(function ($q) {
+            ->where(function ($q) use ($defaultFrequency) {
                 $q->whereNull('last_analysis')
-                    ->orWhere('last_analysis', '<=', now()->subHours($this->analysis_frequency ?? 24));
+                    ->orWhere('last_analysis', '<=', now()->subHours($defaultFrequency));
             });
     }
 
-    /**
-     * Calculate reputation score based on metrics
-     */
     public function calculateReputation(): float
     {
         $reputation = 100.0;
 
-        // Deduct points for bounces
         if ($this->bounce_rate > 0) {
             $reputation -= ($this->bounce_rate * 2);
         }
 
-        // Deduct points for FBL complaints
         if ($this->fbl_rate > 0) {
             $reputation -= ($this->fbl_rate * 10);
         }
 
-        // Deduct points for spam complaints
         if ($this->spam_complaint_rate > 0) {
             $reputation -= ($this->spam_complaint_rate * 15);
         }
 
-        // Bonus for good delivery rate
         if ($this->delivery_rate > 95) {
             $reputation += 5;
         }
@@ -111,9 +92,6 @@ class TrainingConfig extends Model
         return max(0, min(100, $reputation));
     }
 
-    /**
-     * Adjust daily limit based on reputation
-     */
     public function adjustDailyLimit(): void
     {
         $reputation = $this->calculateReputation();
@@ -121,25 +99,19 @@ class TrainingConfig extends Model
         $adjustment = 0;
 
         if ($reputation >= 90) {
-            // Excellent reputation - increase by 10%
             $adjustment = $currentLimit * 0.1;
         } elseif ($reputation >= 80) {
-            // Good reputation - increase by 5%
             $adjustment = $currentLimit * 0.05;
         } elseif ($reputation >= 70) {
-            // Average reputation - no change
             $adjustment = 0;
         } elseif ($reputation >= 60) {
-            // Poor reputation - decrease by 10%
             $adjustment = -$currentLimit * 0.1;
         } else {
-            // Very poor reputation - decrease by 20%
             $adjustment = -$currentLimit * 0.2;
         }
 
-        // Apply limits
-        $newLimit = max($this->min_daily_limit ?? 20, 
-                       min($this->max_daily_limit ?? 10000, 
+        $newLimit = max($this->min_daily_limit ?? 20,
+                       min($this->max_daily_limit ?? 10000,
                            $currentLimit + $adjustment));
 
         $this->update([
@@ -150,17 +122,11 @@ class TrainingConfig extends Model
         ]);
     }
 
-    /**
-     * Check if training is in warmup period
-     */
     public function isInWarmup(): bool
     {
         return $this->created_at->addDays($this->warmup_days)->isFuture();
     }
 
-    /**
-     * Get effective daily limit considering warmup
-     */
     public function getEffectiveDailyLimit(): int
     {
         if ($this->isInWarmup()) {
@@ -172,9 +138,6 @@ class TrainingConfig extends Model
         return $this->daily_limit;
     }
 
-    /**
-     * Update metrics from PowerMTA analysis
-     */
     public function updateMetrics(array $metrics): void
     {
         $this->update([
@@ -186,9 +149,6 @@ class TrainingConfig extends Model
         ]);
     }
 
-    /**
-     * Get training status description
-     */
     public function getTrainingStatusDescription(): string
     {
         return match($this->training_status) {

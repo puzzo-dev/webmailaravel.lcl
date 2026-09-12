@@ -2,32 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Subscription;
 use App\Models\Plan;
+use App\Models\Subscription;
 use App\Models\User;
-use App\Traits\BillingTrait;
-use App\Traits\ResponseTrait;
-use App\Traits\LoggingTrait;
+use App\Services\BillingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 class BillingController extends Controller
 {
-    use BillingTrait, ResponseTrait, LoggingTrait;
+    public function __construct(
+        private BillingService $billingService
+    ) {}
 
     /**
      * Get user subscriptions
      */
     public function index(Request $request): JsonResponse
     {
-        $subscriptions = Subscription::where('user_id', Auth::id())
-            ->with(['plan', 'user'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($request->get('per_page', 15));
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $perPage = min((int) $request->get('per_page', 15), 100);
 
-        return $this->paginatedResponse($subscriptions, 'Subscriptions retrieved successfully');
+            return Subscription::where('user_id', Auth::id())
+                ->with(['plan', 'user'])
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+        }, 'list_subscriptions');
     }
 
     /**
@@ -35,12 +36,11 @@ class BillingController extends Controller
      */
     public function show(Subscription $subscription): JsonResponse
     {
-        // Authorize user can view this subscription
-        if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-            return $this->errorResponse('Unauthorized', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($subscription) {
+            $this->authorize('view', $subscription);
 
-        return $this->successResponse($subscription->load(['plan', 'user']), 'Subscription retrieved successfully');
+            return $subscription->load(['plan', 'user']);
+        }, 'view_subscription');
     }
 
     /**
@@ -48,36 +48,30 @@ class BillingController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'plan_id' => 'required|exists:plans,id',
-        ]);
-
-        $plan = Plan::findOrFail($request->plan_id);
-        $user = Auth::user();
-
-        // Check if user already has an active subscription
-        $activeSubscription = Subscription::where('user_id', $user->id)
-            ->where('status', 'active')
-            ->first();
-
-        if ($activeSubscription) {
-            return $this->errorResponse('User already has an active subscription', 400);
-        }
-
-        // Create subscription using BTCPay
-        $result = $this->createBTCPaySubscription($user, $plan);
-
-        if ($result['success']) {
-            $this->logInfo('Subscription created successfully', [
-                'user_id' => $user->id,
-                'plan_id' => $plan->id,
-                'subscription_id' => $result['subscription_id'] ?? null
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $request->validate([
+                'plan_id' => 'required|exists:plans,id',
             ]);
 
-            return $this->successResponse($result, 'Subscription created successfully', 201);
-        }
+            $plan = Plan::findOrFail($request->plan_id);
+            $user = Auth::user();
 
-        return $this->errorResponse($result['error'] ?? 'Failed to create subscription', 400);
+            $activeSubscription = Subscription::where('user_id', $user->id)
+                ->where('status', 'active')
+                ->first();
+
+            if ($activeSubscription) {
+                return $this->errorResponse('User already has an active subscription', 400);
+            }
+
+            $result = $this->billingService->createBTCPaySubscription($user, $plan);
+
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to create subscription', 400);
+            }
+
+            return $result;
+        }, 'create_subscription');
     }
 
     /**
@@ -85,30 +79,27 @@ class BillingController extends Controller
      */
     public function update(Request $request, Subscription $subscription): JsonResponse
     {
-        // Authorize user can update this subscription
-        if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-            return $this->errorResponse('Unauthorized', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($request, $subscription) {
+            $this->authorize('update', $subscription);
 
-        $request->validate([
-            'plan_id' => 'sometimes|exists:plans,id',
-            'status' => 'sometimes|in:active,cancelled,expired,pending'
-        ]);
+            $request->validate([
+                'plan_id' => 'sometimes|exists:plans,id',
+                'status' => 'sometimes|in:active,cancelled,expired,pending',
+            ]);
 
-        if ($request->has('plan_id')) {
-            $newPlan = Plan::findOrFail($request->plan_id);
-            
-            // Create upgrade/downgrade invoice
-            $result = $this->createBTCPaySubscription(Auth::user(), $newPlan);
-            
-            if (!$result['success']) {
-                return $this->errorResponse($result['error'] ?? 'Failed to update subscription', 400);
+            if ($request->has('plan_id')) {
+                $newPlan = Plan::findOrFail($request->plan_id);
+                $result = $this->billingService->createBTCPaySubscription(Auth::user(), $newPlan);
+
+                if (!$result['success']) {
+                    return $this->errorResponse($result['error'] ?? 'Failed to update subscription', 400);
+                }
             }
-        }
 
-        $subscription->update($request->only(['status']));
+            $subscription->update($request->only(['status']));
 
-        return $this->successResponse($subscription->fresh(['plan', 'user']), 'Subscription updated successfully');
+            return $subscription->fresh(['plan', 'user']);
+        }, 'update_subscription');
     }
 
     /**
@@ -116,23 +107,17 @@ class BillingController extends Controller
      */
     public function destroy(Subscription $subscription): JsonResponse
     {
-        // Authorize user can cancel this subscription
-        if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-            return $this->errorResponse('Unauthorized', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($subscription) {
+            $this->authorize('delete', $subscription);
 
-        $result = $this->cancelBTCPaySubscription($subscription);
+            $result = $this->billingService->cancelBTCPaySubscription($subscription);
 
-        if ($result['success']) {
-            $this->logInfo('Subscription cancelled successfully', [
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id
-            ]);
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to cancel subscription', 400);
+            }
 
-            return $this->successResponse(null, 'Subscription cancelled successfully');
-        }
-
-        return $this->errorResponse($result['error'] ?? 'Failed to cancel subscription', 400);
+            return null;
+        }, 'cancel_subscription');
     }
 
     /**
@@ -140,24 +125,23 @@ class BillingController extends Controller
      */
     public function createInvoice(Request $request): JsonResponse
     {
-        $request->validate([
-            'subscription_id' => 'required|exists:subscriptions,id',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $request->validate([
+                'subscription_id' => 'required|exists:subscriptions,id',
+            ]);
 
-        $subscription = Subscription::with('plan', 'user')->findOrFail($request->subscription_id);
+            $subscription = Subscription::with('plan', 'user')->findOrFail($request->subscription_id);
 
-        // Authorize user can create invoice for this subscription
-        if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-            return $this->errorResponse('Unauthorized', 403);
-        }
+            $this->authorize('createInvoice', $subscription);
 
-        $result = $this->createBTCPaySubscriptionInvoice($subscription);
+            $result = $this->billingService->createBTCPaySubscriptionInvoice($subscription);
 
-        if ($result['success']) {
-            return $this->successResponse($result['data'], 'Invoice created successfully');
-        }
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to create invoice', 400);
+            }
 
-        return $this->errorResponse($result['error'] ?? 'Failed to create invoice', 400);
+            return $result['data'];
+        }, 'create_invoice');
     }
 
     /**
@@ -165,16 +149,15 @@ class BillingController extends Controller
      */
     public function paymentHistory(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        
-        // Admin can view any user's payment history
-        if ($user->hasRole('admin') && $request->has('user_id')) {
-            $user = User::findOrFail($request->user_id);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $user = Auth::user();
 
-        $payments = $this->getPaymentHistory($user);
+            if ($user->hasRole('admin') && $request->has('user_id')) {
+                $user = User::findOrFail($request->user_id);
+            }
 
-        return $this->successResponse($payments, 'Payment history retrieved successfully');
+            return $this->billingService->getPaymentHistory($user);
+        }, 'get_payment_history');
     }
 
     /**
@@ -182,13 +165,13 @@ class BillingController extends Controller
      */
     public function invoiceStatus(Request $request): JsonResponse
     {
-        $request->validate([
-            'invoice_id' => 'required|string',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $request->validate([
+                'invoice_id' => 'required|string',
+            ]);
 
-        $status = $this->getBTCPayInvoiceStatus($request->invoice_id);
-
-        return $this->successResponse($status, 'Invoice status retrieved successfully');
+            return $this->billingService->getBTCPayInvoiceStatus($request->invoice_id);
+        }, 'get_invoice_status');
     }
 
     /**
@@ -196,16 +179,18 @@ class BillingController extends Controller
      */
     public function webhook(Request $request): JsonResponse
     {
-        $payload = $request->all();
-        $signature = $request->header('BTCPay-Sig') ?? $request->header('X-BTCPay-Signature') ?? '';
-        
-        $result = $this->processBTCPayWebhook($payload, $signature);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            $payload = $request->all();
+            $signature = $request->header('BTCPay-Sig') ?? $request->header('X-BTCPay-Signature') ?? '';
 
-        if ($result['success']) {
-            return $this->successResponse(null, 'Webhook processed successfully');
-        }
+            $result = $this->billingService->processBTCPayWebhook($payload, $signature);
 
-        return $this->errorResponse($result['error'] ?? 'Failed to process webhook', 400);
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to process webhook', 400);
+            }
+
+            return null;
+        }, 'process_webhook');
     }
 
     /**
@@ -213,92 +198,9 @@ class BillingController extends Controller
      */
     public function plans(): JsonResponse
     {
-        try {
-        $plans = Plan::where('is_active', true)
-            ->orderBy('price')
-            ->get();
-
-            // If no plans exist, create default plans
-            if ($plans->isEmpty()) {
-                $defaultPlans = [
-                    [
-                        'name' => 'Starter',
-                        'description' => 'Perfect for small businesses and individuals',
-                        'price' => 19.99,
-                        'currency' => 'USD',
-                        'duration_days' => 30,
-                        'max_domains' => 1,
-                        'max_senders_per_domain' => 2,
-                        'max_total_campaigns' => 10,
-                        'max_live_campaigns' => 1,
-                        'daily_sending_limit' => 1000,
-                        'features' => [
-                            'Basic Analytics',
-                            'Email Support',
-                            'Standard Templates',
-                            'Basic Reporting'
-                        ],
-                        'is_active' => true,
-                    ],
-                    [
-                        'name' => 'Professional',
-                        'description' => 'Ideal for growing businesses and marketing teams',
-                        'price' => 49.99,
-                        'currency' => 'USD',
-                        'duration_days' => 30,
-                        'max_domains' => 3,
-                        'max_senders_per_domain' => 5,
-                        'max_total_campaigns' => 50,
-                        'max_live_campaigns' => 3,
-                        'daily_sending_limit' => 5000,
-                        'features' => [
-                            'Advanced Analytics',
-                            'Priority Support',
-                            'Custom Domains',
-                            'API Access',
-                            'Advanced Reporting',
-                            'A/B Testing'
-                        ],
-                        'is_active' => true,
-                    ],
-                    [
-                        'name' => 'Enterprise',
-                        'description' => 'For large organizations with high-volume needs',
-                        'price' => 99.99,
-                        'currency' => 'USD',
-                        'duration_days' => 30,
-                        'max_domains' => 10,
-                        'max_senders_per_domain' => 10,
-                        'max_total_campaigns' => 200,
-                        'max_live_campaigns' => 10,
-                        'daily_sending_limit' => 25000,
-                        'features' => [
-                            'Advanced Analytics',
-                            'Dedicated Support',
-                            'Custom Domains',
-                            'API Access',
-                            'White-label Options',
-                            'Advanced Reporting',
-                            'A/B Testing',
-                            'Custom Integrations'
-                        ],
-                        'is_active' => true,
-                    ],
-                ];
-
-                foreach ($defaultPlans as $planData) {
-                    Plan::create($planData);
-                }
-
-                $plans = Plan::where('is_active', true)
-                    ->orderBy('price')
-                    ->get();
-            }
-
-        return $this->successResponse($plans, 'Plans retrieved successfully');
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to retrieve plans', 500);
-        }
+        return $this->executeWithErrorHandling(function () {
+            return $this->billingService->getOrCreateDefaultPlans();
+        }, 'get_plans');
     }
 
     /**
@@ -306,9 +208,9 @@ class BillingController extends Controller
      */
     public function rates(): JsonResponse
     {
-        $rates = $this->getBTCPayPaymentRates();
-
-        return $this->successResponse($rates, 'Payment rates retrieved successfully');
+        return $this->executeWithErrorHandling(function () {
+            return $this->billingService->getBTCPayPaymentRates();
+        }, 'get_payment_rates');
     }
 
     /**
@@ -316,23 +218,17 @@ class BillingController extends Controller
      */
     public function renew(Request $request, Subscription $subscription): JsonResponse
     {
-        // Authorize user can renew this subscription
-        if ($subscription->user_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
-            return $this->errorResponse('Unauthorized', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($subscription) {
+            $this->authorize('renew', $subscription);
 
-        $result = $this->renewBTCPaySubscription($subscription);
+            $result = $this->billingService->renewBTCPaySubscription($subscription);
 
-        if ($result['success']) {
-            $this->logInfo('Subscription renewed successfully', [
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id
-            ]);
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to renew subscription', 400);
+            }
 
-            return $this->successResponse($result['data'], 'Subscription renewed successfully');
-        }
-
-        return $this->errorResponse($result['error'] ?? 'Failed to renew subscription', 400);
+            return $result['data'];
+        }, 'renew_subscription');
     }
 
     /**
@@ -340,84 +236,13 @@ class BillingController extends Controller
      */
     public function getBillingStats(): JsonResponse
     {
-        try {
-            // Initialize default stats to prevent null/undefined issues
-            $stats = [
-                'active_subscriptions' => 0,
-                'pending_payments' => 0,
-                'expiring_soon' => 0,
-                'monthly_revenue' => 0.00,
-                'last_month_revenue' => 0.00,
-                'total_revenue' => 0.00,
-                'conversion_rate' => 0.0,
-            ];
-
-            // Safely calculate each stat with error handling
-            try {
-                $stats['active_subscriptions'] = Subscription::where('status', 'active')->count();
-            } catch (\Exception $e) {
-                \Log::warning('Failed to get active subscriptions count: ' . $e->getMessage());
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
             }
 
-            try {
-                $stats['pending_payments'] = Subscription::where('status', 'pending')->count();
-            } catch (\Exception $e) {
-                \Log::warning('Failed to get pending payments count: ' . $e->getMessage());
-            }
-
-            try {
-                $stats['expiring_soon'] = Subscription::where('status', 'active')
-                    ->where('expiry', '<=', now()->addDays(7))
-                    ->count();
-            } catch (\Exception $e) {
-                \Log::warning('Failed to get expiring subscriptions count: ' . $e->getMessage());
-            }
-
-            try {
-                $stats['monthly_revenue'] = (float) Subscription::where('status', 'active')
-                    ->where('paid_at', '>=', now()->startOfMonth())
-                    ->sum('payment_amount') ?: 0.00;
-            } catch (\Exception $e) {
-                \Log::warning('Failed to calculate monthly revenue: ' . $e->getMessage());
-            }
-
-            try {
-                $stats['last_month_revenue'] = (float) Subscription::where('status', 'active')
-                    ->where('paid_at', '>=', now()->subMonth()->startOfMonth())
-                    ->where('paid_at', '<', now()->startOfMonth())
-                    ->sum('payment_amount') ?: 0.00;
-            } catch (\Exception $e) {
-                \Log::warning('Failed to calculate last month revenue: ' . $e->getMessage());
-            }
-
-            try {
-                $stats['total_revenue'] = (float) Subscription::where('status', 'active')
-                    ->sum('payment_amount') ?: 0.00;
-            } catch (\Exception $e) {
-                \Log::warning('Failed to calculate total revenue: ' . $e->getMessage());
-            }
-
-            try {
-                $stats['conversion_rate'] = $this->calculateConversionRate();
-            } catch (\Exception $e) {
-                \Log::warning('Failed to calculate conversion rate: ' . $e->getMessage());
-            }
-
-            return $this->successResponse($stats, 'Billing statistics retrieved successfully');
-        } catch (\Exception $e) {
-            \Log::error('getBillingStats failed: ' . $e->getMessage());
-            // Return default stats instead of error to prevent frontend loading loops
-            $defaultStats = [
-                'active_subscriptions' => 0,
-                'pending_payments' => 0,
-                'expiring_soon' => 0,
-                'monthly_revenue' => 0.00,
-                'last_month_revenue' => 0.00,
-                'total_revenue' => 0.00,
-                'conversion_rate' => 0.0,
-            ];
-            return $this->successResponse($defaultStats, 'Billing statistics retrieved with defaults due to errors');
-        }
+            return $this->billingService->getBillingStats();
+        }, 'get_billing_stats');
     }
 
     /**
@@ -425,148 +250,116 @@ class BillingController extends Controller
      */
     public function getAllSubscriptions(Request $request): JsonResponse
     {
-        try {
-            // Validate pagination parameters
-            $perPage = max(1, min(100, (int) $request->get('per_page', 15)));
-            
-            $subscriptions = Subscription::with(['user', 'plan'])
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
+
+            $perPage = min(max(1, (int) $request->get('per_page', 15)), 100);
+
+            return Subscription::with(['user', 'plan'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
-
-            return $this->paginatedResponse($subscriptions, 'Subscriptions retrieved successfully');
-        } catch (\Exception $e) {
-            \Log::error('getAllSubscriptions failed: ' . $e->getMessage());
-            // Return empty paginated response instead of error to prevent frontend loading loops
-            $emptyPagination = new \Illuminate\Pagination\LengthAwarePaginator(
-                collect([]),
-                0,
-                $request->get('per_page', 15),
-                1,
-                ['path' => $request->url()]
-            );
-            return $this->paginatedResponse($emptyPagination, 'Subscriptions retrieved with empty result due to errors');
-        }
+        }, 'get_all_subscriptions');
     }
 
     /**
-     * Create a new plan
+     * Create a new plan (admin only)
      */
     public function createPlan(Request $request): JsonResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'currency' => 'required|string|size:3',
-            'duration_days' => 'required|integer|min:1',
-            'max_domains' => 'required|integer|min:1',
-            'max_senders_per_domain' => 'required|integer|min:1',
-            'max_total_campaigns' => 'required|integer|min:1',
-            'max_live_campaigns' => 'required|integer|min:1',
-            'daily_sending_limit' => 'required|integer|min:1',
-            'features' => 'nullable|array',
-            'is_active' => 'boolean',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $plan = Plan::create($request->all());
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'price' => 'required|numeric|min:0',
+                'currency' => 'required|string|size:3',
+                'duration_days' => 'required|integer|min:1',
+                
+                'max_senders' => 'required|integer|min:1',
+                'max_total_campaigns' => 'required|integer|min:1',
+                'max_live_campaigns' => 'required|integer|min:1',
+                'daily_sending_limit' => 'required|integer|min:1',
+                'features' => 'nullable|array',
+                'is_active' => 'boolean',
+            ]);
 
-            return $this->successResponse($plan, 'Plan created successfully', 201);
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to create plan', 500);
-        }
+            return $this->billingService->createPlan($validated);
+        }, 'create_plan');
     }
 
     /**
-     * Update a plan
+     * Update a plan (admin only)
      */
     public function updatePlan(Request $request, Plan $plan): JsonResponse
     {
-        $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'sometimes|numeric|min:0',
-            'currency' => 'sometimes|string|size:3',
-            'duration_days' => 'sometimes|integer|min:1',
-            'max_domains' => 'sometimes|integer|min:1',
-            'max_senders_per_domain' => 'sometimes|integer|min:1',
-            'max_total_campaigns' => 'sometimes|integer|min:1',
-            'max_live_campaigns' => 'sometimes|integer|min:1',
-            'daily_sending_limit' => 'sometimes|integer|min:1',
-            'features' => 'nullable|array',
-            'is_active' => 'sometimes|boolean',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request, $plan) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $plan->update($request->all());
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'price' => 'sometimes|numeric|min:0',
+                'currency' => 'sometimes|string|size:3',
+                'duration_days' => 'sometimes|integer|min:1',
+                
+                'max_senders' => 'sometimes|integer|min:1',
+                'max_total_campaigns' => 'sometimes|integer|min:1',
+                'max_live_campaigns' => 'sometimes|integer|min:1',
+                'daily_sending_limit' => 'sometimes|integer|min:1',
+                'features' => 'nullable|array',
+                'is_active' => 'sometimes|boolean',
+            ]);
 
-            return $this->successResponse($plan->fresh(), 'Plan updated successfully');
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to update plan', 500);
-        }
+            return $this->billingService->updatePlan($plan, $validated);
+        }, 'update_plan');
     }
 
     /**
-     * Delete a plan
+     * Delete a plan (admin only)
      */
     public function deletePlan(Plan $plan): JsonResponse
     {
-        try {
-            // Check if plan has active subscriptions
-            $activeSubscriptions = Subscription::where('plan_id', $plan->id)
-                ->where('status', 'active')
-                ->count();
-
-            if ($activeSubscriptions > 0) {
-                return $this->errorResponse('Cannot delete plan with active subscriptions', 400);
+        return $this->executeWithErrorHandling(function () use ($plan) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
             }
 
-            $plan->delete();
+            $this->billingService->deletePlan($plan);
 
-            return $this->successResponse(null, 'Plan deleted successfully');
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to delete plan', 500);
-        }
+            return null;
+        }, 'delete_plan');
     }
 
     /**
-     * Process manual payment for subscription
+     * Process manual payment for subscription (admin only)
      */
     public function processManualPayment(Request $request, Subscription $subscription): JsonResponse
     {
-        $request->validate([
-            'payment_method' => 'required|string',
-            'payment_reference' => 'required|string',
-            'amount_paid' => 'required|numeric|min:0',
-            'currency' => 'sometimes|string|size:3',
-            'notes' => 'nullable|string',
-        ]);
+        return $this->executeWithErrorHandling(function () use ($request, $subscription) {
+            $this->authorize('processManualPayment', $subscription);
 
-        try {
-            $result = $this->processManualPayment($subscription, $request->all());
+            $validated = $request->validate([
+                'payment_method' => 'required|string',
+                'payment_reference' => 'required|string',
+                'amount_paid' => 'required|numeric|min:0',
+                'currency' => 'sometimes|string|size:3',
+                'notes' => 'nullable|string',
+            ]);
 
-            if ($result['success']) {
-                return $this->successResponse($subscription->fresh(['user', 'plan']), 'Manual payment processed successfully');
+            $result = $this->billingService->processSubscriptionManualPayment($subscription, $validated);
+
+            if (!$result['success']) {
+                return $this->errorResponse($result['error'] ?? 'Failed to process manual payment', 400);
             }
 
-            return $this->errorResponse($result['error'] ?? 'Failed to process manual payment', 400);
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to process manual payment', 500);
-        }
-    }
-
-    /**
-     * Calculate conversion rate
-     */
-    private function calculateConversionRate(): float
-    {
-        $totalUsers = User::count();
-        $activeSubscriptions = Subscription::where('status', 'active')->count();
-
-        if ($totalUsers === 0) {
-            return 0.0;
-        }
-
-        return round(($activeSubscriptions / $totalUsers) * 100, 1);
+            return $subscription->fresh(['user', 'plan']);
+        }, 'process_manual_payment');
     }
 }

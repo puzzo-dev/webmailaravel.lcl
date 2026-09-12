@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('reputation_histories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('domain_id')->constrained()->onDelete('cascade');
+            $table->foreignId('sender_id')->nullable()->constrained()->onDelete('cascade');
             $table->date('date');
             $table->decimal('reputation_score', 5, 2)->default(0);
             $table->enum('risk_level', ['low', 'medium', 'high'])->default('low');
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->json('diagnostic_data')->nullable();
             $table->timestamps();
 
-            $table->unique(['domain_id', 'date']);
+            $table->unique(['sender_id', 'date']);
             $table->index(['date', 'reputation_score']);
             $table->index(['risk_level']);
         });

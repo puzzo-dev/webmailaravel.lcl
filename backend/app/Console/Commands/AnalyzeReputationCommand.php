@@ -3,39 +3,24 @@
 namespace App\Console\Commands;
 
 use App\Jobs\AnalyzeReputationJob;
-use App\Models\Domain;
+use App\Models\Sender;
 use App\Services\PowerMTAService;
 use Illuminate\Console\Command;
-use Carbon\Carbon;
 
 class AnalyzeReputationCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'reputation:analyze 
-                            {--domain= : Specific domain to analyze}
+                            {--sender= : Specific sender ID to analyze}
                             {--date= : Date to analyze (Y-m-d format)}
-                            {--all : Analyze all domains}
+                            {--all : Analyze all senders}
                             {--days=7 : Number of days to analyze (when using --all)}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Analyze sender reputation from PowerMTA data';
 
-    /**
-     * Execute the console command.
-     */
     public function handle(PowerMTAService $powerMTAService): int
     {
         $this->info('Starting reputation analysis...');
 
-        // Check PowerMTA status first
         $status = $powerMTAService->getStatus();
         if ($status['status'] !== 'online') {
             $this->error('PowerMTA service is not available: ' . ($status['error'] ?? 'Unknown error'));
@@ -44,33 +29,29 @@ class AnalyzeReputationCommand extends Command
 
         $this->info('PowerMTA service is online.');
 
-        $domain = $this->option('domain');
+        $senderId = $this->option('sender');
         $date = $this->option('date') ?? now()->format('Y-m-d');
         $analyzeAll = $this->option('all');
         $days = (int) $this->option('days');
 
-        if ($domain) {
-            // Analyze specific domain
-            $domainModel = Domain::where('domain', $domain)->first();
-            
-            if (!$domainModel) {
-                $this->error("Domain '{$domain}' not found.");
+        if ($senderId) {
+            $sender = Sender::find($senderId);
+            if (!$sender) {
+                $this->error("Sender '{$senderId}' not found.");
                 return 1;
             }
-
-            $this->analyzeDomain($domainModel, $date);
+            $this->analyzeSender($sender, $date);
         } elseif ($analyzeAll) {
-            // Analyze all domains
-            $domains = Domain::all();
-            $this->info("Analyzing {$domains->count()} domains for the last {$days} days...");
+            $senders = Sender::where('is_active', true)->get();
+            $this->info("Analyzing {$senders->count()} senders for the last {$days} days...");
 
-            $bar = $this->output->createProgressBar($domains->count() * $days);
+            $bar = $this->output->createProgressBar($senders->count() * $days);
             $bar->start();
 
-            foreach ($domains as $domainModel) {
+            foreach ($senders as $sender) {
                 for ($i = 0; $i < $days; $i++) {
                     $analysisDate = now()->subDays($i)->format('Y-m-d');
-                    $this->analyzeDomain($domainModel, $analysisDate, false);
+                    $this->analyzeSender($sender, $analysisDate, false);
                     $bar->advance();
                 }
             }
@@ -78,7 +59,7 @@ class AnalyzeReputationCommand extends Command
             $bar->finish();
             $this->newLine();
         } else {
-            $this->error('Please specify either --domain or --all option.');
+            $this->error('Please specify either --sender=ID or --all option.');
             return 1;
         }
 
@@ -86,31 +67,22 @@ class AnalyzeReputationCommand extends Command
         return 0;
     }
 
-    /**
-     * Analyze a specific domain
-     */
-    protected function analyzeDomain(Domain $domain, string $date, bool $showOutput = true): void
+    protected function analyzeSender(Sender $sender, string $date, bool $showOutput = true): void
     {
         if ($showOutput) {
-            $this->info("Analyzing domain: {$domain->name} for date: {$date}");
+            $this->info("Analyzing sender: {$sender->email} for date: {$date}");
         }
 
         try {
-            // Dispatch job for background processing
-            AnalyzeReputationJob::dispatch($domain->id, $date);
-            
+            AnalyzeReputationJob::dispatch($sender->id, $date);
+
             if ($showOutput) {
-                $this->info("Job dispatched for domain: {$domain->name}");
+                $this->info("Job dispatched for sender: {$sender->email}");
             }
         } catch (\Exception $e) {
             if ($showOutput) {
-                $this->error("Failed to analyze domain {$domain->name}: " . $e->getMessage());
+                $this->error("Failed to analyze sender {$sender->email}: " . $e->getMessage());
             }
         }
     }
-} 
- 
- 
- 
- 
- 
+}

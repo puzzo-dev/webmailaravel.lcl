@@ -3,8 +3,14 @@
 # Environment files
 .env
 .env.local
-.env.production
+.env.env.production
 .env.backup
+
+# Credentials — NEVER commit
+prod-creds.txt
+*-creds.txt
+*credentials*
+*secret*
 
 # Dependencies
 node_modules/
@@ -34,6 +40,19 @@ logs/
 .idea/
 *.swp
 *.swo
+
+# Agent / assistant config (stays local, never committed)
+.agents/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.kiro/
+.opencode/
+.pi/
+.trae/
+.trae-cn/
+.devin/
 
 # OS files
 .DS_Store

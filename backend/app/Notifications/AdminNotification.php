@@ -32,8 +32,24 @@ class AdminNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return [\App\Channels\TelegramChannel::class];
     }
+
+    public function toTelegram(object $notifiable): array
+    {
+        $emoji = match($this->type) {
+            'success' => '✅',
+            'warning' => '⚠️',
+            'error' => '❌',
+            default => 'ℹ️'
+        };
+        return [
+            'text' => "{$emoji} <b>{$this->title}</b>\n\n{$this->message}",
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => true,
+        ];
+    }
+
 
     /**
      * Get the mail representation of the notification.

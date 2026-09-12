@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('senders', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users');
-            $table->foreignId('domain_id')->constrained('domains')->index();
             $table->string('name');
             $table->string('email');
             $table->boolean('is_active')->default(true);

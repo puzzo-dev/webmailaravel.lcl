@@ -18,18 +18,24 @@ class AdminAuthorizationMiddleware
     {
         // Check if user is authenticated
         if (! Auth::check()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthenticated',
-            ], 401);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated',
+                ], 401);
+            }
+            return redirect()->route('login');
         }
 
         // Check if user has admin role
         if (! Auth::user()->hasRole('admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Access denied. Admin role required.',
-            ], 403);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied. Admin role required.',
+                ], 403);
+            }
+            return redirect()->route('dashboard')->with('error', 'Access denied. Admin role required.');
         }
 
         return $next($request);

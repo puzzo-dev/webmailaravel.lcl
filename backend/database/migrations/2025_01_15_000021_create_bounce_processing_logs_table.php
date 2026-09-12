@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('bounce_credential_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('domain_id')->nullable()->constrained()->onDelete('cascade');
             $table->string('message_id')->nullable(); // Email message ID
             $table->string('bounce_email')->index(); // The bounced email address
             $table->enum('bounce_type', ['hard', 'soft', 'complaint', 'unsubscribe', 'other'])->index();

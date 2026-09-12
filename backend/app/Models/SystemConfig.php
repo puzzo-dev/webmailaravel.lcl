@@ -88,6 +88,36 @@ class SystemConfig extends Model
     }
 
     /**
+     * Get PMTA file monitoring configuration
+     */
+    public static function getPmtaMonitoringConfig(): array
+    {
+        return [
+            'enabled' => static::getValue('pmta_enabled', 'false') === 'true',
+            'project_id' => static::getValue('pmta_project_id', 'webmailaravel'),
+            'files_path' => static::getValue('pmta_files_path', '/root/pmta/logs'),
+            'fbl_path' => static::getValue('pmta_fbl_path', 'pmta-fbl'),
+            'logs_path' => static::getValue('pmta_logs_path', ''),
+            'acct_path' => static::getValue('pmta_acct_path', 'pmta-acct'),
+            'diag_path' => static::getValue('pmta_diag_path', 'pmta-diag'),
+            'bounce_path' => static::getValue('pmta_bounce_path', 'pmta-bounce'),
+            'scan_interval' => (int) static::getValue('pmta_scan_interval', 5),
+            'retention_days' => (int) static::getValue('pmta_retention_days', 30),
+        ];
+    }
+
+    /**
+     * Get Cloudflare DNS automation configuration
+     */
+    public static function getCloudflareConfig(): array
+    {
+        return [
+            'api_token' => static::getValue('cloudflare_api_token'),
+            'zone_id' => static::getValue('cloudflare_zone_id'),
+        ];
+    }
+
+    /**
      * Get SMTP configuration
      */
     public static function getDefaultSMTPConfig(): array
@@ -232,11 +262,29 @@ class SystemConfig extends Model
             ['key' => 'redis_database', 'value' => '0', 'description' => 'Redis database number'],
             ['key' => 'redis_prefix', 'value' => 'campaign_manager:', 'description' => 'Redis key prefix'],
 
-            // PowerMTA Configuration
-            ['key' => 'powermta_host', 'value' => 'localhost', 'description' => 'PowerMTA server host'],
-            ['key' => 'powermta_port', 'value' => '25', 'description' => 'PowerMTA server port'],
-            ['key' => 'powermta_logs_path', 'value' => '/var/log/powermta', 'description' => 'PowerMTA logs directory'],
-            ['key' => 'powermta_config_path', 'value' => '/etc/powermta', 'description' => 'PowerMTA config directory'],
+            // PowerMTA Configuration — management API runs on HTTPS with ?format=json
+            ['key' => 'powermta_host', 'value' => '63.250.44.3', 'description' => 'PowerMTA management API host'],
+            ['key' => 'powermta_port', 'value' => '8060', 'description' => 'PowerMTA management API port (HTTPS)'],
+            ['key' => 'powermta_logs_path', 'value' => '/var/log/pmta', 'description' => 'PowerMTA log files directory'],
+            ['key' => 'powermta_config_path', 'value' => '/etc/pmta', 'description' => 'PowerMTA config directory'],
+
+            // PMTA File Monitoring — paths match production PMTA Docker bind-mount
+            // PMTA container bind-mounts /root/pmta/logs -> /var/log/pmta inside the container.
+            // The Laravel app (when deployed on the same host) reads from the host path.
+            ['key' => 'pmta_enabled', 'value' => 'false', 'description' => 'Enable PMTA file-based monitoring'],
+            ['key' => 'pmta_project_id', 'value' => 'webmailaravel', 'description' => 'Unique project identifier — distinguishes this project from others sharing the same PMTA engine (sent as X-Project-ID header)'],
+            ['key' => 'pmta_files_path', 'value' => '/root/pmta/logs', 'description' => 'Base path for PMTA files (host bind-mount: /root/pmta/logs -> container /var/log/pmta)'],
+            ['key' => 'pmta_fbl_path', 'value' => 'pmta-fbl', 'description' => 'FBL files subdirectory (move-to from acct-file)'],
+            ['key' => 'pmta_logs_path', 'value' => '', 'description' => 'Log files subdirectory (log-file is /var/log/pmta/log)'],
+            ['key' => 'pmta_acct_path', 'value' => 'pmta-acct', 'description' => 'Accounting files subdirectory (move-to from acct-file)'],
+            ['key' => 'pmta_diag_path', 'value' => 'pmta-diag', 'description' => 'Diagnostic files subdirectory (move-to from acct-file)'],
+            ['key' => 'pmta_bounce_path', 'value' => 'pmta-bounce', 'description' => 'Bounce files subdirectory (move-to from acct-file)'],
+            ['key' => 'pmta_scan_interval', 'value' => '5', 'description' => 'Scan interval in minutes'],
+            ['key' => 'pmta_retention_days', 'value' => '30', 'description' => 'File retention in days'],
+
+            // Cloudflare DNS Automation
+            ['key' => 'cloudflare_api_token', 'value' => '', 'description' => 'Cloudflare API token for DNS automation'],
+            ['key' => 'cloudflare_zone_id', 'value' => '', 'description' => 'Cloudflare zone ID for DNS management'],
 
             // Upload Configuration
             ['key' => 'upload_max_file_size', 'value' => '10485760', 'description' => 'Maximum file upload size (10MB)'],

@@ -3,25 +3,16 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateBounceCredentialRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return auth()->check();
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     */
     public function rules(): array
     {
-        $credentialId = $this->route('bounce_credential');
-        
         return [
             'email' => 'sometimes|email|max:255',
             'protocol' => 'sometimes|in:imap,pop3',
@@ -39,9 +30,6 @@ class UpdateBounceCredentialRequest extends FormRequest
         ];
     }
 
-    /**
-     * Get custom messages for validator errors.
-     */
     public function messages(): array
     {
         return [
@@ -56,9 +44,6 @@ class UpdateBounceCredentialRequest extends FormRequest
         ];
     }
 
-    /**
-     * Configure the validator instance.
-     */
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
@@ -69,34 +54,15 @@ class UpdateBounceCredentialRequest extends FormRequest
                 return;
             }
 
-            // Ensure only one default credential per user (for non-domain specific)
-            if ($this->input('is_default') && !$credential->domain_id) {
+            // Ensure only one default credential per user
+            if ($this->input('is_default')) {
                 $existingDefault = \App\Models\BounceCredential::where('user_id', auth()->id())
                     ->where('is_default', true)
-                    ->whereNull('domain_id')
                     ->where('id', '!=', $credentialId)
                     ->exists();
 
                 if ($existingDefault) {
                     $validator->errors()->add('is_default', 'You already have a default bounce credential. Only one default is allowed.');
-                }
-            }
-
-            // Domain-specific credentials cannot be default
-            if ($this->input('is_default') && $credential->domain_id) {
-                $validator->errors()->add('is_default', 'Domain-specific credentials cannot be set as default.');
-            }
-
-            // Check if this is the last default credential
-            if ($this->has('is_default') && !$this->input('is_default') && $credential->is_default) {
-                $otherDefaults = \App\Models\BounceCredential::where('user_id', auth()->id())
-                    ->where('is_default', true)
-                    ->whereNull('domain_id')
-                    ->where('id', '!=', $credentialId)
-                    ->count();
-
-                if ($otherDefaults === 0) {
-                    $validator->errors()->add('is_default', 'You must have at least one default bounce credential.');
                 }
             }
         });

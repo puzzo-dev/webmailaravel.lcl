@@ -9,6 +9,8 @@ class Session extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'id',
         'user_id',

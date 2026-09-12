@@ -117,8 +117,8 @@ class SendEmailJob implements ShouldQueue
             $campaignService = app(\App\Services\CampaignService::class);
             $recipientData = $campaignService->getRecipientData($this->campaign->id, $this->recipient);
 
-            // Configure mail settings for this specific sender's domain
-            $this->configureMailForSender();
+            // Configure a per-sender mailer (avoids global config race condition)
+            $mailerName = $this->configureMailForSender();
 
             // Get campaign attachments if any
             $attachments = [];
@@ -130,14 +130,23 @@ class SendEmailJob implements ShouldQueue
             // Create campaign email instance outside try block to access in catch
             $campaignEmail = new CampaignEmail($this->campaign, $this->content, $this->sender, $this->recipient, $recipientData, $attachments);
             
-            // Send email using Laravel's Mail facade
-            Mail::to($this->recipient)->send($campaignEmail);
+            // Send email using the per-sender mailer (not the global default)
+            Mail::mailer($mailerName)->to($this->recipient)->send($campaignEmail);
             
             // Mark email as successfully sent
             $campaignEmail->markAsSent();
-
-            // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND
-            $sender->incrementDailySent();
+            
+            // INCREMENT SENDER COUNT AFTER SUCCESSFUL SEND (atomic — prevents race condition)
+            if (!$sender->incrementDailySent()) {
+                // Limit was reached between the check and the increment — reschedule
+                Log::warning('Sender daily limit reached during increment, rescheduling', [
+                    'campaign_id' => $this->campaign->id,
+                    'recipient' => $this->recipient,
+                    'sender_id' => $sender->id,
+                ]);
+                $this->release(3600);
+                return;
+            }
             
             // Clear user daily cache to reflect new count
             $userCacheKey = "user_daily_sent:{$user->id}:" . now()->format('Y-m-d');
@@ -199,42 +208,32 @@ class SendEmailJob implements ShouldQueue
     }
 
     /**
-     * Configure mail settings for the sender's domain SMTP configuration
+     * Configure a per-sender mailer to avoid the global config() race condition.
+     * Returns the mailer name to use for sending.
      */
-    private function configureMailForSender(): void
+    private function configureMailForSender(): string
     {
-        // Check if sender exists and has domain
         if (!$this->sender) {
             throw new \Exception('Sender is null');
         }
-        
-        if (!$this->sender->domain) {
-            Log::error('Sender has no domain assigned', [
+
+        // Get the sender's SMTP configuration
+        $smtpConfig = $this->sender->smtpConfig;
+
+        if (!$smtpConfig) {
+            Log::error('No SMTP configuration found for sender', [
                 'sender_id' => $this->sender->id,
                 'sender_email' => $this->sender->email
             ]);
-            throw new \Exception('Sender has no domain assigned');
-        }
-        
-        // Get the sender's domain SMTP configuration
-        $smtpConfig = $this->sender->domain->smtpConfig;
-        
-        if (!$smtpConfig) {
-            Log::error('No SMTP configuration found for sender domain', [
-                'sender_id' => $this->sender->id,
-                'domain_id' => $this->sender->domain_id,
-                'domain_name' => $this->sender->domain->name ?? 'unknown'
-            ]);
-            throw new \Exception('No SMTP configuration found for sender domain');
+            throw new \Exception('No SMTP configuration assigned to this sender');
         }
 
-        // Store original mail configuration
-        $originalConfig = config('mail');
-        
-        // Set the mail configuration for this specific sender
+        // Register a per-sender mailer — each sender gets its own isolated config
+        // This prevents concurrent workers from overwriting each other's SMTP settings
+        $mailerName = 'smtp_sender_' . $this->sender->id;
+
         config([
-            'mail.default' => 'smtp',
-            'mail.mailers.smtp' => [
+            "mail.mailers.{$mailerName}" => [
                 'transport' => 'smtp',
                 'host' => $smtpConfig->host,
                 'port' => $smtpConfig->port,
@@ -244,22 +243,27 @@ class SendEmailJob implements ShouldQueue
                 'timeout' => 30,
                 'local_domain' => $smtpConfig->host,
             ],
-            'mail.from.address' => $this->sender->email,
-            'mail.from.name' => $this->sender->name,
+            "mail.from_addresses.{$mailerName}" => [
+                'address' => $this->sender->email,
+                'name' => $this->sender->name,
+            ],
         ]);
 
-        // Clear the mail manager cache to force reload of configuration
-        app('mail.manager')->purge('smtp');
+        // Purge this specific mailer to force a fresh SMTP connection
+        app('mail.manager')->purge($mailerName);
 
         Log::info('Mail configured for sender', [
             'sender_id' => $this->sender->id,
             'sender_email' => $this->sender->email,
             'sender_name' => $this->sender->name,
+            'mailer_name' => $mailerName,
             'smtp_host' => $smtpConfig->host,
             'smtp_port' => $smtpConfig->port,
             'smtp_username' => $smtpConfig->username,
             'smtp_encryption' => $smtpConfig->encryption
         ]);
+
+        return $mailerName;
     }
 
 
@@ -304,11 +308,14 @@ class SendEmailJob implements ShouldQueue
             
             // Only check completion if we have recipient count and all are processed
             if ($totalRecipients > 0 && $totalProcessed >= $totalRecipients) {
-                // More robust check for remaining jobs using job UUID and payload
+                // Check for remaining SendEmailJob instances for this campaign
+                // Use grouped where to avoid the OR matching other campaigns' jobs
                 $pendingJobs = \DB::table('jobs')
                     ->where('payload', 'LIKE', '%SendEmailJob%')
-                    ->where('payload', 'LIKE', '%"campaignId":' . $campaign->id . '%')
-                    ->orWhere('payload', 'LIKE', '%"campaign_id":' . $campaign->id . '%')
+                    ->where(function ($q) use ($campaign) {
+                        $q->where('payload', 'LIKE', '%"campaignId":' . $campaign->id . '%')
+                          ->orWhere('payload', 'LIKE', '%"campaign_id":' . $campaign->id . '%');
+                    })
                     ->count();
                     
                 // Also check for ProcessCampaignJob instances

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Sender;
-use App\Models\Domain;
 use App\Models\SystemConfig;
 use App\Models\TrainingConfig;
 use App\Traits\LoggingTrait;
@@ -38,21 +37,21 @@ class UnifiedTrainingService
     /**
      * Run training based on system configuration (manual or automatic)
      */
-    public function runTraining(?User $user = null, ?string $domainId = null): array
+    public function runTraining(?User $user = null): array
     {
         // Start performance monitoring
         $performanceData = $this->performanceService->monitorTrainingPerformance(
             'unified', 
             $user ? 1 : 0, 
-            $domainId ? 1 : 0
+            0
         );
         
         try {
             $systemMode = SystemConfig::get('TRAINING_DEFAULT_MODE', 'automatic');
             
             $result = $systemMode === 'manual' 
-                ? $this->runManualTraining($user, $domainId)
-                : $this->runAutomaticTraining($user, $domainId);
+                ? $this->runManualTraining($user)
+                : $this->runAutomaticTraining($user);
             
             // End performance monitoring
             $this->performanceService->endTiming($performanceData['timing'], array_merge(
@@ -76,11 +75,10 @@ class UnifiedTrainingService
     /**
      * Run automatic training for senders
      */
-    public function runAutomaticTraining(?User $user = null, ?string $domainId = null): array
+    public function runAutomaticTraining(?User $user = null): array
     {
         $this->logInfo('Starting automatic training process', [
             'user_id' => $user?->id,
-            'domain_id' => $domainId
         ]);
         
         $results = [
@@ -91,7 +89,7 @@ class UnifiedTrainingService
         ];
 
         try {
-            $senders = $this->getSendersForTraining($user, $domainId);
+            $senders = $this->getSendersForTraining($user);
             
             foreach ($senders as $sender) {
                 try {
@@ -118,11 +116,10 @@ class UnifiedTrainingService
     /**
      * Run manual training for senders
      */
-    public function runManualTraining(?User $user = null, ?string $domainId = null): array
+    public function runManualTraining(?User $user = null): array
     {
         $this->logInfo('Starting manual training process', [
             'user_id' => $user?->id,
-            'domain_id' => $domainId
         ]);
 
         $results = [
@@ -139,7 +136,7 @@ class UnifiedTrainingService
             $intervalDays = (int) SystemConfig::get('TRAINING_MANUAL_INCREASE_INTERVAL_DAYS', 2);
             $maxLimit = (int) SystemConfig::get('TRAINING_MANUAL_MAX_LIMIT', 500);
 
-            $senders = $this->getSendersForTraining($user, $domainId);
+            $senders = $this->getSendersForTraining($user);
 
             foreach ($senders as $sender) {
                 try {
@@ -261,18 +258,12 @@ class UnifiedTrainingService
     /**
      * Get senders for training based on filters
      */
-    private function getSendersForTraining(?User $user = null, ?string $domainId = null)
+    private function getSendersForTraining(?User $user = null)
     {
-        $query = Sender::with(['domain', 'user'])->where('is_active', true);
+        $query = Sender::with(['user'])->where('is_active', true);
 
         if ($user) {
             $query->where('user_id', $user->id);
-        }
-
-        if ($domainId) {
-            $query->whereHas('domain', function ($q) use ($domainId) {
-                $q->where('id', $domainId);
-            });
         }
 
         return $query->get();
@@ -330,7 +321,7 @@ class UnifiedTrainingService
             return [
                 'id' => $sender->id,
                 'email' => $sender->email,
-                'domain' => $sender->domain->name,
+                'sender' => $sender->email,
                 'daily_limit' => $sender->daily_limit,
                 'current_daily_sent' => $sender->current_daily_sent,
                 'remaining_sends' => $sender->getRemainingDailySends(),
@@ -375,14 +366,6 @@ class UnifiedTrainingService
     public function runTrainingForUser(User $user): array
     {
         return $this->runTraining($user);
-    }
-
-    /**
-     * Run training for specific domain
-     */
-    public function runTrainingForDomain(string $domainId): array
-    {
-        return $this->runTraining(null, $domainId);
     }
 
     /**

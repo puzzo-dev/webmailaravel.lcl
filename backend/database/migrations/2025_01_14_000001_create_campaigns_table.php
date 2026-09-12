@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('campaigns', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->index();
+            $table->foreignId('user_id')->constrained('users');
             $table->string('name');
             $table->string('subject');
             $table->enum('status', ['DRAFT', 'RUNNING', 'PAUSED', 'STOPPED', 'COMPLETED'])->default('DRAFT');

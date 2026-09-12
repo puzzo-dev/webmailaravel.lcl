@@ -1,28 +1,16 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::table('plans_and_system', function (Blueprint $table) {
-            //
-        });
+        // Intentional no-op — training preferences are stored in system_configs table, not plans_and_system
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::table('plans_and_system', function (Blueprint $table) {
-            //
-        });
+        // No-op
     }
 };

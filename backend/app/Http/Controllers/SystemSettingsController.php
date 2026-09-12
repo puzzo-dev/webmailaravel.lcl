@@ -509,4 +509,90 @@ class SystemSettingsController extends Controller
             return $this->successResponse(null, 'PowerMTA configuration updated successfully');
         }, 'update_powermta_config');
     }
+
+    /**
+     * Get PMTA monitoring configuration (admin only)
+     */
+    public function getPmtaMonitoringConfig(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            $config = SystemConfig::getPmtaMonitoringConfig();
+            // Don't expose secrets — none here, but be explicit
+            return $this->successResponse($config, 'PMTA monitoring config retrieved');
+        }, 'view_pmta_config');
+    }
+
+    /**
+     * Update PMTA monitoring configuration (admin only)
+     */
+    public function updatePmtaMonitoringConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            $validated = $request->validate([
+                'enabled' => 'nullable|boolean',
+                'project_id' => 'nullable|string|max:100',
+                'files_path' => 'nullable|string',
+                'fbl_path' => 'nullable|string',
+                'logs_path' => 'nullable|string',
+                'acct_path' => 'nullable|string',
+                'diag_path' => 'nullable|string',
+                'bounce_path' => 'nullable|string',
+                'scan_interval' => 'nullable|integer|min:1|max:1440',
+                'retention_days' => 'nullable|integer|min:1|max:365',
+            ]);
+            foreach ($validated as $key => $value) {
+                $configKey = 'pmta_' . $key;
+                $storeValue = is_bool($value) ? ($value ? 'true' : 'false') : (string)$value;
+                SystemConfig::set($configKey, $storeValue);
+            }
+            return $this->successResponse(null, 'PMTA monitoring config updated');
+        }, 'update_pmta_config');
+    }
+
+    /**
+     * Get Cloudflare DNS configuration (admin only)
+     */
+    public function getCloudflareConfig(): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            $config = SystemConfig::getCloudflareConfig();
+            // Mask the API token in the response
+            return $this->successResponse([
+                'api_token' => $config['api_token'] ? '••••••' . substr($config['api_token'], -4) : '',
+                'zone_id' => $config['zone_id'],
+                'is_configured' => !empty($config['api_token']) && !empty($config['zone_id']),
+            ], 'Cloudflare config retrieved');
+        }, 'view_cloudflare_config');
+    }
+
+    /**
+     * Update Cloudflare DNS configuration (admin only)
+     */
+    public function updateCloudflareConfig(Request $request): JsonResponse
+    {
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!Auth::user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Access denied. Admin role required.');
+            }
+            $validated = $request->validate([
+                'api_token' => 'nullable|string|max:255',
+                'zone_id' => 'nullable|string|max:255',
+            ]);
+            foreach ($validated as $key => $value) {
+                if ($value !== null && $value !== '') {
+                    SystemConfig::set('cloudflare_' . $key, $value);
+                }
+            }
+            return $this->successResponse(null, 'Cloudflare config updated');
+        }, 'update_cloudflare_config');
+    }
 }

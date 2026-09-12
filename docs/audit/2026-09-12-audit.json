@@ -1,0 +1,165 @@
+{
+ "capabilities": [
+  "cargo",
+  "docker",
+  "gh",
+  "git",
+  "network",
+  "node",
+  "npm",
+  "python3"
+ ],
+ "counts": {
+  "findings": 2,
+  "probes_blind": 2,
+  "probes_run": 7
+ },
+ "findings": [
+  {
+   "blast": 2,
+   "detail": "Deploy targets declared (docker) with no telemetry dependency in any manifest. A failure on a user's machine is invisible.",
+   "effort": 2,
+   "evidence": "languages= deploy=docker telemetry=[]",
+   "first_seen": "2026-09-12",
+   "id": "f-a825549fc486",
+   "p": 1.0,
+   "probe": "telemetry",
+   "remedy": "add an error reporter, or record the decision not to — the gap worth closing is that nobody wrote down which it is",
+   "runs_open": 0,
+   "severity": "medium",
+   "title": "A deployed surface reports no errors anywhere its maintainer can see",
+   "where": "manifests"
+  },
+  {
+   "blast": 3,
+   "detail": "",
+   "effort": 1,
+   "evidence": "",
+   "first_seen": "2026-09-12",
+   "id": "f-fb7e89935c6c",
+   "p": 3.0,
+   "probe": "gitignore-secrets",
+   "remedy": "move it out of the tree and add it to .gitignore; if it ever held a live value, rotate that value first",
+   "runs_open": 0,
+   "severity": "high",
+   "title": "A file that normally holds credentials is tracked by git",
+   "where": "frontend/.env"
+  }
+ ],
+ "generated_at": "2026-09-12T11:10:18Z",
+ "probes": [
+  {
+   "id": "secrets-tree",
+   "needs": [
+    "git"
+   ],
+   "phase": "probe",
+   "reason": "no credential pattern in the tracked tree",
+   "verdict": "clean"
+  },
+  {
+   "id": "secrets-history",
+   "needs": [
+    "git"
+   ],
+   "phase": "probe",
+   "reason": "no credential pattern in the last 400 commits",
+   "verdict": "clean"
+  },
+  {
+   "id": "worktree",
+   "needs": [
+    "git"
+   ],
+   "phase": "probe",
+   "reason": "250 uncommitted path(s) — disclosed, not a finding: an audit reports the committed project",
+   "verdict": "clean"
+  },
+  {
+   "id": "telemetry",
+   "needs": [],
+   "phase": "prod",
+   "reason": "no error reporting found",
+   "verdict": "finding"
+  },
+  {
+   "id": "ci-present",
+   "needs": [],
+   "phase": "prod",
+   "reason": "CI configured: jenkins",
+   "verdict": "clean"
+  },
+  {
+   "id": "docs-present",
+   "needs": [],
+   "phase": "seams",
+   "reason": "3 documentation marker(s): README.md, docs, CHANGELOG.md",
+   "verdict": "clean"
+  },
+  {
+   "id": "gitignore-secrets",
+   "needs": [
+    "git"
+   ],
+   "phase": "probe",
+   "reason": "1 tracked",
+   "verdict": "finding"
+  },
+  {
+   "id": "channel-divergence",
+   "needs": [
+    "git"
+   ],
+   "phase": "prod",
+   "reason": "no version in a manifest to make a claim about",
+   "verdict": "blind"
+  },
+  {
+   "id": "published-version",
+   "needs": [
+    "npm",
+    "network"
+   ],
+   "phase": "prod",
+   "reason": "no name+version in a manifest",
+   "verdict": "blind"
+  }
+ ],
+ "profile": {
+  "ci": [
+   "jenkins"
+  ],
+  "deploy": [
+   "docker"
+  ],
+  "docs": [
+   "README.md",
+   "docs",
+   "CHANGELOG.md"
+  ],
+  "languages": [],
+  "managers": [],
+  "monorepo": true,
+  "name": "webmailaravel.lcl",
+  "root": "/home/puzzo/codebase/webmailaravel.lcl",
+  "submodules": [],
+  "telemetry": [],
+  "tracked_files": 499,
+  "vcs": "git",
+  "version": null,
+  "workspaces": false
+ },
+ "ratchet": {
+  "carried": [],
+  "closed": [],
+  "first_run": true,
+  "new": [],
+  "unranked": [
+   "f-a825549fc486",
+   "f-fb7e89935c6c"
+  ]
+ },
+ "root": "/home/puzzo/codebase/webmailaravel.lcl",
+ "schema": "project-audit/1",
+ "sidecar": "/home/puzzo/codebase/webmailaravel.lcl/docs/audit/2026-09-12-audit.json"
+}

@@ -35,7 +35,7 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail', 'database', 'broadcast', \App\Channels\TelegramChannel::class];
+        return [\App\Channels\TelegramChannel::class];
     }
 
     /**
@@ -47,7 +47,7 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
             ->subject('Subscription Updated')
             ->line("Your subscription to '{$this->subscription->plan->name}' has been updated.")
             ->line("Status: {$this->subscription->status}")
-            ->line("Expires: " . ($this->subscription->expiry ? $this->subscription->expiry->format('Y-m-d') : 'Never'))
+            ->line("Expires: " . ($this->subscription->ends_at ? $this->subscription->ends_at->format('Y-m-d') : 'Never'))
             ->action('View Subscription', url('/subscriptions'))
             ->line('Thank you for using our application!');
     }
@@ -111,8 +111,8 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
 
         // Add specific context for certain statuses
         $additionalContext = '';
-        if ($this->newStatus === 'expired' && $this->subscription->expiry) {
-            $additionalContext = " Expired on: {$this->subscription->expiry->format('Y-m-d')}";
+        if ($this->newStatus === 'expired' && $this->subscription->ends_at) {
+            $additionalContext = " Expired on: {$this->subscription->ends_at->format('Y-m-d')}";
         } elseif ($this->newStatus === 'renewed' && isset($this->context['next_billing_date'])) {
             $additionalContext = " Next billing: {$this->context['next_billing_date']}";
         } elseif ($this->newStatus === 'cancelled' && isset($this->context['reason'])) {
@@ -132,7 +132,7 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
             'plan_name' => $this->subscription->plan->name,
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,
-            'expiry' => $this->subscription->expiry,
+            'expiry' => $this->subscription->ends_at,
             'context' => $this->context,
             'status_changed_at' => now()->toISOString(),
         ];
@@ -147,7 +147,7 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
             'subscription_id' => $this->subscription->id,
             'plan_name' => $this->subscription->plan->name,
             'status' => $this->subscription->status,
-            'expiry' => $this->subscription->expiry,
+            'expiry' => $this->subscription->ends_at,
             'type' => 'subscription_updated',
             'message' => "Subscription to '{$this->subscription->plan->name}' updated to {$this->subscription->status}",
         ];
@@ -160,7 +160,7 @@ class SubscriptionUpdated extends Notification implements ShouldQueue
     {
         $status = ucfirst($this->subscription->status);
         $planName = $this->subscription->plan->name;
-        $expiry = $this->subscription->expiry ? $this->subscription->expiry->format('Y-m-d') : 'Never';
+        $expiry = $this->subscription->ends_at ? $this->subscription->ends_at->format('Y-m-d') : 'Never';
         
         return [
             'text' => "💳 <b>Subscription Update</b>\n\n" .

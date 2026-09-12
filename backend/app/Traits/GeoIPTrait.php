@@ -30,7 +30,7 @@ trait GeoIPTrait
 
             // Check cache first
             $cacheKey = "geoip:{$ip}";
-            $cachedResult = $this->getCache($cacheKey);
+            $cachedResult = $this->getCachedDataIfExists($cacheKey);
             
             if ($cachedResult) {
                 $this->logMethodExit(__METHOD__, $cachedResult);
@@ -46,7 +46,7 @@ trait GeoIPTrait
                     $reader = new Reader($geoipConfig['database_path']);
                     $result = $this->getLocationFromDatabase($reader, $ip);
                     if ($result['success']) {
-                        $this->setCache($cacheKey, $result, 86400); // Cache for 24 hours
+                        $this->setCachedData($cacheKey, $result, 86400); // Cache for 24 hours
                         $this->logMethodExit(__METHOD__, $result);
                         return $result;
                     }
@@ -60,7 +60,7 @@ trait GeoIPTrait
             // Fallback to external API
             $result = $this->getLocationFromAPI($ip, $geoipConfig);
             if ($result['success']) {
-                $this->setCache($cacheKey, $result, 86400); // Cache for 24 hours
+                $this->setCachedData($cacheKey, $result, 86400); // Cache for 24 hours
             }
 
             $this->logMethodExit(__METHOD__, $result);

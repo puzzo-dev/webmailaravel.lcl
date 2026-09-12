@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { systemSettingsService } from '../../services/api';
-import { api } from '../../utils/api';
+import { api } from '../../services/api';
 
 // Async thunk to fetch public system configuration
 export const fetchSystemConfig = createAsyncThunk(

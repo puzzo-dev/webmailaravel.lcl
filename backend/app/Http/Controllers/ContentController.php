@@ -58,10 +58,12 @@ class ContentController extends Controller
     protected function getStoreRules(): array
     {
         return [
-            'title' => 'required|string|max:255',
-            'body' => 'required|string',
-            'type' => 'required|string|in:email,template,page',
-            'status' => 'nullable|string|in:draft,published,archived'
+            'name' => 'required|string|max:255',
+            'subject' => 'required|string|max:255',
+            'body' => 'nullable|string',
+            'html_body' => 'nullable|string',
+            'text_body' => 'nullable|string',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -71,10 +73,12 @@ class ContentController extends Controller
     protected function getUpdateRules(): array
     {
         return [
-            'title' => 'sometimes|string|max:255',
-            'body' => 'sometimes|string',
-            'type' => 'sometimes|string|in:email,template,page',
-            'status' => 'sometimes|string|in:draft,published,archived'
+            'name' => 'sometimes|string|max:255',
+            'subject' => 'sometimes|string|max:255',
+            'body' => 'nullable|string',
+            'html_body' => 'nullable|string',
+            'text_body' => 'nullable|string',
+            'is_active' => 'sometimes|boolean',
         ];
     }
 
@@ -102,8 +106,7 @@ class ContentController extends Controller
         return $this->validateAndExecute(
             $request,
             $this->getStoreRules(),
-            function () use ($request) {
-                $data = $request->input('validated_data');
+            function ($data) use ($request) {
                 $data['user_id'] = Auth::id();
 
                 $content = Content::create($data);
@@ -138,14 +141,13 @@ class ContentController extends Controller
         return $this->validateAndExecute(
             $request,
             $this->getUpdateRules(),
-            function () use ($request, $id) {
+            function ($data) use ($request, $id) {
                 $content = Content::findOrFail($id);
                 
                 if (!$this->canAccessResource($content)) {
                     return $this->forbiddenResponse('Access denied');
                 }
                 
-                $data = $request->input('validated_data');
                 $content->update($data);
                 
                 return $this->successResponse($content->load($this->getRelationships()), 'Content updated successfully');
@@ -187,11 +189,10 @@ class ContentController extends Controller
             // Generate preview data
             $previewData = [
                 'id' => $content->id,
-                'title' => $content->title,
-                'body' => $content->body,
-                'type' => $content->type,
-                'preview_html' => $this->generatePreviewHtml($content->body),
-                'preview_text' => $this->generatePreviewText($content->body)
+                'name' => $content->name,
+                'subject' => $content->subject,
+                'html_body' => $content->html_body ?? $content->body,
+                'preview_text' => strip_tags($content->html_body ?? $content->body ?? '')
             ];
 
             return $this->successResponse($previewData, 'Content preview generated successfully');
@@ -211,10 +212,12 @@ class ContentController extends Controller
             }
 
             $duplicatedContent = Content::create([
-                'title' => $originalContent->title . ' (Copy)',
+                'name' => $originalContent->name . ' (Copy)',
+                'subject' => $originalContent->subject,
                 'body' => $originalContent->body,
-                'type' => $originalContent->type,
-                'status' => 'draft',
+                'html_body' => $originalContent->html_body,
+                'text_body' => $originalContent->text_body,
+                'is_active' => true,
                 'user_id' => auth()->id()
             ]);
 

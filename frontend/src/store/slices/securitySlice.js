@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { api, handleApiError } from '../../utils/api';
+import { api, handleApiError } from '../../services/api';
 
 // Async thunks for 2FA
 export const enable2FA = createAsyncThunk(

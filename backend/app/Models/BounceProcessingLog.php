@@ -10,86 +10,69 @@ class BounceProcessingLog extends Model
     use HasFactory;
 
     protected $fillable = [
-        'domain_id',
+        'bounce_credential_id',
+        'user_id',
         'message_id',
-        'from_email',
-        'to_email',
-        'bounce_reason',
+        'bounce_email',
         'bounce_type',
-        'status',
-        'error_message',
+        'bounce_reason',
         'raw_message',
-        'processed_at'
+        'parsed_data',
+        'added_to_suppression',
+        'processing_status',
+        'processing_notes',
     ];
 
     protected $casts = [
-        'raw_message' => 'array',
-        'processed_at' => 'datetime'
+        'parsed_data' => 'array',
+        'added_to_suppression' => 'boolean',
     ];
 
-    // Relationships
-    public function domain() { return $this->belongsTo(Domain::class); }
+    public function bounceCredential() { return $this->belongsTo(BounceCredential::class); }
+    public function user() { return $this->belongsTo(User::class); }
 
-    /**
-     * Scope to filter by bounce type
-     */
     public function scopeBounceType($query, $type)
     {
         return $query->where('bounce_type', $type);
     }
 
-    /**
-     * Scope to filter by status
-     */
     public function scopeStatus($query, $status)
     {
-        return $query->where('status', $status);
+        return $query->where('processing_status', $status);
     }
 
-    /**
-     * Scope to filter by domain
-     */
-    public function scopeDomain($query, $domainId)
+    public function scopeCredential($query, $credentialId)
     {
-        return $query->where('domain_id', $domainId);
+        return $query->where('bounce_credential_id', $credentialId);
     }
 
-    /**
-     * Scope to filter processed bounces
-     */
     public function scopeProcessed($query)
     {
-        return $query->where('status', 'processed');
+        return $query->where('processing_status', 'processed');
     }
 
-    /**
-     * Scope to filter failed bounces
-     */
     public function scopeFailed($query)
     {
-        return $query->where('status', 'failed');
+        return $query->where('processing_status', 'failed');
     }
 
-    /**
-     * Get bounce statistics for a domain
-     */
-    public static function getBounceStatistics($domainId, $days = 30)
+    public static function getBounceStatistics($credentialId, $days = 30)
     {
-        $query = self::where('domain_id', $domainId)
-                    ->where('processed_at', '>=', now()->subDays($days));
+        $query = self::where('bounce_credential_id', $credentialId)
+                    ->where('created_at', '>=', now()->subDays($days));
 
         return [
             'total_bounces' => $query->count(),
             'hard_bounces' => $query->clone()->bounceType('hard')->count(),
             'soft_bounces' => $query->clone()->bounceType('soft')->count(),
-            'spam_bounces' => $query->clone()->bounceType('spam')->count(),
-            'block_bounces' => $query->clone()->bounceType('block')->count(),
+            'spam_bounces' => $query->clone()->bounceType('complaint')->count(),
+            'block_bounces' => $query->clone()->bounceType('other')->count(),
             'processed' => $query->clone()->processed()->count(),
             'failed' => $query->clone()->failed()->count(),
             'recent_bounces' => $query->clone()
-                                    ->orderBy('processed_at', 'desc')
+                                    ->orderBy('created_at', 'desc')
                                     ->limit(10)
                                     ->get()
         ];
     }
-} 
+}

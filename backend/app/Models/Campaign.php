@@ -200,27 +200,41 @@ class Campaign extends Model
      */
     public function getFirstSender()
     {
-        return Sender::whereIn('id', $this->sender_ids ?? [])->first();
+        return Sender::whereIn('id', $this->sender_ids ?? [])->whereNull('banned_at')->first();
     }
 
     /**
-     * Get content variations for content switching
+     * Get content variations for content switching (memoized to prevent N+1)
      */
     public function getContentVariations()
     {
-        return Content::whereIn('id', $this->content_ids ?? [])->get();
+        if (array_key_exists('content_variations', $this->relations)) {
+            return $this->relations['content_variations'];
+        }
+
+        $variations = Content::whereIn('id', $this->content_ids ?? [])->get();
+        $this->setRelation('content_variations', $variations);
+        return $variations;
     }
 
     /**
-     * Get senders for this campaign
+     * Get senders for this campaign (memoized to prevent N+1)
      */
     public function getSenders()
     {
-        if ($this->isSingleSend() && $this->single_sender_id) {
-            return collect([$this->singleSender]);
+        if (array_key_exists('campaign_senders', $this->relations)) {
+            return $this->relations['campaign_senders'];
         }
-        
-        return Sender::whereIn('id', $this->sender_ids ?? [])->get();
+
+        if ($this->isSingleSend() && $this->single_sender_id) {
+            $sender = $this->singleSender;
+            $senders = $sender && !$sender->banned ? collect([$sender]) : collect([]);
+        } else {
+            $senders = Sender::whereIn('id', $this->sender_ids ?? [])->whereNull('banned_at')->get();
+        }
+
+        $this->setRelation('campaign_senders', $senders);
+        return $senders;
     }
 
     /**
@@ -298,7 +312,7 @@ class Campaign extends Model
      */
     public function isTrackingEnabled(): bool
     {
-        return $this->enable_open_tracking || $this->enable_click_tracking;
+        return $this->enable_tracking;
     }
 
     /**

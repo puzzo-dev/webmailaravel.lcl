@@ -392,7 +392,7 @@ trait FileProcessingTrait
 
 
 
-    protected function downloadFile(string $filePath, string $fileName = null, array $headers = []): Response
+    protected function downloadFile(string $filePath, ?string $fileName = null, array $headers = []): Response
     {
         if (!file_exists($filePath)) {
             abort(404, 'File not found');
@@ -415,7 +415,7 @@ trait FileProcessingTrait
     /**
      * Stream a large file download
      */
-    protected function streamFile(string $filePath, string $fileName = null): StreamedResponse
+    protected function streamFile(string $filePath, ?string $fileName = null): StreamedResponse
     {
         if (!file_exists($filePath)) {
             abort(404, 'File not found');
@@ -444,7 +444,7 @@ trait FileProcessingTrait
     /**
      * Download file from storage disk
      */
-    protected function downloadStorageFile(string $disk, string $path, string $fileName = null): Response
+    protected function downloadStorageFile(string $disk, string $path, ?string $fileName = null): Response
     {
         if (!Storage::disk($disk)->exists($path)) {
             abort(404, 'File not found');
@@ -458,7 +458,7 @@ trait FileProcessingTrait
     /**
      * View file in browser (inline)
      */
-    protected function viewFile(string $filePath, string $fileName = null): Response
+    protected function viewFile(string $filePath, ?string $fileName = null): Response
     {
         if (!file_exists($filePath)) {
             abort(404, 'File not found');

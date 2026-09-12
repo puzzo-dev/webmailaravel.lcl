@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('smtp_configs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('domain_id')->constrained()->onDelete('cascade');
             $table->string('host');
             $table->integer('port');
             $table->string('username');
@@ -21,8 +20,6 @@ return new class extends Migration
             $table->enum('encryption', ['tls', 'ssl', 'none'])->default('tls');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-            
-            $table->unique(['domain_id']);
         });
     }
 

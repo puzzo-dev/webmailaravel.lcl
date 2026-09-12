@@ -11,31 +11,81 @@ class Sender extends Model
 
     protected $fillable = [
         'user_id',
-        'domain_id',
+        'smtp_config_id',
         'name',
         'email',
         'is_active',
+        'banned_at',
+        'banned_by',
         'daily_limit',
         'current_daily_sent',
         'last_reset_date',
         'reputation_score',
         'last_training_at',
         'training_data',
+        'dkim_private_key',
+        'dkim_selector',
+        'dns_verified_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'banned_at' => 'datetime',
         'daily_limit' => 'integer',
         'current_daily_sent' => 'integer',
         'last_reset_date' => 'date',
         'reputation_score' => 'decimal:2',
+        'dns_verified_at' => 'datetime',
         'last_training_at' => 'datetime',
         'training_data' => 'array',
     ];
 
+    protected $appends = ['banned'];
+
     // Relationships
     public function user() { return $this->belongsTo(User::class); }
-    public function domain() { return $this->belongsTo(Domain::class); }
+    public function smtpConfig() { return $this->belongsTo(SmtpConfig::class); }
+    public function bannedBy() { return $this->belongsTo(User::class, 'banned_by'); }
+
+    /**
+     * Check if the sender is banned.
+     */
+    public function getBannedAttribute(): bool
+    {
+        return $this->banned_at !== null;
+    }
+
+    /**
+     * Scope to only include senders that are not banned.
+     */
+    public function scopeNotBanned($query)
+    {
+        return $query->whereNull('banned_at');
+    }
+
+    /**
+     * Ban this sender.
+     */
+    public function ban(User $bannedBy): void
+    {
+        $this->update([
+            'banned_at' => now(),
+            'banned_by' => $bannedBy->id,
+            'is_active' => false,
+        ]);
+    }
+
+    /**
+     * Unban this sender.
+     */
+    public function unban(): void
+    {
+        $this->update([
+            'banned_at' => null,
+            'banned_by' => null,
+            'is_active' => true,
+        ]);
+    }
 
     /**
      * Check if sender can send more emails today
@@ -56,12 +106,27 @@ class Sender extends Model
     }
 
     /**
-     * Increment daily sent count
+     * Atomically increment daily sent count — only succeeds if under the limit.
+     * Returns true if the increment succeeded, false if the limit was reached.
+     * This prevents the race condition where multiple workers pass canSendToday() simultaneously.
      */
-    public function incrementDailySent(int $count = 1): void
+    public function incrementDailySent(int $count = 1): bool
     {
         $this->resetDailyCountIfNeeded();
-        $this->increment('current_daily_sent', $count);
+
+        // Atomic conditional increment — only updates if current_daily_sent < daily_limit
+        $updated = \DB::table('senders')
+            ->where('id', $this->id)
+            ->where('current_daily_sent', '<', $this->daily_limit)
+            ->increment('current_daily_sent', $count);
+
+        if ($updated > 0) {
+            // Refresh the in-memory model to reflect the DB state
+            $this->refresh();
+            return true;
+        }
+
+        return false;
     }
 
     /**

@@ -3,17 +3,23 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class SmtpConfig extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'domain_id',
         'host',
         'port',
         'username',
         'password',
         'encryption',
-        'is_active'
+        'is_active',
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected $casts = [
@@ -21,7 +27,8 @@ class SmtpConfig extends Model
         'port' => 'integer'
     ];
 
-    public function domain() { 
-        return $this->belongsTo(Domain::class); 
+    public function senders()
+    {
+        return $this->hasMany(Sender::class);
     }
 }

@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Traits\SuppressionListTrait;
 use App\Traits\FileProcessingTrait;
 use App\Traits\CacheManagementTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 
 class SuppressionListController extends Controller
 {
@@ -21,9 +19,8 @@ class SuppressionListController extends Controller
     public function index(Request $request): JsonResponse
     {
         return $this->executeWithErrorHandling(function () use ($request) {
-            // Check if user is admin
             if (!auth()->user()->hasRole('admin')) {
-                return $this->errorResponse('Admin access required', 403);
+                return $this->forbiddenResponse('Admin access required');
             }
 
             $perPage = $request->input('per_page', 20);
@@ -32,7 +29,6 @@ class SuppressionListController extends Controller
 
             $query = \App\Models\SuppressionList::query();
 
-            // Apply search filter
             if ($search) {
                 $query->where('email', 'like', "%{$search}%")
                      ->orWhere('reason', 'like', "%{$search}%");
@@ -41,7 +37,7 @@ class SuppressionListController extends Controller
             $results = $query->orderBy('created_at', 'desc')
                            ->paginate($perPage, ['*'], 'page', $page);
 
-            return $this->successResponse($results, 'Suppression list retrieved successfully');
+            return $this->paginatedResponse($results, 'Suppression list retrieved successfully');
         }, 'get_suppression_list');
     }
 
@@ -50,57 +46,28 @@ class SuppressionListController extends Controller
      */
     public function processFBLFile(Request $request): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $request->validate([
-                'fbl_file' => 'required|file|mimes:csv,txt|max:10240', // 10MB max
-                'source' => 'nullable|string|max:255'
+            $validated = $request->validate([
+                'fbl_file' => 'required|file|mimes:csv,txt|max:10240',
+                'source' => 'nullable|string|max:255',
             ]);
 
             $file = $request->file('fbl_file');
-            $source = $request->input('source', 'fbl_upload');
+            $source = $validated['source'] ?? 'fbl_upload';
 
-            // Upload file
             $filepath = $this->uploadFile($file, 'fbl_files');
+            $result = $this->processFBLFileData($filepath, $source);
 
-            // Process FBL file
-            $result = $this->processFBLFile($filepath, $source);
-
-            if ($result['success']) {
-                Log::info('FBL file processed successfully', [
-                    'filepath' => $filepath,
-                    'processed' => $result['processed'],
-                    'added' => $result['added']
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'FBL file processed successfully',
-                    'data' => $result
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to process FBL file',
-                    'error' => $result['error']
-                ], 500);
+            if (!$result['success']) {
+                return $this->errorResponse('Failed to process FBL file: ' . ($result['error'] ?? 'Unknown error'), 500);
             }
 
-        } catch (\Exception $e) {
-            Log::error('FBL file processing failed', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process FBL file',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $result;
+        }, 'process_fbl_file');
     }
 
     /**
@@ -108,29 +75,13 @@ class SuppressionListController extends Controller
      */
     public function getStatistics(): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $stats = $this->getSuppressionStatistics();
-
-            return response()->json([
-                'success' => true,
-                'data' => $stats
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to get suppression statistics', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get suppression statistics'
-            ], 500);
-        }
+            return $this->getSuppressionStatistics();
+        }, 'get_suppression_statistics');
     }
 
     /**
@@ -138,38 +89,19 @@ class SuppressionListController extends Controller
      */
     public function export(Request $request): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
             $filename = $request->input('filename');
             $filepath = $this->exportSuppressionList($filename);
 
-            Log::info('Suppression list exported', [
-                'filepath' => $filepath
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Suppression list exported successfully',
-                'data' => [
-                    'filepath' => $filepath,
-                    'download_url' => url('/api/suppression-list/download/' . basename($filepath))
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to export suppression list', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to export suppression list'
-            ], 500);
-        }
+            return [
+                'filepath' => $filepath,
+                'download_url' => url('/api/suppression-list/download/' . basename($filepath)),
+            ];
+        }, 'export_suppression_list');
     }
 
     /**
@@ -177,19 +109,21 @@ class SuppressionListController extends Controller
      */
     public function download(string $filename): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($filename) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
+            // Prevent path traversal — only allow safe filenames
+            $filename = basename($filename);
+            if (!preg_match('/^[a-zA-Z0-9._-]+\.(csv|txt)$/', $filename)) {
+                return $this->errorResponse('Invalid file name', 400);
+            }
+
             $filepath = 'suppression_lists/' . $filename;
 
             if (!Storage::disk('local')->exists($filepath)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'File not found'
-                ], 404);
+                return $this->errorResponse('File not found', 404);
             }
 
             return response()->download(
@@ -197,18 +131,7 @@ class SuppressionListController extends Controller
                 $filename,
                 ['Content-Type' => 'text/csv']
             );
-
-        } catch (\Exception $e) {
-            Log::error('Failed to download suppression list', [
-                'filename' => $filename,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to download file'
-            ], 500);
-        }
+        }, 'download_suppression_list');
     }
 
     /**
@@ -216,59 +139,30 @@ class SuppressionListController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $request->validate([
+            $validated = $request->validate([
                 'file' => 'required|file|mimes:csv,txt|max:10240',
                 'type' => 'nullable|string|max:50',
-                'source' => 'nullable|string|max:255'
+                'source' => 'nullable|string|max:255',
             ]);
 
             $file = $request->file('file');
-            $type = $request->input('type', 'manual');
-            $source = $request->input('source', 'import');
+            $type = $validated['type'] ?? 'manual';
+            $source = $validated['source'] ?? 'import';
 
-            // Upload file
             $filepath = $this->uploadFile($file, 'suppression_lists');
-
-            // Import suppression list
             $result = $this->importSuppressionList($filepath, $type, $source);
 
-            if ($result['success']) {
-                Log::info('Suppression list imported', [
-                    'filepath' => $filepath,
-                    'imported' => $result['imported'],
-                    'skipped' => $result['skipped']
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Suppression list imported successfully',
-                    'data' => $result
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to import suppression list',
-                    'error' => $result['error']
-                ], 500);
+            if (!$result['success']) {
+                return $this->errorResponse('Failed to import suppression list: ' . ($result['error'] ?? 'Unknown error'), 500);
             }
 
-        } catch (\Exception $e) {
-            Log::error('Suppression list import failed', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to import suppression list',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+            return $result;
+        }, 'import_suppression_list');
     }
 
     /**
@@ -276,45 +170,23 @@ class SuppressionListController extends Controller
      */
     public function removeEmail(Request $request): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
-
-        try {
-            $request->validate([
-                'email' => 'required|email'
-            ]);
-
-            $email = $request->input('email');
-            $removed = $this->removeFromSuppressionList($email);
-
-            if ($removed) {
-                Log::info('Email removed from suppression list', [
-                    'email' => $email
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Email removed from suppression list'
-                ]);
-            } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to remove email from suppression list'
-                ], 500);
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
             }
 
-        } catch (\Exception $e) {
-            Log::error('Failed to remove email from suppression list', [
-                'error' => $e->getMessage()
+            $validated = $request->validate([
+                'email' => 'required|email',
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to remove email'
-            ], 500);
-        }
+            $removed = $this->removeFromSuppressionList($validated['email']);
+
+            if (!$removed) {
+                return $this->errorResponse('Failed to remove email from suppression list', 500);
+            }
+
+            return ['message' => 'Email removed from suppression list'];
+        }, 'remove_suppression_email');
     }
 
     /**
@@ -322,37 +194,15 @@ class SuppressionListController extends Controller
      */
     public function cleanup(Request $request): JsonResponse
     {
-        // Check if user is admin
-        if (!auth()->user()->hasRole('admin')) {
-            return $this->errorResponse('Admin access required', 403);
-        }
+        return $this->executeWithErrorHandling(function () use ($request) {
+            if (!auth()->user()->hasRole('admin')) {
+                return $this->forbiddenResponse('Admin access required');
+            }
 
-        try {
-            $days = $request->input('days', 365);
+            $days = (int) $request->input('days', 365);
             $removed = $this->cleanupOldEntries($days);
 
-            Log::info('Suppression list cleanup completed', [
-                'days' => $days,
-                'removed' => $removed
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Cleanup completed successfully',
-                'data' => [
-                    'removed_entries' => $removed
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Suppression list cleanup failed', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to cleanup suppression list'
-            ], 500);
-        }
+            return ['removed_entries' => $removed];
+        }, 'cleanup_suppression_list');
     }
-} 
+}
